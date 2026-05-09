@@ -7,6 +7,9 @@
     "doc": "docs"
   },
   "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
     "build:meta": "node tools/apply-meta-template.js",
     "build:social": "node tools/generate-social-image.js",
     "test": "npm run test:page-transitions",
@@ -25,6 +28,7 @@
   },
   "homepage": "https://github.com/Masashi-desu/works#readme",
   "devDependencies": {
-    "playwright": "^1.59.1"
+    "playwright": "^1.59.1",
+    "vite": "^8.0.11"
   }
 }

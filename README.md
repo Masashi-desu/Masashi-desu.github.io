@@ -4,6 +4,14 @@ https://masashi-desu.github.io/works/
 
 # Masahi Desu Works Static Site
 
+## 開発とビルド
+
+- ローカル開発: `npm run dev`
+- 本番ビルド: `npm run build`
+- ビルド成果物の確認: `npm run preview`
+
+GitHub Pages では `/works/` 配下に公開されるため、Vite の本番ビルドでは `base` を `/works/` に設定しています。
+
 ## 長文テキストの改行ポリシー
 
 製品ページなどの長文説明では、HTML の `<br>` ではなく改行コード (`\n`) と `white-space: pre-line;` を組み合わせて改行を表現します。
