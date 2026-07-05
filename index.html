@@ -214,6 +214,7 @@
       let sectionSettleTimer = null;
       let sectionAlignFrame = null;
       let restAlignTimer = null;
+      let restSampleScrollY = null;
       let touchPointsActive = 0;
       let lastTouchEventAt = 0;
       let wheelDeltaY = 0;
@@ -656,6 +657,7 @@
         // 指の情報は無効とみなして補正を進める。
         const touchRecentlyActive = touchPointsActive > 0 && (Date.now() - lastTouchEventAt) < TOUCH_ACTIVITY_STALE_MS;
         if (touchRecentlyActive || isSectionNavigationLocked() || pendingHomeSection || pendingFooterScroll || sectionAlignFrame !== null) {
+          restSampleScrollY = null;
           scheduleRestAlignmentCheck(320);
           return;
         }
@@ -664,6 +666,14 @@
           return;
         }
         const current = window.scrollY;
+        // 進行中のアニメーションや遅いドラッグと争わないよう、同じ位置を
+        // 2回連続で観測してから(= 実際に静止してから)補正する。
+        if (restSampleScrollY === null || Math.abs(restSampleScrollY - current) > 2) {
+          restSampleScrollY = current;
+          scheduleRestAlignmentCheck(220);
+          return;
+        }
+        restSampleScrollY = null;
         let nearestSection = null;
         let nearestDistance = Infinity;
         sections.forEach((section) => {

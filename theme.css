@@ -521,6 +521,15 @@ html.page-home-document.home-scroll-managed {
   touch-action: pan-x pinch-zoom;
 }
 
+/* iOS WebKit はプログラムスクロール後も直前のスナップ位置を記憶していて、
+   後からページをそこへ引き戻す(移動成功→引き戻しが起きる)。タッチ環境で
+   JS 制御が有効な間は CSS スナップを無効化し、JS を唯一のスナップ制御にする。 */
+@media (any-pointer: coarse) {
+  html.page-home-document.home-scroll-managed {
+    scroll-snap-type: none;
+  }
+}
+
 :root[data-theme="dark"].page-home-document,
 :root[data-theme="dark"].page-catalog-document,
 :root[data-theme="dark"].page-product-document {

@@ -167,10 +167,22 @@ async function main() {
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(500);
 
-    // (1) JS 制御中は縦パンがネイティブに渡らないこと (touch-action)
-    const touchAction = await page.evaluate(() => getComputedStyle(document.documentElement).touchAction);
-    if (!touchAction.includes('pan-x')) {
-      throw new Error(`Expected html touch-action to exclude vertical pan (include pan-x), got "${touchAction}"`);
+    // (1) JS 制御中は縦パンがネイティブに渡らないこと (touch-action) と、
+    //     タッチ環境では CSS スナップが無効化され JS が唯一のスナップ制御になること
+    //     (iOS WebKit はプログラムスクロール後に直前のスナップ位置へ引き戻す不具合があるため)
+    const scrollControl = await page.evaluate(() => ({
+      touchAction: getComputedStyle(document.documentElement).touchAction,
+      scrollSnapType: getComputedStyle(document.documentElement).scrollSnapType,
+      coarsePointer: window.matchMedia('(any-pointer: coarse)').matches
+    }));
+    if (!scrollControl.touchAction.includes('pan-x')) {
+      throw new Error(`Expected html touch-action to exclude vertical pan (include pan-x), got "${scrollControl.touchAction}"`);
+    }
+    if (!scrollControl.coarsePointer) {
+      throw new Error('Expected the emulated iPhone context to report a coarse pointer');
+    }
+    if (scrollControl.scrollSnapType !== 'none') {
+      throw new Error(`Expected CSS scroll snap to be disabled under JS control on touch devices, got "${scrollControl.scrollSnapType}"`);
     }
 
     // (2) 意図判定しきい値未満の最初の縦 touchmove でも preventDefault されること
