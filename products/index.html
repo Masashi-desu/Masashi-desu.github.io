@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" class="page-catalog-document">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -58,7 +58,7 @@
   <!-- mdw:meta:end -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css">
   <link rel="stylesheet" href="../theme.css">
   <script>
@@ -90,7 +90,7 @@
     <header class="catalog-header" data-transition-fade>
       <!-- 製品一覧 -->
       <p class="section-label" data-i18n="sectionLabel">Product Portfolio</p>
-      <h1 class="section-title" data-i18n="sectionTitle">プロダクト一覧</h1>
+      <h1 class="section-title" data-i18n="sectionTitle">Product</h1>
       <p class="section-copy" data-i18n="sectionBody">
         macOS向けのプロダクティビティツールからハードウェアまで。ビルドを重ねてきたプロジェクトのスナップショットをこちらにまとめています。
       </p>
@@ -140,10 +140,10 @@
       </span>
     </div>
   </main>
-  <footer class="site-footer">
+  <footer class="site-footer catalog-footer">
     <div class="page-container site-footer__inner">
-      <span class="site-footer__copyright">© 2025 Masahi Desu Works</span>
-    <div data-include="footer" data-footer-src="../partials/footer.html"></div>
+      <span class="site-footer__copyright">© 2026 Masahi_desu</span>
+      <div data-include="footer" data-footer-src="../partials/footer.html"></div>
     </div>
   </footer>
   <script vite-ignore src="../theme.js"></script>
@@ -166,7 +166,7 @@
       const localeConfig = {
         ja: {
           sectionLabel: 'Product Portfolio',
-          sectionTitle: 'プロダクト一覧',
+          sectionTitle: 'Product',
           sectionBody: 'macOS向けのプロダクティビティツールからハードウェアまで。ビルドを重ねてきたプロジェクトのスナップショットをこちらにまとめています。',
           backHome: '← ホーム',
           updatedLabel: '更新日: ',
@@ -188,7 +188,7 @@
         },
         en: {
           sectionLabel: 'Product Portfolio',
-          sectionTitle: 'Products',
+          sectionTitle: 'Product',
           sectionBody: 'From macOS productivity tools to experimental hardware—discover snapshots of the projects we keep iterating on.',
           backHome: '← Home',
           updatedLabel: 'Updated: ',
@@ -519,8 +519,11 @@
           if (tagList) {
             link.appendChild(tagList);
           }
-          link.appendChild(date);
-          link.appendChild(cta);
+          const footer = document.createElement('div');
+          footer.className = 'catalog-card__footer';
+          footer.appendChild(date);
+          footer.appendChild(cta);
+          link.appendChild(footer);
           grid.appendChild(link);
         });
 
