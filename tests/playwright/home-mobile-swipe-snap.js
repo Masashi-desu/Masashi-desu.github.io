@@ -1,7 +1,7 @@
 /**
  * テスト概要:
  *  - 目的: トップページをスマホ touch context で縦スワイプした際、セクション移動が途中停止せず nav segment と表示セクションが一致することを検証する。
- *  - 期待値: 上スワイプ後は Product が active かつ products-section の top が 0px 付近、下スワイプ後は Philosophy が active かつ catch-section の top が 0px 付近になる。
+ *  - 期待値: 上スワイプ後は Product が active かつ products-section の top が 0px 付近、footer へ入っても gear 側は active にならず、その後の下スワイプで Product / Philosophy に戻れる。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium mobile context から CDP touch event を送って scrollY・active target・section の矩形を取得する。
  */
 const http = require('http');
@@ -81,11 +81,14 @@ async function getHomeState(page) {
     const active = document.querySelector('.home-section-nav__button.is-active, .home-section-nav__footer-link.is-active');
     const catchRect = document.getElementById('catch-section').getBoundingClientRect();
     const productsRect = document.getElementById('products-section').getBoundingClientRect();
+    const footerRect = document.getElementById('home-footer').getBoundingClientRect();
     return {
       scrollY: Math.round(window.scrollY),
       activeTarget: active ? active.dataset.sectionTarget || active.dataset.footerTarget : null,
       catchTop: Number(catchRect.top.toFixed(2)),
-      productsTop: Number(productsRect.top.toFixed(2))
+      productsTop: Number(productsRect.top.toFixed(2)),
+      footerTop: Number(footerRect.top.toFixed(2)),
+      distanceFromBottom: Math.round(document.documentElement.scrollHeight - (window.scrollY + window.innerHeight))
     };
   });
 }
@@ -96,6 +99,15 @@ function assertSectionState(state, expectedTarget, topKey) {
   }
   if (Math.abs(state[topKey]) > SECTION_TOLERANCE) {
     throw new Error(`Expected ${topKey} near 0px, got ${state[topKey]}: ${JSON.stringify(state)}`);
+  }
+}
+
+function assertFooterStateKeepsProductSegment(state) {
+  if (state.activeTarget !== 'products-section') {
+    throw new Error(`Expected Product segment to remain active at footer, got ${state.activeTarget}: ${JSON.stringify(state)}`);
+  }
+  if (state.distanceFromBottom > SECTION_TOLERANCE) {
+    throw new Error(`Expected to be settled at footer bottom, got ${state.distanceFromBottom}px from bottom: ${JSON.stringify(state)}`);
   }
 }
 
@@ -146,6 +158,26 @@ async function main() {
     await page.waitForTimeout(1300);
     const productState = await getHomeState(page);
     assertSectionState(productState, 'products-section', 'productsTop');
+
+    await page.click('.home-section-nav__footer-link');
+    await page.waitForTimeout(1300);
+    const footerClickState = await getHomeState(page);
+    assertFooterStateKeepsProductSegment(footerClickState);
+
+    await dispatchSwipe(cdp, page, 190, 650);
+    await page.waitForTimeout(1300);
+    const productReturnState = await getHomeState(page);
+    assertSectionState(productReturnState, 'products-section', 'productsTop');
+
+    await dispatchSwipe(cdp, page, 650, 190);
+    await page.waitForTimeout(1300);
+    const footerSwipeState = await getHomeState(page);
+    assertFooterStateKeepsProductSegment(footerSwipeState);
+
+    await dispatchSwipe(cdp, page, 190, 650);
+    await page.waitForTimeout(1300);
+    const productReturnFromSwipeState = await getHomeState(page);
+    assertSectionState(productReturnFromSwipeState, 'products-section', 'productsTop');
 
     await dispatchSwipe(cdp, page, 190, 650);
     await page.waitForTimeout(1300);

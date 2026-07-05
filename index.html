@@ -192,6 +192,7 @@
       const footerNavLink = document.querySelector('.home-section-nav__footer-link');
       const footerTarget = footerNavLink ? document.getElementById(footerNavLink.dataset.footerTarget) : null;
       const sections = Array.from(document.querySelectorAll('[data-home-section]'));
+      const sectionTargetIds = new Set(sectionButtons.map((button) => button.dataset.sectionTarget).filter(Boolean));
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const SECTION_NAV_LOCK_MS = 720;
       const SECTION_SCROLL_SETTLE_MS = 640;
@@ -444,12 +445,12 @@
       }
 
       function updateSectionNav(targetId) {
-        if (targetId) {
+        if (sectionTargetIds.has(targetId)) {
           activeSectionTarget = targetId;
         }
         let activeControl = null;
         sectionButtons.forEach((button) => {
-          const active = button.dataset.sectionTarget === targetId;
+          const active = button.dataset.sectionTarget === activeSectionTarget;
           button.classList.toggle('is-active', active);
           button.setAttribute('aria-current', active ? 'true' : 'false');
           if (active) {
@@ -457,12 +458,8 @@
           }
         });
         if (footerNavLink) {
-          const active = footerNavLink.dataset.footerTarget === targetId;
-          footerNavLink.classList.toggle('is-active', active);
-          footerNavLink.setAttribute('aria-current', active ? 'true' : 'false');
-          if (active) {
-            activeControl = footerNavLink;
-          }
+          footerNavLink.classList.remove('is-active');
+          footerNavLink.setAttribute('aria-current', 'false');
         }
         if (activeControl && sectionNav) {
           sectionNav.style.setProperty('--segment-x', `${activeControl.offsetLeft}px`);
@@ -472,6 +469,10 @@
 
       function getSectionIndexById(sectionId) {
         return sections.findIndex((section) => section.id === sectionId);
+      }
+
+      function getFooterAdjacentSection() {
+        return sections.length > 0 ? sections[sections.length - 1] : null;
       }
 
       function getDirectionalSection(direction) {
@@ -562,7 +563,10 @@
         pendingHomeSection = null;
         clearSectionSettleTimer();
         sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : SECTION_NAV_LOCK_MS);
-        updateSectionNav(footerTarget.id);
+        const adjacentSection = getFooterAdjacentSection();
+        if (adjacentSection) {
+          updateSectionNav(adjacentSection.id);
+        }
         footerTarget.scrollIntoView({
           behavior: reduceMotion.matches ? 'auto' : 'smooth',
           block: 'end'
@@ -586,11 +590,14 @@
       }
 
       function syncFooterNavState() {
-        if (isSectionNavigationLocked() && (!footerTarget || activeSectionTarget !== footerTarget.id)) {
+        if (isSectionNavigationLocked()) {
           return;
         }
         if (isFooterNavPosition()) {
-          updateSectionNav(footerTarget.id);
+          const adjacentSection = getFooterAdjacentSection();
+          if (adjacentSection) {
+            updateSectionNav(adjacentSection.id);
+          }
         }
       }
 
@@ -734,7 +741,10 @@
               return;
             }
             if (isFooterNavPosition()) {
-              updateSectionNav(footerTarget.id);
+              const adjacentSection = getFooterAdjacentSection();
+              if (adjacentSection) {
+                updateSectionNav(adjacentSection.id);
+              }
               return;
             }
             if (visible && visible.target.id) {
