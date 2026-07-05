@@ -208,6 +208,7 @@
       let activeNavTarget = activeSectionTarget;
       let sectionNavLockUntil = 0;
       let pendingHomeSection = null;
+      let pendingFooterScroll = false;
       let sectionSettleTimer = null;
       let wheelDeltaY = 0;
       let wheelResetTimer = null;
@@ -537,6 +538,9 @@
         if (direction === 0 || sections.length === 0) {
           return null;
         }
+        if (isFooterNavPosition()) {
+          return direction > 0 ? null : getFooterAdjacentSection();
+        }
         const tolerance = Math.max(4, Math.round(window.innerHeight * 0.06));
         if (direction > 0) {
           const nextVisible = sections.find((section) => section.getBoundingClientRect().top > tolerance);
@@ -553,6 +557,22 @@
         }
         const activeIndex = getSectionIndexById(activeSectionTarget);
         return activeIndex > 0 ? sections[activeIndex - 1] : null;
+      }
+
+      function canNavigateInDirection(direction) {
+        if (getDirectionalSection(direction)) {
+          return true;
+        }
+        return direction > 0 && Boolean(footerTarget) && !isFooterNavPosition();
+      }
+
+      function getDocumentBottomScrollTop() {
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        const documentHeight = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight
+        );
+        return Math.max(0, Math.round(documentHeight - viewportHeight));
       }
 
       function clearWheelAccumulation() {
@@ -597,12 +617,31 @@
         }, reduceMotion.matches ? 80 : delay);
       }
 
+      function settleFooterScroll(delay = SECTION_SCROLL_SETTLE_MS) {
+        clearSectionSettleTimer();
+        sectionSettleTimer = window.setTimeout(() => {
+          sectionSettleTimer = null;
+          if (!pendingFooterScroll) {
+            return;
+          }
+          pendingFooterScroll = false;
+          if (!isFooterNavPosition()) {
+            window.scrollTo({
+              top: getDocumentBottomScrollTop(),
+              behavior: 'auto'
+            });
+          }
+          updateFooterNav();
+        }, reduceMotion.matches ? 80 : delay);
+      }
+
       function scrollToHomeSection(section) {
         if (!section) {
           return;
         }
         sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : Math.max(SECTION_NAV_LOCK_MS, SECTION_SCROLL_SETTLE_MS + 140));
         pendingHomeSection = section;
+        pendingFooterScroll = false;
         updateSectionNav(section.id);
         if (window.history && window.history.replaceState && window.location.hash === '#home-footer') {
           window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
@@ -614,21 +653,23 @@
         settleHomeSection(section);
       }
 
-      function scrollToFooter() {
+      function scrollToFooter(options = {}) {
         if (!footerTarget) {
           return;
         }
         pendingHomeSection = null;
+        pendingFooterScroll = true;
         clearSectionSettleTimer();
-        sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : SECTION_NAV_LOCK_MS);
+        sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : Math.max(SECTION_NAV_LOCK_MS, SECTION_SCROLL_SETTLE_MS + 140));
         updateFooterNav();
         footerTarget.scrollIntoView({
           behavior: reduceMotion.matches ? 'auto' : 'smooth',
           block: 'end'
         });
-        if (window.history && window.history.pushState) {
+        if (options.updateHistory !== false && window.history && window.history.pushState) {
           window.history.pushState(null, '', `#${footerTarget.id}`);
         }
+        settleFooterScroll();
       }
 
       function isFooterNavPosition() {
@@ -656,6 +697,17 @@
       function navigateSectionByDirection(direction, event) {
         const target = getDirectionalSection(direction);
         if (!target) {
+          if (direction > 0 && footerTarget && !isFooterNavPosition()) {
+            if (event && event.cancelable) {
+              event.preventDefault();
+            }
+            if (isSectionNavigationLocked()) {
+              return true;
+            }
+            clearWheelAccumulation();
+            scrollToFooter({ updateHistory: false });
+            return true;
+          }
           clearWheelAccumulation();
           return false;
         }
@@ -686,7 +738,7 @@
           return;
         }
         const direction = deltaY > 0 ? 1 : -1;
-        if (!getDirectionalSection(direction)) {
+        if (!canNavigateInDirection(direction)) {
           clearWheelAccumulation();
           return;
         }
@@ -731,7 +783,7 @@
           return;
         }
         const direction = deltaY > 0 ? 1 : -1;
-        if (!getDirectionalSection(direction)) {
+        if (!canNavigateInDirection(direction)) {
           return;
         }
         if (event.cancelable) {
@@ -744,9 +796,14 @@
       }
 
       function handleSectionTouchEnd() {
-        if (touchSectionHandled && pendingHomeSection) {
-          sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);
-          settleHomeSection(pendingHomeSection, TOUCH_MOMENTUM_SETTLE_MS);
+        if (touchSectionHandled) {
+          if (pendingHomeSection) {
+            sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);
+            settleHomeSection(pendingHomeSection, TOUCH_MOMENTUM_SETTLE_MS);
+          } else if (pendingFooterScroll) {
+            sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);
+            settleFooterScroll(TOUCH_MOMENTUM_SETTLE_MS);
+          }
         }
         touchSectionHandled = false;
       }
