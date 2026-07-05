@@ -513,6 +513,14 @@ html.page-home-document {
   scroll-snap-type: y mandatory;
 }
 
+/* JS のセクションナビが有効な間は縦パンをネイティブに渡さない。
+   iOS Safari はネイティブスクロール開始後の touchmove を cancelable:false にするため、
+   CSS で縦パン自体を無効化しないと JS 制御と慣性スクロール + mandatory snap が競合する。 */
+html.page-home-document.home-scroll-managed {
+  touch-action: pan-x;
+  touch-action: pan-x pinch-zoom;
+}
+
 :root[data-theme="dark"].page-home-document,
 :root[data-theme="dark"].page-catalog-document,
 :root[data-theme="dark"].page-product-document {

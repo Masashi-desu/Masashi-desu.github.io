@@ -201,6 +201,7 @@
       const TOUCH_SECTION_THRESHOLD = 48;
       const TOUCH_INTENT_THRESHOLD = 10;
       const TOUCH_MOMENTUM_SETTLE_MS = 520;
+      const SECTION_ALIGN_ENFORCE_FRAMES = 36;
       const PRODUCT_CAROUSEL_SPEED = 26;
       const PRODUCT_CAROUSEL_MIN_DURATION = 54;
       let productCatalog = [];
@@ -210,6 +211,7 @@
       let pendingHomeSection = null;
       let pendingFooterScroll = false;
       let sectionSettleTimer = null;
+      let sectionAlignFrame = null;
       let wheelDeltaY = 0;
       let wheelResetTimer = null;
       let touchStartX = 0;
@@ -598,6 +600,38 @@
         }
       }
 
+      function cancelScrollAlignment() {
+        if (sectionAlignFrame !== null) {
+          window.cancelAnimationFrame(sectionAlignFrame);
+          sectionAlignFrame = null;
+        }
+      }
+
+      function enforceScrollAlignment(readTargetTop) {
+        // iOS Safari は慣性スクロール中のプログラムスクロールを無視することがあるため、
+        // 一発の scrollTo ではなく数フレームにわたり整合するまで再適用する。
+        cancelScrollAlignment();
+        let framesLeft = SECTION_ALIGN_ENFORCE_FRAMES;
+        const step = () => {
+          sectionAlignFrame = null;
+          const targetTop = readTargetTop();
+          if (targetTop === null) {
+            return;
+          }
+          if (Math.abs(window.scrollY - targetTop) > 1) {
+            window.scrollTo({
+              top: targetTop,
+              behavior: 'auto'
+            });
+          }
+          framesLeft -= 1;
+          if (framesLeft > 0) {
+            sectionAlignFrame = window.requestAnimationFrame(step);
+          }
+        };
+        step();
+      }
+
       function settleHomeSection(section, delay = SECTION_SCROLL_SETTLE_MS) {
         clearSectionSettleTimer();
         sectionSettleTimer = window.setTimeout(() => {
@@ -605,13 +639,7 @@
           if (!section || pendingHomeSection !== section) {
             return;
           }
-          const tolerance = Math.max(2, Math.round(window.innerHeight * 0.01));
-          if (Math.abs(section.getBoundingClientRect().top) > tolerance) {
-            window.scrollTo({
-              top: getSectionScrollTop(section),
-              behavior: 'auto'
-            });
-          }
+          enforceScrollAlignment(() => getSectionScrollTop(section));
           updateSectionNav(section.id);
           pendingHomeSection = null;
         }, reduceMotion.matches ? 80 : delay);
@@ -625,12 +653,7 @@
             return;
           }
           pendingFooterScroll = false;
-          if (!isFooterNavPosition()) {
-            window.scrollTo({
-              top: getDocumentBottomScrollTop(),
-              behavior: 'auto'
-            });
-          }
+          enforceScrollAlignment(() => getDocumentBottomScrollTop());
           updateFooterNav();
         }, reduceMotion.matches ? 80 : delay);
       }
@@ -639,6 +662,7 @@
         if (!section) {
           return;
         }
+        cancelScrollAlignment();
         sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : Math.max(SECTION_NAV_LOCK_MS, SECTION_SCROLL_SETTLE_MS + 140));
         pendingHomeSection = section;
         pendingFooterScroll = false;
@@ -659,6 +683,7 @@
         }
         pendingHomeSection = null;
         pendingFooterScroll = true;
+        cancelScrollAlignment();
         clearSectionSettleTimer();
         sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : Math.max(SECTION_NAV_LOCK_MS, SECTION_SCROLL_SETTLE_MS + 140));
         updateFooterNav();
@@ -774,6 +799,12 @@
         if (event.touches.length !== 1) {
           return;
         }
+        // 最初の touchmove から必ず preventDefault する。iOS Safari は一度ネイティブ
+        // スクロールが始まると以降の touchmove を cancelable:false にするため、
+        // 意図判定を待ってから preventDefault しても縦パンを止められない。
+        if (event.cancelable) {
+          event.preventDefault();
+        }
         const touch = event.touches[0];
         const deltaX = touchStartX - touch.clientX;
         const deltaY = touchStartY - touch.clientY;
@@ -785,9 +816,6 @@
         const direction = deltaY > 0 ? 1 : -1;
         if (!canNavigateInDirection(direction)) {
           return;
-        }
-        if (event.cancelable) {
-          event.preventDefault();
         }
         if (touchSectionHandled || absDeltaY < TOUCH_SECTION_THRESHOLD) {
           return;
@@ -809,6 +837,9 @@
       }
 
       function setupSectionNavigation() {
+        if (sections.length > 0) {
+          document.documentElement.classList.add('home-scroll-managed');
+        }
         sectionButtons.forEach((button) => {
           button.addEventListener('click', () => {
             const section = document.getElementById(button.dataset.sectionTarget);
