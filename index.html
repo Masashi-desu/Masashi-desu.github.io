@@ -212,6 +212,8 @@
       let pendingFooterScroll = false;
       let sectionSettleTimer = null;
       let sectionAlignFrame = null;
+      let restAlignTimer = null;
+      let touchPointsActive = 0;
       let wheelDeltaY = 0;
       let wheelResetTimer = null;
       let touchStartX = 0;
@@ -632,6 +634,63 @@
         step();
       }
 
+      function isViewportZoomed() {
+        return Boolean(window.visualViewport && window.visualViewport.scale > 1.02);
+      }
+
+      function scheduleRestAlignmentCheck(delay) {
+        if (restAlignTimer !== null) {
+          window.clearTimeout(restAlignTimer);
+        }
+        restAlignTimer = window.setTimeout(runRestAlignmentCheck, delay);
+      }
+
+      function runRestAlignmentCheck() {
+        // マルチタッチやシステムジェスチャなど JS が関与しない経路でスクロールが
+        // 起きても、静止位置は必ずセクション境界かフッター末尾になるよう常時監視する。
+        restAlignTimer = null;
+        if (touchPointsActive > 0 || isSectionNavigationLocked() || pendingHomeSection || pendingFooterScroll || sectionAlignFrame !== null) {
+          scheduleRestAlignmentCheck(320);
+          return;
+        }
+        if (isViewportZoomed() || sections.length === 0) {
+          return;
+        }
+        const current = window.scrollY;
+        let nearestSection = null;
+        let nearestDistance = Infinity;
+        sections.forEach((section) => {
+          const distance = Math.abs(getSectionScrollTop(section) - current);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestSection = section;
+          }
+        });
+        let alignToFooter = false;
+        if (footerTarget) {
+          const footerDistance = Math.abs(getDocumentBottomScrollTop() - current);
+          if (footerDistance < nearestDistance) {
+            nearestDistance = footerDistance;
+            alignToFooter = true;
+          }
+        }
+        const tolerance = Math.max(4, Math.round(window.innerHeight * 0.02));
+        if (nearestDistance > tolerance) {
+          sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : 480);
+          if (alignToFooter) {
+            enforceScrollAlignment(() => getDocumentBottomScrollTop());
+          } else {
+            const target = nearestSection;
+            enforceScrollAlignment(() => getSectionScrollTop(target));
+          }
+        }
+        if (alignToFooter) {
+          updateFooterNav();
+        } else {
+          updateSectionNav(nearestSection.id);
+        }
+      }
+
       function settleHomeSection(section, delay = SECTION_SCROLL_SETTLE_MS) {
         clearSectionSettleTimer();
         sectionSettleTimer = window.setTimeout(() => {
@@ -787,6 +846,7 @@
       }
 
       function handleSectionTouchStart(event) {
+        touchPointsActive = event.touches.length;
         if (event.touches.length !== 1) {
           return;
         }
@@ -823,7 +883,8 @@
         touchSectionHandled = navigateSectionByDirection(direction);
       }
 
-      function handleSectionTouchEnd() {
+      function handleSectionTouchEnd(event) {
+        touchPointsActive = event && event.touches ? event.touches.length : 0;
         if (touchSectionHandled) {
           if (pendingHomeSection) {
             sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);
@@ -834,6 +895,9 @@
           }
         }
         touchSectionHandled = false;
+        if (touchPointsActive === 0) {
+          scheduleRestAlignmentCheck(TOUCH_MOMENTUM_SETTLE_MS + 200);
+        }
       }
 
       function setupSectionNavigation() {
@@ -893,6 +957,9 @@
 
         window.addEventListener('wheel', handleSectionWheel, { passive: false });
         window.addEventListener('scroll', syncFooterNavState, { passive: true });
+        if ('ontouchstart' in window || window.matchMedia('(any-pointer: coarse)').matches) {
+          window.addEventListener('scroll', () => scheduleRestAlignmentCheck(260), { passive: true });
+        }
         window.addEventListener('touchstart', handleSectionTouchStart, { passive: true });
         window.addEventListener('touchmove', handleSectionTouchMove, { passive: false });
         window.addEventListener('touchend', handleSectionTouchEnd, { passive: true });

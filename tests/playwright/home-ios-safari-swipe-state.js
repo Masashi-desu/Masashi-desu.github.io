@@ -14,6 +14,8 @@
  *      対象セクションの top が 0px 付近(footer は文書末尾)かつ active target が一致する。
  *    - window.scrollTo が数回無視されても(iOS の慣性中挙動の模擬)最終的に整合位置へ補正される。
  *    - ロック中の連続スワイプ後も位置と nav が食い違わない。
+ *    - JS 管理外のスクロール(2本指ジェスチャ等の模擬として直接 scrollTo)でセクション間の
+ *      中途半端な位置に置かれても、静止後に最寄りのスナップ位置へ自己修復し nav も同期する。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、WebKit の iPhone 14 Pro コンテキストで
  *    合成 TouchEvent(touches 配列を持つ plain Event)を window へ dispatch してスワイプを再現し、
  *    scrollY・active target・各セクションの矩形を取得して判定する。
@@ -241,6 +243,28 @@ async function main() {
     if (rapidState.activeTarget !== aligned.target) {
       throw new Error(`Expected nav to match settled section ${aligned.target}: ${JSON.stringify(rapidState)}`);
     }
+
+    // (6) JS 管理外のスクロールで中途半端な位置に置かれても自己修復すること
+    //     (ボタンを押したまま2本指でスワイプした場合など、JS が関与しないネイティブスクロールの模擬)。
+    //     実機 iOS では CSS の mandatory snap が機能しない場面があるため、スナップを無効化して
+    //     ブラウザ自身の再スナップに頼らず JS 側の自己修復のみで整合することを確認する。
+    await page.evaluate(() => {
+      document.documentElement.style.scrollSnapType = 'none';
+      const productsTop = Math.round(document.getElementById('products-section').getBoundingClientRect().top + window.scrollY);
+      window.scrollTo(0, productsTop - 200);
+    });
+    await page.waitForTimeout(1400);
+    assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'unmanaged mid-scroll recovery (section)');
+
+    await page.evaluate(() => {
+      const documentHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      window.scrollTo(0, documentHeight - window.innerHeight - 60);
+    });
+    await page.waitForTimeout(1400);
+    assertFooterState(await getHomeState(page), 'unmanaged mid-scroll recovery (footer)');
+    await page.evaluate(() => {
+      document.documentElement.style.scrollSnapType = '';
+    });
 
     console.log('Home sections stay in sync under iOS-Safari-like touch conditions (WebKit).');
   } finally {
