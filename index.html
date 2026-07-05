@@ -203,6 +203,7 @@
       const TOUCH_MOMENTUM_SETTLE_MS = 520;
       let productCatalog = [];
       let activeSectionTarget = sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : '';
+      let activeNavTarget = activeSectionTarget;
       let sectionNavLockUntil = 0;
       let pendingHomeSection = null;
       let sectionSettleTimer = null;
@@ -448,9 +449,13 @@
         if (sectionTargetIds.has(targetId)) {
           activeSectionTarget = targetId;
         }
+        if (targetId) {
+          activeNavTarget = targetId;
+        }
+        const visibleTarget = activeNavTarget || activeSectionTarget;
         let activeControl = null;
         sectionButtons.forEach((button) => {
-          const active = button.dataset.sectionTarget === activeSectionTarget;
+          const active = button.dataset.sectionTarget === visibleTarget;
           button.classList.toggle('is-active', active);
           button.setAttribute('aria-current', active ? 'true' : 'false');
           if (active) {
@@ -458,8 +463,12 @@
           }
         });
         if (footerNavLink) {
-          footerNavLink.classList.remove('is-active');
-          footerNavLink.setAttribute('aria-current', 'false');
+          const active = footerNavLink.dataset.footerTarget === visibleTarget;
+          footerNavLink.classList.toggle('is-active', active);
+          footerNavLink.setAttribute('aria-current', active ? 'true' : 'false');
+          if (active) {
+            activeControl = footerNavLink;
+          }
         }
         if (activeControl && sectionNav) {
           sectionNav.style.setProperty('--segment-x', `${activeControl.offsetLeft}px`);
@@ -473,6 +482,17 @@
 
       function getFooterAdjacentSection() {
         return sections.length > 0 ? sections[sections.length - 1] : null;
+      }
+
+      function updateFooterNav() {
+        if (!footerTarget) {
+          return;
+        }
+        const adjacentSection = getFooterAdjacentSection();
+        if (adjacentSection) {
+          activeSectionTarget = adjacentSection.id;
+        }
+        updateSectionNav(footerTarget.id);
       }
 
       function getDirectionalSection(direction) {
@@ -563,10 +583,7 @@
         pendingHomeSection = null;
         clearSectionSettleTimer();
         sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : SECTION_NAV_LOCK_MS);
-        const adjacentSection = getFooterAdjacentSection();
-        if (adjacentSection) {
-          updateSectionNav(adjacentSection.id);
-        }
+        updateFooterNav();
         footerTarget.scrollIntoView({
           behavior: reduceMotion.matches ? 'auto' : 'smooth',
           block: 'end'
@@ -594,10 +611,7 @@
           return;
         }
         if (isFooterNavPosition()) {
-          const adjacentSection = getFooterAdjacentSection();
-          if (adjacentSection) {
-            updateSectionNav(adjacentSection.id);
-          }
+          updateFooterNav();
         }
       }
 
@@ -736,15 +750,12 @@
             entries.forEach((entry) => {
               entry.target.classList.toggle('is-visible', entry.isIntersecting);
             });
-            if (isSectionNavigationLocked() && activeSectionTarget) {
-              updateSectionNav(activeSectionTarget);
+            if (isSectionNavigationLocked() && activeNavTarget) {
+              updateSectionNav(activeNavTarget);
               return;
             }
             if (isFooterNavPosition()) {
-              const adjacentSection = getFooterAdjacentSection();
-              if (adjacentSection) {
-                updateSectionNav(adjacentSection.id);
-              }
+              updateFooterNav();
               return;
             }
             if (visible && visible.target.id) {

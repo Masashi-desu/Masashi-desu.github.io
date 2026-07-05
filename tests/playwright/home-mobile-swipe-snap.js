@@ -1,7 +1,7 @@
 /**
  * テスト概要:
  *  - 目的: トップページをスマホ touch context で縦スワイプした際、セクション移動が途中停止せず nav segment と表示セクションが一致することを検証する。
- *  - 期待値: 上スワイプ後は Product が active かつ products-section の top が 0px 付近、footer へ入っても gear 側は active にならず、その後の下スワイプで Product / Philosophy に戻れる。
+ *  - 期待値: 上スワイプ後は Product が active かつ products-section の top が 0px 付近、footer では gear が active になり、その後の下スワイプで Product / Philosophy に戻れる。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium mobile context から CDP touch event を送って scrollY・active target・section の矩形を取得する。
  */
 const http = require('http');
@@ -102,9 +102,9 @@ function assertSectionState(state, expectedTarget, topKey) {
   }
 }
 
-function assertFooterStateKeepsProductSegment(state) {
-  if (state.activeTarget !== 'products-section') {
-    throw new Error(`Expected Product segment to remain active at footer, got ${state.activeTarget}: ${JSON.stringify(state)}`);
+function assertFooterState(state) {
+  if (state.activeTarget !== 'home-footer') {
+    throw new Error(`Expected footer segment to be active, got ${state.activeTarget}: ${JSON.stringify(state)}`);
   }
   if (state.distanceFromBottom > SECTION_TOLERANCE) {
     throw new Error(`Expected to be settled at footer bottom, got ${state.distanceFromBottom}px from bottom: ${JSON.stringify(state)}`);
@@ -162,7 +162,7 @@ async function main() {
     await page.click('.home-section-nav__footer-link');
     await page.waitForTimeout(1300);
     const footerClickState = await getHomeState(page);
-    assertFooterStateKeepsProductSegment(footerClickState);
+    assertFooterState(footerClickState);
 
     await dispatchSwipe(cdp, page, 190, 650);
     await page.waitForTimeout(1300);
@@ -172,7 +172,7 @@ async function main() {
     await dispatchSwipe(cdp, page, 650, 190);
     await page.waitForTimeout(1300);
     const footerSwipeState = await getHomeState(page);
-    assertFooterStateKeepsProductSegment(footerSwipeState);
+    assertFooterState(footerSwipeState);
 
     await dispatchSwipe(cdp, page, 190, 650);
     await page.waitForTimeout(1300);
