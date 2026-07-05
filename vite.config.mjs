@@ -8,9 +8,9 @@ const HTML_INPUTS = collectHtmlInputs(ROOT);
 const ROOT_STATIC_FILES = ['theme.css', 'theme.js', 'footer.js'];
 const STATIC_DIRS = ['partials', 'products'];
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig({
   appType: 'mpa',
-  base: mode === 'production' ? '/works/' : '/',
+  base: '/',
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [copyStaticSiteAssets()],
-}));
+});
 
 function collectHtmlInputs(dir, inputs = {}) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

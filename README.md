@@ -1,8 +1,8 @@
 ## Webトップページ
 
-https://masashi-desu.github.io/works/
+https://masashi-desu.github.io/
 
-# Masahi Desu Works Static Site
+# Masahi Desu User Site
 
 ## 開発とビルド
 
@@ -10,7 +10,7 @@ https://masashi-desu.github.io/works/
 - 本番ビルド: `npm run build`
 - ビルド成果物の確認: `npm run preview`
 
-GitHub Pages では `/works/` 配下に公開されるため、Vite の本番ビルドでは `base` を `/works/` に設定しています。
+GitHub Pages ではユーザーサイトとしてルート配下に公開されるため、Vite の本番ビルドでは `base` を `/` に設定しています。
 
 ## 長文テキストの改行ポリシー
 
