@@ -1279,10 +1279,6 @@ body.page-product--surround .site-footer__icon {
 }
 
 @media (max-width: 36rem) {
-  html.page-home-document {
-    scroll-snap-type: y proximity;
-  }
-
   .home-section-nav {
     width: min(calc(100% - 1rem), 22rem);
   }

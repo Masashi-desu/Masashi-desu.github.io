@@ -194,16 +194,22 @@
       const sections = Array.from(document.querySelectorAll('[data-home-section]'));
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const SECTION_NAV_LOCK_MS = 720;
+      const SECTION_SCROLL_SETTLE_MS = 640;
       const WHEEL_SECTION_THRESHOLD = 86;
       const WHEEL_RESET_MS = 180;
       const TOUCH_SECTION_THRESHOLD = 48;
+      const TOUCH_INTENT_THRESHOLD = 10;
+      const TOUCH_MOMENTUM_SETTLE_MS = 520;
       let productCatalog = [];
       let activeSectionTarget = sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : '';
       let sectionNavLockUntil = 0;
+      let pendingHomeSection = null;
+      let sectionSettleTimer = null;
       let wheelDeltaY = 0;
       let wheelResetTimer = null;
       let touchStartX = 0;
       let touchStartY = 0;
+      let touchSectionHandled = false;
       let currentLang = resolveLocale(readStoredLanguage() || 'ja');
 
       function syncSectionViewportSize() {
@@ -224,7 +230,6 @@
         window.addEventListener('orientationchange', syncSectionViewportSize);
         if (window.visualViewport) {
           window.visualViewport.addEventListener('resize', syncSectionViewportSize);
-          window.visualViewport.addEventListener('scroll', syncSectionViewportSize);
         }
       }
 
@@ -503,25 +508,59 @@
         return Date.now() < sectionNavLockUntil;
       }
 
+      function getSectionScrollTop(section) {
+        return Math.round(section.getBoundingClientRect().top + window.scrollY);
+      }
+
+      function clearSectionSettleTimer() {
+        if (sectionSettleTimer !== null) {
+          window.clearTimeout(sectionSettleTimer);
+          sectionSettleTimer = null;
+        }
+      }
+
+      function settleHomeSection(section, delay = SECTION_SCROLL_SETTLE_MS) {
+        clearSectionSettleTimer();
+        sectionSettleTimer = window.setTimeout(() => {
+          sectionSettleTimer = null;
+          if (!section || pendingHomeSection !== section) {
+            return;
+          }
+          const tolerance = Math.max(2, Math.round(window.innerHeight * 0.01));
+          if (Math.abs(section.getBoundingClientRect().top) > tolerance) {
+            window.scrollTo({
+              top: getSectionScrollTop(section),
+              behavior: 'auto'
+            });
+          }
+          updateSectionNav(section.id);
+          pendingHomeSection = null;
+        }, reduceMotion.matches ? 80 : delay);
+      }
+
       function scrollToHomeSection(section) {
         if (!section) {
           return;
         }
-        sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : SECTION_NAV_LOCK_MS);
+        sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : Math.max(SECTION_NAV_LOCK_MS, SECTION_SCROLL_SETTLE_MS + 140));
+        pendingHomeSection = section;
         updateSectionNav(section.id);
         if (window.history && window.history.replaceState && window.location.hash === '#home-footer') {
           window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
         }
-        section.scrollIntoView({
+        window.scrollTo({
+          top: getSectionScrollTop(section),
           behavior: reduceMotion.matches ? 'auto' : 'smooth',
-          block: 'start'
         });
+        settleHomeSection(section);
       }
 
       function scrollToFooter() {
         if (!footerTarget) {
           return;
         }
+        pendingHomeSection = null;
+        clearSectionSettleTimer();
         sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : SECTION_NAV_LOCK_MS);
         updateSectionNav(footerTarget.id);
         footerTarget.scrollIntoView({
@@ -617,6 +656,7 @@
         }
         touchStartX = event.touches[0].clientX;
         touchStartY = event.touches[0].clientY;
+        touchSectionHandled = false;
       }
 
       function handleSectionTouchMove(event) {
@@ -626,14 +666,30 @@
         const touch = event.touches[0];
         const deltaX = touchStartX - touch.clientX;
         const deltaY = touchStartY - touch.clientY;
-        if (Math.abs(deltaY) < TOUCH_SECTION_THRESHOLD || Math.abs(deltaY) < Math.abs(deltaX) * 1.25) {
+        const absDeltaX = Math.abs(deltaX);
+        const absDeltaY = Math.abs(deltaY);
+        if (absDeltaY < TOUCH_INTENT_THRESHOLD || absDeltaY < absDeltaX * 1.25) {
           return;
         }
         const direction = deltaY > 0 ? 1 : -1;
-        if (navigateSectionByDirection(direction, event)) {
-          touchStartX = touch.clientX;
-          touchStartY = touch.clientY;
+        if (!getDirectionalSection(direction)) {
+          return;
         }
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+        if (touchSectionHandled || absDeltaY < TOUCH_SECTION_THRESHOLD) {
+          return;
+        }
+        touchSectionHandled = navigateSectionByDirection(direction);
+      }
+
+      function handleSectionTouchEnd() {
+        if (touchSectionHandled && pendingHomeSection) {
+          sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);
+          settleHomeSection(pendingHomeSection, TOUCH_MOMENTUM_SETTLE_MS);
+        }
+        touchSectionHandled = false;
       }
 
       function setupSectionNavigation() {
@@ -692,6 +748,8 @@
         window.addEventListener('scroll', syncFooterNavState, { passive: true });
         window.addEventListener('touchstart', handleSectionTouchStart, { passive: true });
         window.addEventListener('touchmove', handleSectionTouchMove, { passive: false });
+        window.addEventListener('touchend', handleSectionTouchEnd, { passive: true });
+        window.addEventListener('touchcancel', handleSectionTouchEnd, { passive: true });
         updateSectionNav(sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : '');
         window.addEventListener('resize', () => {
           const active = sectionButtons.find((button) => button.classList.contains('is-active'));

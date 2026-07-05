@@ -12,8 +12,9 @@
     "preview": "vite preview --host 127.0.0.1",
     "build:meta": "node tools/apply-meta-template.js",
     "build:social": "node tools/generate-social-image.js",
-    "test": "npm run test:page-transitions",
-    "test:page-transitions": "node tests/playwright/page-transition-sequence.js"
+    "test": "npm run test:page-transitions && npm run test:home-mobile-swipe",
+    "test:page-transitions": "node tests/playwright/page-transition-sequence.js",
+    "test:home-mobile-swipe": "node tests/playwright/home-mobile-swipe-snap.js"
   },
   "repository": {
     "type": "git",
