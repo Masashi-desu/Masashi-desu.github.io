@@ -1,9 +1,9 @@
 [
   {
     "dir": "",
-    "title": "Keycap Maker",
-    "title_ja": "Keycap Maker",
-    "title_en": "Keycap Maker",
+    "title": "KeycapMaker",
+    "title_ja": "KeycapMaker",
+    "title_en": "KeycapMaker",
     "desc": "Customize and download 3D-printable keycap models.",
     "desc_ja": "3Dプリント可能なキーキャップのモデルをカスタムしてダウンロードできます。",
     "desc_en": "Customize and download 3D-printable keycap models.",
