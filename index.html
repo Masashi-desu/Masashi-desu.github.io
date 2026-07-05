@@ -202,6 +202,7 @@
       const TOUCH_INTENT_THRESHOLD = 10;
       const TOUCH_MOMENTUM_SETTLE_MS = 520;
       const SECTION_ALIGN_ENFORCE_FRAMES = 36;
+      const TOUCH_ACTIVITY_STALE_MS = 1100;
       const PRODUCT_CAROUSEL_SPEED = 26;
       const PRODUCT_CAROUSEL_MIN_DURATION = 54;
       let productCatalog = [];
@@ -214,6 +215,7 @@
       let sectionAlignFrame = null;
       let restAlignTimer = null;
       let touchPointsActive = 0;
+      let lastTouchEventAt = 0;
       let wheelDeltaY = 0;
       let wheelResetTimer = null;
       let touchStartX = 0;
@@ -649,10 +651,15 @@
         // マルチタッチやシステムジェスチャなど JS が関与しない経路でスクロールが
         // 起きても、静止位置は必ずセクション境界かフッター末尾になるよう常時監視する。
         restAlignTimer = null;
-        if (touchPointsActive > 0 || isSectionNavigationLocked() || pendingHomeSection || pendingFooterScroll || sectionAlignFrame !== null) {
+        // 長押し等でシステムがジェスチャを奪うと touchend/touchcancel が届かないまま
+        // スクロールされることがある。タッチイベントが一定時間途絶えていたら
+        // 指の情報は無効とみなして補正を進める。
+        const touchRecentlyActive = touchPointsActive > 0 && (Date.now() - lastTouchEventAt) < TOUCH_ACTIVITY_STALE_MS;
+        if (touchRecentlyActive || isSectionNavigationLocked() || pendingHomeSection || pendingFooterScroll || sectionAlignFrame !== null) {
           scheduleRestAlignmentCheck(320);
           return;
         }
+        touchPointsActive = 0;
         if (isViewportZoomed() || sections.length === 0) {
           return;
         }
@@ -845,8 +852,16 @@
         }
       }
 
+      function markTouchActivity(event) {
+        lastTouchEventAt = Date.now();
+        touchPointsActive = event.touches ? event.touches.length : 0;
+      }
+
       function handleSectionTouchStart(event) {
-        touchPointsActive = event.touches.length;
+        markTouchActivity(event);
+        // システムに奪われたジェスチャは以降のイベントが一切届かないことがあるため、
+        // タッチ開始時点で stale 判定後の検査を予約しておく。
+        scheduleRestAlignmentCheck(TOUCH_ACTIVITY_STALE_MS + 320);
         if (event.touches.length !== 1) {
           return;
         }
@@ -856,6 +871,7 @@
       }
 
       function handleSectionTouchMove(event) {
+        markTouchActivity(event);
         if (event.touches.length !== 1) {
           return;
         }
@@ -884,7 +900,11 @@
       }
 
       function handleSectionTouchEnd(event) {
-        touchPointsActive = event && event.touches ? event.touches.length : 0;
+        if (event) {
+          markTouchActivity(event);
+        } else {
+          touchPointsActive = 0;
+        }
         if (touchSectionHandled) {
           if (pendingHomeSection) {
             sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);

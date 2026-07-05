@@ -16,6 +16,8 @@
  *    - ロック中の連続スワイプ後も位置と nav が食い違わない。
  *    - JS 管理外のスクロール(2本指ジェスチャ等の模擬として直接 scrollTo)でセクション間の
  *      中途半端な位置に置かれても、静止後に最寄りのスナップ位置へ自己修復し nav も同期する。
+ *    - 長押しでシステムがジェスチャを奪い touchend が届かないままスクロールされた場合
+ *      (touchstart のみ dispatch して放置)でも、タッチ情報の stale 判定により自己修復する。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、WebKit の iPhone 14 Pro コンテキストで
  *    合成 TouchEvent(touches 配列を持つ plain Event)を window へ dispatch してスワイプを再現し、
  *    scrollY・active target・各セクションの矩形を取得して判定する。
@@ -262,6 +264,21 @@ async function main() {
     });
     await page.waitForTimeout(1400);
     assertFooterState(await getHomeState(page), 'unmanaged mid-scroll recovery (footer)');
+
+    // (7) 長押しでシステムがジェスチャを奪い、touchend が届かないままスクロールされても
+    //     自己修復すること(実機 Safari の「長押し→スクロールバー表示→スクロール」の再現)
+    await page.evaluate(() => {
+      const x = Math.round(window.innerWidth / 2);
+      const event = new Event('touchstart', { bubbles: true, cancelable: true });
+      event.touches = [{ clientX: x, clientY: 400 }];
+      window.dispatchEvent(event);
+      // touchmove / touchend は届かないまま、システムスクロール相当の移動だけが起きる
+      const productsTop = Math.round(document.getElementById('products-section').getBoundingClientRect().top + window.scrollY);
+      window.scrollTo(0, productsTop - 250);
+    });
+    await page.waitForTimeout(2600);
+    assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'system-claimed gesture recovery');
+
     await page.evaluate(() => {
       document.documentElement.style.scrollSnapType = '';
     });
