@@ -1,7 +1,7 @@
 /**
  * テスト概要:
  *  - 目的: ホームのプロダクトカード carousel がスマホ表示で速くなりすぎず、手動の横スクロール操作にも反応し、アニメーション終端後も途切れずにループすることを検証する。
- *  - 期待値: iPhone 幅で 1 周分の移動距離が最初の clone カード位置と一致し、duration は距離ベースで 54s 以上、横スクロール可能で操作中は一時停止し、carousel領域は透明背景かつ通常時の影なし、終端を跨いだ後もカードが viewport 内に表示される。
+ *  - 期待値: iPhone 幅で 1 周分の移動距離が最初の clone カード位置と一致し、duration は距離ベースで 54s 以上、横スクロール可能で操作中は一時停止し、ユーザー操作中にscrollLeftが巻き戻らず、carousel領域は透明背景かつ通常時の影なし、終端を跨いだ後もカードが viewport 内に表示される。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium mobile context で CSS 変数・computed style・scrollLeft・カード矩形・CSS Animation currentTime を計測する。
  */
 const http = require('http');
@@ -158,15 +158,16 @@ async function main() {
       throw new Error(`Expected product carousel to be horizontally scrollable: ${JSON.stringify(initial)}`);
     }
 
-    await page.evaluate(() => {
+    const manualScrollTarget = Math.round(initial.distance + 180);
+    await page.evaluate((scrollLeft) => {
       const grid = document.querySelector('.home-product-grid');
-      grid.scrollLeft = 180;
-    });
+      grid.scrollLeft = scrollLeft;
+    }, manualScrollTarget);
     await page.waitForTimeout(80);
 
     const manualScroll = await getCarouselState(page);
-    if (manualScroll.scrollLeft < 120) {
-      throw new Error(`Expected manual horizontal scroll to update scrollLeft: ${JSON.stringify(manualScroll)}`);
+    if (manualScroll.scrollLeft < manualScrollTarget - 60) {
+      throw new Error(`Expected manual horizontal scroll not to be normalized mid-gesture: ${JSON.stringify({ manualScrollTarget, ...manualScroll })}`);
     }
     if (manualScroll.animationPlayState !== 'paused') {
       throw new Error(`Expected carousel animation to pause during manual scroll: ${JSON.stringify(manualScroll)}`);

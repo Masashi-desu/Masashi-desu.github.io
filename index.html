@@ -354,6 +354,9 @@
         if (!productGrid || productCarouselNormalizingScroll) {
           return;
         }
+        if (productCarouselPointerState || productGrid.classList.contains('is-user-scrolling')) {
+          return;
+        }
         const distance = getProductCarouselDistance();
         if (distance <= 1 || productGrid.scrollWidth <= productGrid.clientWidth + 1) {
           return;
@@ -390,7 +393,6 @@
           return;
         }
         productGrid.classList.add('is-user-scrolling');
-        normalizeProductCarouselScroll();
         if (!productCarouselPointerState) {
           scheduleProductCarouselResume(delay);
         }
@@ -420,7 +422,6 @@
           productCarouselPointerState.moved = true;
         }
         productGrid.scrollLeft = productCarouselPointerState.startScrollLeft - deltaX;
-        normalizeProductCarouselScroll();
         event.preventDefault();
       }
 
