@@ -194,6 +194,7 @@
       const sections = Array.from(document.querySelectorAll('[data-home-section]'));
       const sectionTargetIds = new Set(sectionButtons.map((button) => button.dataset.sectionTarget).filter(Boolean));
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const fineHoverPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
       const SECTION_NAV_LOCK_MS = 720;
       const SECTION_SCROLL_SETTLE_MS = 640;
       const WHEEL_SECTION_THRESHOLD = 86;
@@ -222,7 +223,11 @@
       let productCarouselPrependSet = null;
       let productCarouselPointerState = null;
       let productCarouselSuppressClick = false;
-      let productCarouselNormalizingScroll = false;
+      let productCarouselAutoFrame = null;
+      let productCarouselAutoLastFrameAt = 0;
+      let productCarouselAutoRemainder = 0;
+      let productCarouselProgrammaticScrollUntil = 0;
+      let productCarouselProgrammaticScrollLeft = null;
       let touchPointsActive = 0;
       let lastTouchEventAt = 0;
       let wheelDeltaY = 0;
@@ -249,15 +254,18 @@
         window.addEventListener('resize', () => {
           syncSectionViewportSize();
           syncProductCarouselMetrics();
+          ensureProductCarouselBuffers();
         });
         window.addEventListener('orientationchange', () => {
           syncSectionViewportSize();
           syncProductCarouselMetrics();
+          ensureProductCarouselBuffers();
         });
         if (window.visualViewport) {
           window.visualViewport.addEventListener('resize', () => {
             syncSectionViewportSize();
             syncProductCarouselMetrics();
+            ensureProductCarouselBuffers();
           });
         }
       }
@@ -338,7 +346,6 @@
         );
         productGrid.style.setProperty('--home-product-distance', `${distance}px`);
         productGrid.style.setProperty('--home-product-duration', `${duration}s`);
-        normalizeProductCarouselScroll();
       }
 
       function isProductCarouselTarget(target) {
@@ -357,27 +364,88 @@
         return Number.isFinite(value) ? value : 0;
       }
 
-      function normalizeProductCarouselScroll() {
-        if (!productGrid || productCarouselNormalizingScroll) {
+      function markProductCarouselProgrammaticScroll() {
+        productCarouselProgrammaticScrollUntil = window.performance.now() + 160;
+      }
+
+      function setProductCarouselScrollLeft(scrollLeft) {
+        if (!productGrid) {
           return;
         }
-        if (productCarouselPointerState || productGrid.classList.contains('is-user-scrolling')) {
+        markProductCarouselProgrammaticScroll();
+        productGrid.scrollLeft = scrollLeft;
+        productCarouselProgrammaticScrollLeft = productGrid.scrollLeft;
+      }
+
+      function isProductCarouselProgrammaticScroll() {
+        return (
+          window.performance.now() < productCarouselProgrammaticScrollUntil &&
+          productCarouselProgrammaticScrollLeft !== null &&
+          Math.abs(productGrid.scrollLeft - productCarouselProgrammaticScrollLeft) <= 2
+        );
+      }
+
+      function isProductCarouselAutoPaused() {
+        if (!productGrid) {
+          return true;
+        }
+        return (
+          reduceMotion.matches ||
+          document.hidden ||
+          productCarouselPointerState ||
+          productGrid.classList.contains('is-user-scrolling') ||
+          (fineHoverPointer.matches && productGrid.matches(':hover')) ||
+          productGrid.contains(document.activeElement)
+        );
+      }
+
+      function stopProductCarouselAutoScroll() {
+        if (productCarouselAutoFrame !== null) {
+          window.cancelAnimationFrame(productCarouselAutoFrame);
+          productCarouselAutoFrame = null;
+        }
+        productCarouselAutoLastFrameAt = 0;
+        productCarouselAutoRemainder = 0;
+      }
+
+      function runProductCarouselAutoScroll(timestamp) {
+        productCarouselAutoFrame = window.requestAnimationFrame(runProductCarouselAutoScroll);
+        if (!productGrid || typeof productCarouselAppendSet !== 'function' || typeof productCarouselPrependSet !== 'function') {
+          productCarouselAutoLastFrameAt = timestamp;
+          return;
+        }
+        if (isProductCarouselAutoPaused()) {
+          productCarouselAutoLastFrameAt = timestamp;
           return;
         }
         const distance = getProductCarouselDistance();
         if (distance <= 1 || productGrid.scrollWidth <= productGrid.clientWidth + 1) {
+          productCarouselAutoLastFrameAt = timestamp;
           return;
         }
-        const maxScrollLeft = productGrid.scrollWidth - productGrid.clientWidth;
-        if (maxScrollLeft <= distance + 1 || productGrid.scrollLeft < distance) {
+        ensureProductCarouselBuffers();
+        if (productCarouselAutoLastFrameAt === 0) {
+          productCarouselAutoLastFrameAt = timestamp;
           return;
         }
-        const nextScrollLeft = productGrid.scrollLeft % distance;
-        productCarouselNormalizingScroll = true;
-        productGrid.scrollLeft = nextScrollLeft;
-        window.requestAnimationFrame(() => {
-          productCarouselNormalizingScroll = false;
-        });
+        const elapsedSeconds = Math.min(0.12, Math.max(0, (timestamp - productCarouselAutoLastFrameAt) / 1000));
+        productCarouselAutoLastFrameAt = timestamp;
+        const delta = PRODUCT_CAROUSEL_SPEED * elapsedSeconds + productCarouselAutoRemainder;
+        const wholePixels = Math.trunc(delta);
+        productCarouselAutoRemainder = delta - wholePixels;
+        if (wholePixels <= 0) {
+          return;
+        }
+        setProductCarouselScrollLeft(productGrid.scrollLeft + wholePixels);
+        ensureProductCarouselBuffers();
+      }
+
+      function startProductCarouselAutoScroll() {
+        stopProductCarouselAutoScroll();
+        if (!productGrid || typeof productCarouselAppendSet !== 'function' || typeof productCarouselPrependSet !== 'function') {
+          return;
+        }
+        productCarouselAutoFrame = window.requestAnimationFrame(runProductCarouselAutoScroll);
       }
 
       function ensureProductCarouselBuffers() {
@@ -436,7 +504,7 @@
           if (removedWidth <= 0) {
             break;
           }
-          productGrid.scrollLeft = Math.max(0, productGrid.scrollLeft - removedWidth);
+          setProductCarouselScrollLeft(Math.max(0, productGrid.scrollLeft - removedWidth));
           cards = Array.from(track.querySelectorAll('.home-product-card'));
         }
 
@@ -540,6 +608,11 @@
         }
         productGrid.dataset.carouselInteractionBound = 'true';
         productGrid.addEventListener('scroll', () => {
+          const wasProgrammaticScroll = isProductCarouselProgrammaticScroll();
+          ensureProductCarouselBuffers();
+          if (wasProgrammaticScroll) {
+            return;
+          }
           pauseProductCarouselForInteraction();
         }, { passive: true });
         productGrid.addEventListener('wheel', (event) => {
@@ -558,12 +631,13 @@
         if (!productGrid || productCatalog.length === 0) {
           return;
         }
+        stopProductCarouselAutoScroll();
         const entries = productCatalog
           .slice()
           .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
         productGrid.innerHTML = '';
-        productGrid.scrollLeft = 0;
+        setProductCarouselScrollLeft(0);
         productGrid.style.setProperty('--home-product-count', String(entries.length));
 
         const track = document.createElement('div');
@@ -668,7 +742,7 @@
             entries.forEach((item, index) => appendProductCard(item, index, true, beforeNode));
             const addedWidth = Math.max(0, productGrid.scrollWidth - previousScrollWidth);
             if (addedWidth > 0 && productGrid.contains(track)) {
-              productGrid.scrollLeft += addedWidth;
+              setProductCarouselScrollLeft(productGrid.scrollLeft + addedWidth);
             }
           };
           for (let cloneSet = 0; cloneSet < PRODUCT_CAROUSEL_BUFFER_SETS; cloneSet += 1) {
@@ -690,10 +764,11 @@
         syncProductCarouselMetrics();
         const initialDistance = getProductCarouselDistance();
         if (initialDistance > 1) {
-          productGrid.scrollLeft = initialDistance * PRODUCT_CAROUSEL_BUFFER_SETS;
+          setProductCarouselScrollLeft(initialDistance * PRODUCT_CAROUSEL_BUFFER_SETS);
         }
         ensureProductCarouselBuffers();
         window.requestAnimationFrame(syncProductCarouselMetrics);
+        startProductCarouselAutoScroll();
 
         if (window.mdwTheme && typeof window.mdwTheme.focusPressables === 'function') {
           window.mdwTheme.focusPressables(productGrid);

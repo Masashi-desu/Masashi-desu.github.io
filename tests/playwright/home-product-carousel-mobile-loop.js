@@ -1,13 +1,13 @@
 /**
  * テスト概要:
- *  - 目的: ホームのプロダクトカード carousel がスマホ表示で速くなりすぎず、手動の横スクロール操作にも反応し、アニメーション終端後も途切れずにループすることを検証する。
- *  - 期待値: iPhone 幅で 1 周分の移動距離が隣接カードセット間隔と一致し、duration は距離ベースで 54s 以上、横スクロール可能で操作中は一時停止し、ユーザー操作中にscrollLeftが巻き戻らず、両端付近ではカードセットが継ぎ足され、不要になった端のカードは破棄され、carousel領域は透明背景かつ通常時の影なし、終端を跨いだ後もカードが viewport 内に表示される。
- *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium mobile context で CSS 変数・computed style・scrollLeft・カード矩形・CSS Animation currentTime を計測する。
+ *  - 目的: ホームのプロダクトカード carousel がスマホ表示で速くなりすぎず、手動の横スクロール操作にも反応し、自動移動・手動操作・viewport resize 後も途切れずにループすることを検証する。
+ *  - 期待値: iPhone 幅で 1 周分の移動距離が隣接カードセット間隔と一致し、duration は距離ベースで 54s 以上、横スクロール可能で自動移動は scrollLeft で進み、操作中は一時停止し、ユーザー操作中にscrollLeftが巻き戻らず、両端付近ではカードセットが継ぎ足され、不要になった端のカードは破棄され、carousel領域は透明背景かつ通常時の影なし、viewport resize 後もカードが viewport 内に表示される。
+ *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium/WebKit mobile context で CSS 変数・computed style・scrollLeft・カード矩形を計測する。
  */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { chromium, devices } = require('playwright');
+const { chromium, webkit, devices } = require('playwright');
 
 const ROOT = path.resolve(__dirname, '../../');
 const MOBILE_VIEWPORT = { width: 393, height: 852 };
@@ -72,14 +72,6 @@ async function getCarouselState(page) {
     const firstRepeatedSetDistance = Number.isFinite(setSize) && cards[0] && cards[setSize]
       ? cards[setSize].offsetLeft - cards[0].offsetLeft
       : null;
-    let trackTransformX = 0;
-    if (trackStyle.transform && trackStyle.transform !== 'none') {
-      try {
-        trackTransformX = new DOMMatrixReadOnly(trackStyle.transform).m41;
-      } catch (error) {
-        trackTransformX = 0;
-      }
-    }
     const visibleCards = Array.from(document.querySelectorAll('.home-product-card')).filter((card) => {
       const rect = card.getBoundingClientRect();
       return rect.right > gridRect.left + 24 && rect.left < gridRect.right - 24;
@@ -90,8 +82,8 @@ async function getCarouselState(page) {
       setSize,
       distance: Number.parseFloat(gridStyle.getPropertyValue('--home-product-distance')),
       duration: Number.parseFloat(gridStyle.getPropertyValue('--home-product-duration')),
-      animationDuration: Number.parseFloat(trackStyle.animationDuration),
-      animationPlayState: trackStyle.animationPlayState,
+      animationName: trackStyle.animationName,
+      isUserScrolling: grid.classList.contains('is-user-scrolling'),
       gridBackgroundColor: gridStyle.backgroundColor,
       gridPaddingBottom: gridStyle.paddingBottom,
       trackBackgroundColor: trackStyle.backgroundColor,
@@ -102,18 +94,14 @@ async function getCarouselState(page) {
       scrollWidth: grid.scrollWidth,
       scrollLeft: Math.round(grid.scrollLeft),
       trackLeft: Number(trackRect.left.toFixed(2)),
-      trackTransformX: Number(trackTransformX.toFixed(2)),
       transform: trackStyle.transform,
       visibleCards
     };
   });
 }
 
-async function main() {
-  const server = await startServer();
-  const port = server.address().port;
-  const browser = await chromium.launch();
-
+async function runCarouselAssertions(browserType, browserName, port) {
+  const browser = await browserType.launch();
   try {
     const context = await browser.newContext({
       ...devices['iPhone 14 Pro'],
@@ -159,8 +147,11 @@ async function main() {
     if (Math.abs(initial.distance - initial.firstRepeatedSetDistance) > 1) {
       throw new Error(`Carousel distance should match adjacent set distance: ${JSON.stringify(initial)}`);
     }
-    if (initial.duration < MIN_DURATION_SECONDS || initial.animationDuration < MIN_DURATION_SECONDS) {
+    if (initial.duration < MIN_DURATION_SECONDS) {
       throw new Error(`Mobile carousel duration should not be faster than desktop baseline: ${JSON.stringify(initial)}`);
+    }
+    if (initial.animationName !== 'none' || initial.transform !== 'none') {
+      throw new Error(`Expected carousel auto movement not to depend on CSS transform animation: ${JSON.stringify(initial)}`);
     }
     if (initial.visibleCards < 1) {
       throw new Error(`Expected at least one visible product card before loop: ${JSON.stringify(initial)}`);
@@ -179,7 +170,16 @@ async function main() {
     }
     const maxExpectedCards = initial.setSize * MAX_EXPECTED_CARD_SETS;
 
-    const manualScrollTarget = Math.round(initial.scrollLeft + initial.distance + 180);
+    await page.waitForTimeout(1250);
+    const afterAutoScroll = await getCarouselState(page);
+    if (afterAutoScroll.scrollLeft <= initial.scrollLeft + 12) {
+      throw new Error(`Expected carousel to auto-scroll with scrollLeft: ${JSON.stringify({ initial, afterAutoScroll })}`);
+    }
+    if (afterAutoScroll.visibleCards < 1) {
+      throw new Error(`Expected visible product cards during automatic scroll: ${JSON.stringify(afterAutoScroll)}`);
+    }
+
+    const manualScrollTarget = Math.round(afterAutoScroll.scrollLeft + afterAutoScroll.distance + 180);
     await page.evaluate((scrollLeft) => {
       const grid = document.querySelector('.home-product-grid');
       grid.scrollLeft = scrollLeft;
@@ -190,8 +190,13 @@ async function main() {
     if (manualScroll.scrollLeft < manualScrollTarget - 60) {
       throw new Error(`Expected manual horizontal scroll not to be normalized mid-gesture: ${JSON.stringify({ manualScrollTarget, ...manualScroll })}`);
     }
-    if (manualScroll.animationPlayState !== 'paused') {
-      throw new Error(`Expected carousel animation to pause during manual scroll: ${JSON.stringify(manualScroll)}`);
+    if (!manualScroll.isUserScrolling) {
+      throw new Error(`Expected carousel auto-scroll to pause during manual scroll: ${JSON.stringify(manualScroll)}`);
+    }
+    await page.waitForTimeout(520);
+    const manualHold = await getCarouselState(page);
+    if (Math.abs(manualHold.scrollLeft - manualScroll.scrollLeft) > 4) {
+      throw new Error(`Expected manual scroll position to stay stable while interaction pause is active: ${JSON.stringify({ manualScroll, manualHold })}`);
     }
 
     const beforeEndScroll = await getCarouselState(page);
@@ -255,34 +260,45 @@ async function main() {
       throw new Error(`Expected visible product cards after repeated bidirectional extension and trimming: ${JSON.stringify(afterStressScroll)}`);
     }
 
+    await page.setViewportSize({ width: MOBILE_VIEWPORT.width, height: MOBILE_VIEWPORT.height - 92 });
+    await page.waitForTimeout(120);
+    const afterMobileViewportResize = await getCarouselState(page);
+    if (afterMobileViewportResize.visibleCards < 1) {
+      throw new Error(`Expected visible product cards after mobile viewport resize: ${JSON.stringify(afterMobileViewportResize)}`);
+    }
+    if (afterMobileViewportResize.scrollLeft < afterMobileViewportResize.distance) {
+      throw new Error(`Expected mobile viewport resize not to collapse the left carousel buffer: ${JSON.stringify(afterMobileViewportResize)}`);
+    }
+
     await page.waitForFunction(() => {
       const grid = document.querySelector('.home-product-grid');
       return !grid.classList.contains('is-user-scrolling');
     }, null, { timeout: 1600 });
 
-    await page.evaluate(() => {
-      const track = document.querySelector('.home-product-track');
-      const animation = track.getAnimations().find((entry) => entry.animationName === 'home-product-drift');
-      if (!animation) {
-        throw new Error('home-product-drift animation was not found');
-      }
-      const durationMs = Number.parseFloat(getComputedStyle(track).animationDuration) * 1000;
-      animation.currentTime = durationMs - 24;
-      animation.play();
-    });
-    await page.waitForTimeout(120);
-
-    const afterWrap = await getCarouselState(page);
-    if (afterWrap.visibleCards < 1) {
-      throw new Error(`Expected visible product cards after crossing loop boundary: ${JSON.stringify(afterWrap)}`);
+    const beforeAutoResume = await getCarouselState(page);
+    await page.waitForTimeout(1250);
+    const afterAutoResume = await getCarouselState(page);
+    if (afterAutoResume.scrollLeft <= beforeAutoResume.scrollLeft + 12) {
+      throw new Error(`Expected automatic scroll to resume after manual interaction settles: ${JSON.stringify({ beforeAutoResume, afterAutoResume })}`);
     }
-    if (afterWrap.trackTransformX < -80) {
-      throw new Error(`Carousel did not wrap back to the start after animation boundary: ${JSON.stringify(afterWrap)}`);
+    if (afterAutoResume.visibleCards < 1) {
+      throw new Error(`Expected visible product cards after automatic scroll resumes: ${JSON.stringify(afterAutoResume)}`);
     }
 
-    console.log('Home product carousel loops at mobile speed.');
+    console.log(`Home product carousel loops at mobile speed (${browserName}).`);
   } finally {
     await browser.close();
+  }
+}
+
+async function main() {
+  const server = await startServer();
+  const port = server.address().port;
+
+  try {
+    await runCarouselAssertions(chromium, 'Chromium', port);
+    await runCarouselAssertions(webkit, 'WebKit', port);
+  } finally {
     await new Promise((resolve) => server.close(resolve));
   }
 }
