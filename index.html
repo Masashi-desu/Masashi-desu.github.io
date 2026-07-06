@@ -362,16 +362,43 @@
 
           const titleText = lang === 'en' ? (item.title_en || item.title) : (item.title_ja || item.title);
           const descText = lang === 'en' ? (item.desc_en || item.desc) : (item.desc_ja || item.desc);
-          const headerPath = (item.header || item.image || '').trim();
+          const headerPath = (item.header || '').trim();
+          const iconPath = (item.image || '').trim();
+          const hasHeader = Boolean(headerPath);
+          const hasIcon = Boolean(iconPath);
+          const hasMedia = hasHeader || hasIcon;
 
-          if (headerPath) {
+          if (hasMedia) {
             const media = document.createElement('div');
             media.className = 'home-product-card__media';
-            const image = document.createElement('img');
-            image.src = `products/${item.dir || ''}${headerPath}`;
-            image.alt = `${titleText} preview`;
-            image.loading = 'lazy';
-            media.appendChild(image);
+
+            if (hasHeader) {
+              const image = document.createElement('img');
+              image.src = `products/${item.dir || ''}${headerPath}`;
+              image.alt = `${titleText} preview`;
+              image.className = 'home-product-card__media-image';
+              image.loading = 'lazy';
+              media.appendChild(image);
+            } else {
+              const placeholder = document.createElement('div');
+              placeholder.className = 'home-product-card__media-placeholder';
+              media.appendChild(placeholder);
+            }
+
+            if (hasIcon) {
+              const iconBadge = document.createElement('div');
+              iconBadge.className = 'home-product-card__icon-badge';
+
+              const icon = document.createElement('img');
+              icon.src = `products/${item.dir || ''}${iconPath}`;
+              icon.alt = `${titleText} icon`;
+              icon.className = 'home-product-card__icon';
+              icon.loading = 'lazy';
+
+              iconBadge.appendChild(icon);
+              media.appendChild(iconBadge);
+            }
+
             link.appendChild(media);
           }
 
