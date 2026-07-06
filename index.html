@@ -132,7 +132,7 @@
             主要プロダクトへすぐにアクセスできます。
           </p>
         </div>
-        <div id="home-product-grid" class="home-product-grid" aria-live="polite" data-lang-sensitive>
+        <div id="home-product-grid" class="home-product-grid" aria-live="polite" aria-label="プロダクトカード" tabindex="0" data-lang-sensitive>
           <a href="products/index.html" class="home-product-card home-product-card--fallback" data-transition-direction="right">
             <span class="home-product-card__fallback-title" data-i18n="productsLoading">プロダクトを読み込み中</span>
           </a>
@@ -215,6 +215,10 @@
       let sectionAlignFrame = null;
       let restAlignTimer = null;
       let restSampleScrollY = null;
+      let productCarouselInteractionTimer = null;
+      let productCarouselPointerState = null;
+      let productCarouselSuppressClick = false;
+      let productCarouselNormalizingScroll = false;
       let touchPointsActive = 0;
       let lastTouchEventAt = 0;
       let wheelDeltaY = 0;
@@ -327,6 +331,144 @@
         );
         productGrid.style.setProperty('--home-product-distance', `${distance}px`);
         productGrid.style.setProperty('--home-product-duration', `${duration}s`);
+        normalizeProductCarouselScroll();
+      }
+
+      function isProductCarouselTarget(target) {
+        return Boolean(productGrid && target instanceof Node && productGrid.contains(target));
+      }
+
+      function isProductCarouselEvent(event) {
+        return Boolean(event && isProductCarouselTarget(event.target));
+      }
+
+      function getProductCarouselDistance() {
+        if (!productGrid) {
+          return 0;
+        }
+        const value = Number.parseFloat(productGrid.style.getPropertyValue('--home-product-distance'));
+        return Number.isFinite(value) ? value : 0;
+      }
+
+      function normalizeProductCarouselScroll() {
+        if (!productGrid || productCarouselNormalizingScroll) {
+          return;
+        }
+        const distance = getProductCarouselDistance();
+        if (distance <= 1 || productGrid.scrollWidth <= productGrid.clientWidth + 1) {
+          return;
+        }
+        const maxScrollLeft = productGrid.scrollWidth - productGrid.clientWidth;
+        if (maxScrollLeft <= distance + 1 || productGrid.scrollLeft < distance) {
+          return;
+        }
+        const nextScrollLeft = productGrid.scrollLeft % distance;
+        productCarouselNormalizingScroll = true;
+        productGrid.scrollLeft = nextScrollLeft;
+        window.requestAnimationFrame(() => {
+          productCarouselNormalizingScroll = false;
+        });
+      }
+
+      function scheduleProductCarouselResume(delay = 900) {
+        if (!productGrid) {
+          return;
+        }
+        if (productCarouselInteractionTimer !== null) {
+          window.clearTimeout(productCarouselInteractionTimer);
+        }
+        productCarouselInteractionTimer = window.setTimeout(() => {
+          productCarouselInteractionTimer = null;
+          if (!productCarouselPointerState) {
+            productGrid.classList.remove('is-user-scrolling');
+          }
+        }, delay);
+      }
+
+      function pauseProductCarouselForInteraction(delay = 900) {
+        if (!productGrid) {
+          return;
+        }
+        productGrid.classList.add('is-user-scrolling');
+        normalizeProductCarouselScroll();
+        if (!productCarouselPointerState) {
+          scheduleProductCarouselResume(delay);
+        }
+      }
+
+      function handleProductCarouselPointerDown(event) {
+        if (!productGrid || event.pointerType !== 'mouse' || event.button !== 0) {
+          return;
+        }
+        productCarouselPointerState = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startScrollLeft: productGrid.scrollLeft,
+          moved: false
+        };
+        productGrid.classList.add('is-pointer-dragging');
+        pauseProductCarouselForInteraction();
+        productGrid.setPointerCapture(event.pointerId);
+      }
+
+      function handleProductCarouselPointerMove(event) {
+        if (!productGrid || !productCarouselPointerState || productCarouselPointerState.pointerId !== event.pointerId) {
+          return;
+        }
+        const deltaX = event.clientX - productCarouselPointerState.startX;
+        if (Math.abs(deltaX) > 3) {
+          productCarouselPointerState.moved = true;
+        }
+        productGrid.scrollLeft = productCarouselPointerState.startScrollLeft - deltaX;
+        normalizeProductCarouselScroll();
+        event.preventDefault();
+      }
+
+      function endProductCarouselPointer(event) {
+        if (!productGrid || !productCarouselPointerState || productCarouselPointerState.pointerId !== event.pointerId) {
+          return;
+        }
+        const didMove = productCarouselPointerState.moved;
+        if (productGrid.hasPointerCapture(event.pointerId)) {
+          productGrid.releasePointerCapture(event.pointerId);
+        }
+        productCarouselPointerState = null;
+        productGrid.classList.remove('is-pointer-dragging');
+        scheduleProductCarouselResume();
+        if (didMove) {
+          productCarouselSuppressClick = true;
+          window.setTimeout(() => {
+            productCarouselSuppressClick = false;
+          }, 120);
+        }
+      }
+
+      function handleProductCarouselClick(event) {
+        if (!productCarouselSuppressClick) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      function setupProductCarouselInteraction() {
+        if (!productGrid || productGrid.dataset.carouselInteractionBound === 'true') {
+          return;
+        }
+        productGrid.dataset.carouselInteractionBound = 'true';
+        productGrid.addEventListener('scroll', () => {
+          pauseProductCarouselForInteraction();
+        }, { passive: true });
+        productGrid.addEventListener('wheel', (event) => {
+          if (Math.abs(event.deltaX) > 1 || event.shiftKey) {
+            pauseProductCarouselForInteraction();
+          }
+        }, { passive: true });
+        productGrid.addEventListener('pointerdown', handleProductCarouselPointerDown);
+        productGrid.addEventListener('pointermove', handleProductCarouselPointerMove);
+        productGrid.addEventListener('pointerup', endProductCarouselPointer);
+        productGrid.addEventListener('pointercancel', endProductCarouselPointer);
+        productGrid.addEventListener('click', handleProductCarouselClick, true);
       }
 
       function renderProductCards(lang) {
@@ -349,6 +491,7 @@
           link.href = linkInfo.href;
           link.className = 'home-product-card';
           link.dataset.homeAnimate = 'true';
+          link.draggable = false;
           link.style.setProperty('--home-delay', `${(index % entries.length) * 60}ms`);
           if (isClone) {
             link.classList.add('home-product-card--clone');
@@ -378,6 +521,7 @@
               image.alt = `${titleText} preview`;
               image.className = 'home-product-card__media-image';
               image.loading = 'lazy';
+              image.draggable = false;
               media.appendChild(image);
             } else {
               const placeholder = document.createElement('div');
@@ -394,6 +538,7 @@
               icon.alt = `${titleText} icon`;
               icon.className = 'home-product-card__icon';
               icon.loading = 'lazy';
+              icon.draggable = false;
 
               iconBadge.appendChild(icon);
               media.appendChild(iconBadge);
@@ -431,7 +576,9 @@
 
         entries.forEach((item, index) => appendProductCard(item, index, false));
         if (entries.length > 1) {
-          entries.forEach((item, index) => appendProductCard(item, index, true));
+          for (let cloneSet = 0; cloneSet < 2; cloneSet += 1) {
+            entries.forEach((item, index) => appendProductCard(item, index, true));
+          }
         }
         productGrid.appendChild(track);
         syncProductCarouselMetrics();
@@ -861,6 +1008,10 @@
       }
 
       function handleSectionWheel(event) {
+        if (isProductCarouselEvent(event) && (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY))) {
+          pauseProductCarouselForInteraction();
+          return;
+        }
         const deltaY = normalizeWheelDelta(event);
         if (Math.abs(deltaY) < 1) {
           return;
@@ -912,17 +1063,26 @@
         if (event.touches.length !== 1) {
           return;
         }
+        const touch = event.touches[0];
+        const deltaX = touchStartX - touch.clientX;
+        const deltaY = touchStartY - touch.clientY;
+        const absDeltaX = Math.abs(deltaX);
+        const absDeltaY = Math.abs(deltaY);
+        if (isProductCarouselEvent(event)) {
+          if (absDeltaX >= TOUCH_INTENT_THRESHOLD && absDeltaX > absDeltaY) {
+            pauseProductCarouselForInteraction();
+            return;
+          }
+          if (absDeltaY < TOUCH_INTENT_THRESHOLD) {
+            return;
+          }
+        }
         // 最初の touchmove から必ず preventDefault する。iOS Safari は一度ネイティブ
         // スクロールが始まると以降の touchmove を cancelable:false にするため、
         // 意図判定を待ってから preventDefault しても縦パンを止められない。
         if (event.cancelable) {
           event.preventDefault();
         }
-        const touch = event.touches[0];
-        const deltaX = touchStartX - touch.clientX;
-        const deltaY = touchStartY - touch.clientY;
-        const absDeltaX = Math.abs(deltaX);
-        const absDeltaY = Math.abs(deltaY);
         if (absDeltaY < TOUCH_INTENT_THRESHOLD || absDeltaY < absDeltaX * 1.25) {
           return;
         }
@@ -1059,6 +1219,7 @@
       setupSectionViewportSizing();
       applyLanguage(currentLang);
       setupSectionNavigation();
+      setupProductCarouselInteraction();
       loadFeaturedProducts();
       setupLanguageSelector();
       window.addEventListener('mdw:footer-loaded', () => {

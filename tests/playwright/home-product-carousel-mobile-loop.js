@@ -1,8 +1,8 @@
 /**
  * テスト概要:
- *  - 目的: ホームのプロダクトカード carousel がスマホ表示で速くなりすぎず、アニメーション終端後も途切れずにループすることを検証する。
- *  - 期待値: iPhone 幅で 1 周分の移動距離が最初の clone カード位置と一致し、duration は距離ベースで 54s 以上、終端を跨いだ後もカードが viewport 内に表示される。
- *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium mobile context で CSS 変数・computed style・カード矩形・CSS Animation currentTime を計測する。
+ *  - 目的: ホームのプロダクトカード carousel がスマホ表示で速くなりすぎず、手動の横スクロール操作にも反応し、アニメーション終端後も途切れずにループすることを検証する。
+ *  - 期待値: iPhone 幅で 1 周分の移動距離が最初の clone カード位置と一致し、duration は距離ベースで 54s 以上、横スクロール可能で操作中は一時停止し、carousel領域は透明背景かつ通常時の影なし、終端を跨いだ後もカードが viewport 内に表示される。
+ *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium mobile context で CSS 変数・computed style・scrollLeft・カード矩形・CSS Animation currentTime を計測する。
  */
 const http = require('http');
 const fs = require('fs');
@@ -64,6 +64,8 @@ async function getCarouselState(page) {
     const trackRect = track.getBoundingClientRect();
     const gridStyle = getComputedStyle(grid);
     const trackStyle = getComputedStyle(track);
+    const firstCard = document.querySelector('.home-product-card:not(.home-product-card--clone)');
+    const firstCardStyle = firstCard ? getComputedStyle(firstCard) : null;
     const visibleCards = Array.from(document.querySelectorAll('.home-product-card')).filter((card) => {
       const rect = card.getBoundingClientRect();
       return rect.right > gridRect.left + 24 && rect.left < gridRect.right - 24;
@@ -74,7 +76,15 @@ async function getCarouselState(page) {
       distance: Number.parseFloat(gridStyle.getPropertyValue('--home-product-distance')),
       duration: Number.parseFloat(gridStyle.getPropertyValue('--home-product-duration')),
       animationDuration: Number.parseFloat(trackStyle.animationDuration),
+      animationPlayState: trackStyle.animationPlayState,
+      gridBackgroundColor: gridStyle.backgroundColor,
+      gridPaddingBottom: gridStyle.paddingBottom,
+      trackBackgroundColor: trackStyle.backgroundColor,
+      cardBoxShadow: firstCardStyle ? firstCardStyle.boxShadow : null,
       firstCloneOffsetLeft: firstClone ? firstClone.offsetLeft : null,
+      clientWidth: grid.clientWidth,
+      scrollWidth: grid.scrollWidth,
+      scrollLeft: Math.round(grid.scrollLeft),
       trackLeft: Number(trackRect.left.toFixed(2)),
       transform: trackStyle.transform,
       visibleCards
@@ -138,6 +148,38 @@ async function main() {
     if (initial.visibleCards < 1) {
       throw new Error(`Expected at least one visible product card before loop: ${JSON.stringify(initial)}`);
     }
+    if (initial.gridBackgroundColor !== 'rgba(0, 0, 0, 0)' || initial.trackBackgroundColor !== 'rgba(0, 0, 0, 0)') {
+      throw new Error(`Expected carousel scroll area to keep the section background visible: ${JSON.stringify(initial)}`);
+    }
+    if (initial.gridPaddingBottom !== '0px' || initial.cardBoxShadow !== 'none') {
+      throw new Error(`Expected carousel area not to create a tinted band below cards: ${JSON.stringify(initial)}`);
+    }
+    if (initial.scrollWidth <= initial.clientWidth) {
+      throw new Error(`Expected product carousel to be horizontally scrollable: ${JSON.stringify(initial)}`);
+    }
+
+    await page.evaluate(() => {
+      const grid = document.querySelector('.home-product-grid');
+      grid.scrollLeft = 180;
+    });
+    await page.waitForTimeout(80);
+
+    const manualScroll = await getCarouselState(page);
+    if (manualScroll.scrollLeft < 120) {
+      throw new Error(`Expected manual horizontal scroll to update scrollLeft: ${JSON.stringify(manualScroll)}`);
+    }
+    if (manualScroll.animationPlayState !== 'paused') {
+      throw new Error(`Expected carousel animation to pause during manual scroll: ${JSON.stringify(manualScroll)}`);
+    }
+
+    await page.evaluate(() => {
+      const grid = document.querySelector('.home-product-grid');
+      grid.scrollLeft = 0;
+    });
+    await page.waitForFunction(() => {
+      const grid = document.querySelector('.home-product-grid');
+      return grid.scrollLeft === 0 && !grid.classList.contains('is-user-scrolling');
+    }, null, { timeout: 1600 });
 
     await page.evaluate(() => {
       const track = document.querySelector('.home-product-track');
