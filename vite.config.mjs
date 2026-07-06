@@ -6,7 +6,7 @@ const ROOT = import.meta.dirname;
 const OUT_DIR = resolve(ROOT, 'dist');
 const HTML_INPUTS = collectHtmlInputs(ROOT);
 const ROOT_STATIC_FILES = ['theme.css', 'theme.js', 'footer.js'];
-const STATIC_DIRS = ['partials', 'products'];
+const STATIC_DIRS = ['partials', 'products', 'vendor'];
 
 export default defineConfig({
   appType: 'mpa',

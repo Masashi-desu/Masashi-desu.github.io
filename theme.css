@@ -900,24 +900,29 @@ body.page-product--surround .page-background {
 
 .home-product-grid {
   --home-product-gap: clamp(0.75rem, 1.25vw, 1rem);
-  --home-product-distance: calc(50% + (var(--home-product-gap) / 2));
-  --home-product-duration: 54s;
   position: relative;
   width: var(--home-section-width, 100vw);
   margin-left: calc((100% - var(--home-section-width, 100vw)) / 2);
   margin-right: calc((100% - var(--home-section-width, 100vw)) / 2);
   min-height: 0;
   background: transparent;
+  /* Embla(transform 移動)が唯一のスクロール制御者。ネイティブ横スクロールと
+     併用すると iOS で二重制御になりカードが消えるため overflow は隠す。 */
+  overflow: hidden;
+  padding: 0.35rem 0 0;
+  cursor: grab;
+  touch-action: pinch-zoom;
+}
+
+/* Embla のスクリプトが読み込めなかった場合のみネイティブ横スクロールに退避する */
+.home-product-grid--native-scroll {
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
-  padding: 0.35rem 0 0;
-  cursor: grab;
   -ms-overflow-style: none;
   scrollbar-width: none;
-  touch-action: pan-x;
   touch-action: pan-x pinch-zoom;
 }
 
@@ -925,25 +930,26 @@ body.page-product--surround .page-background {
   display: none;
 }
 
-.home-product-grid:focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 0.35rem;
-}
-
 .home-product-grid.is-pointer-dragging {
   cursor: grabbing;
   user-select: none;
 }
 
+/* Embla のコンテナ。viewSize はこの要素の幅から測られるため、
+   コンテンツ幅(max-content)にせずビューポート幅のままにする。 */
 .home-product-track {
   display: flex;
-  width: max-content;
-  gap: var(--home-product-gap);
   background: transparent;
 }
 
-.home-product-track--static {
-  transform: translate3d(0, 0, 0);
+/* Embla のスライド。loop 用のインライン transform はこのラッパーにだけ当たる。
+   カード間隔は flex gap だと loop の継ぎ目で消えるため margin-right で表現する
+   (Embla は末尾スライドの margin-right を継ぎ目の gap として測定する)。 */
+.home-product-slide {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-right: var(--home-product-gap);
 }
 
 .home-product-card {
@@ -2670,11 +2676,6 @@ body.page-transition-visible .page-transition-target {
     opacity: 1 !important;
     transform: none !important;
     transition: none !important;
-  }
-
-  .home-product-track {
-    animation: none !important;
-    transform: none !important;
   }
 
   [data-i18n],

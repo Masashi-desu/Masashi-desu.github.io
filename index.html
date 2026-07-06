@@ -132,7 +132,7 @@
             主要プロダクトへすぐにアクセスできます。
           </p>
         </div>
-        <div id="home-product-grid" class="home-product-grid" aria-live="polite" aria-label="プロダクトカード" tabindex="0" data-lang-sensitive>
+        <div id="home-product-grid" class="home-product-grid" aria-live="polite" aria-label="プロダクトカード" data-lang-sensitive>
           <a href="products/index.html" class="home-product-card home-product-card--fallback" data-transition-direction="right">
             <span class="home-product-card__fallback-title" data-i18n="productsLoading">プロダクトを読み込み中</span>
           </a>
@@ -155,6 +155,9 @@
   </footer>
   <script vite-ignore src="theme.js"></script>
   <script vite-ignore src="footer.js"></script>
+  <script vite-ignore src="vendor/embla-carousel.umd.js"></script>
+  <script vite-ignore src="vendor/embla-carousel-auto-scroll.umd.js"></script>
+  <script vite-ignore src="vendor/embla-carousel-wheel-gestures.umd.js"></script>
   <script>
     (function () {
       const STORAGE_KEY = 'mdw-lang';
@@ -205,10 +208,8 @@
       const SECTION_ALIGN_ENFORCE_FRAMES = 36;
       const TOUCH_ACTIVITY_STALE_MS = 1100;
       const PRODUCT_CAROUSEL_SPEED = 26;
-      const PRODUCT_CAROUSEL_MIN_DURATION = 54;
-      const PRODUCT_CAROUSEL_BUFFER_SETS = 2;
-      const PRODUCT_CAROUSEL_MAX_BUFFER_SETS = 4;
-      const PRODUCT_CAROUSEL_SCROLL_SETTLE_MS = 180;
+      const PRODUCT_CAROUSEL_MAX_SETS = 8;
+      const PRODUCT_CAROUSEL_RESUME_DELAY_MS = 900;
       let productCatalog = [];
       let activeSectionTarget = sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : '';
       let activeNavTarget = activeSectionTarget;
@@ -219,18 +220,10 @@
       let sectionAlignFrame = null;
       let restAlignTimer = null;
       let restSampleScrollY = null;
-      let productCarouselInteractionTimer = null;
-      let productCarouselAppendSet = null;
-      let productCarouselPrependSet = null;
-      let productCarouselPointerState = null;
-      let productCarouselSuppressClick = false;
-      let productCarouselAutoFrame = null;
-      let productCarouselAutoLastFrameAt = 0;
-      let productCarouselAutoRemainder = 0;
-      let productCarouselProgrammaticScrollUntil = 0;
-      let productCarouselProgrammaticScrollLeft = null;
-      let productCarouselLastUserScrollAt = 0;
-      let productCarouselTrimTimer = null;
+      let productCarouselEmbla = null;
+      let productCarouselSetRefreshTimer = null;
+      let productCarouselDragStartLocation = null;
+      let productCarouselSuppressClickUntil = 0;
       let touchPointsActive = 0;
       let lastTouchEventAt = 0;
       let wheelDeltaY = 0;
@@ -256,19 +249,16 @@
         syncSectionViewportSize();
         window.addEventListener('resize', () => {
           syncSectionViewportSize();
-          syncProductCarouselMetrics();
-          ensureProductCarouselBuffers();
+          scheduleProductCarouselSetRefresh();
         });
         window.addEventListener('orientationchange', () => {
           syncSectionViewportSize();
-          syncProductCarouselMetrics();
-          ensureProductCarouselBuffers();
+          scheduleProductCarouselSetRefresh();
         });
         if (window.visualViewport) {
           window.visualViewport.addEventListener('resize', () => {
             syncSectionViewportSize();
-            syncProductCarouselMetrics();
-            ensureProductCarouselBuffers();
+            scheduleProductCarouselSetRefresh();
           });
         }
       }
@@ -323,34 +313,6 @@
         return { href: path, external: false };
       }
 
-      function syncProductCarouselMetrics() {
-        if (!productGrid) {
-          return;
-        }
-        const track = productGrid.querySelector('.home-product-track');
-        if (!track) {
-          return;
-        }
-        const cards = Array.from(track.querySelectorAll('.home-product-card'));
-        const setSize = Number.parseInt(productGrid.style.getPropertyValue('--home-product-count'), 10);
-        const firstCard = cards[0];
-        const firstRepeatedCard = Number.isFinite(setSize) && setSize > 0 ? cards[setSize] : null;
-        if (!firstCard || !firstRepeatedCard) {
-          track.classList.add('home-product-track--static');
-          productGrid.style.setProperty('--home-product-distance', '0px');
-          productGrid.style.setProperty('--home-product-duration', `${PRODUCT_CAROUSEL_MIN_DURATION}s`);
-          return;
-        }
-        track.classList.remove('home-product-track--static');
-        const distance = Math.max(0, Math.round(firstRepeatedCard.offsetLeft - firstCard.offsetLeft));
-        const duration = Math.max(
-          PRODUCT_CAROUSEL_MIN_DURATION,
-          Number((distance / PRODUCT_CAROUSEL_SPEED).toFixed(2))
-        );
-        productGrid.style.setProperty('--home-product-distance', `${distance}px`);
-        productGrid.style.setProperty('--home-product-duration', `${duration}s`);
-      }
-
       function isProductCarouselTarget(target) {
         return Boolean(productGrid && target instanceof Node && productGrid.contains(target));
       }
@@ -359,339 +321,158 @@
         return Boolean(event && isProductCarouselTarget(event.target));
       }
 
-      function getProductCarouselDistance() {
-        if (!productGrid) {
-          return 0;
+      function getProductCarouselAutoScroll() {
+        if (!productCarouselEmbla) {
+          return null;
         }
-        const value = Number.parseFloat(productGrid.style.getPropertyValue('--home-product-distance'));
-        return Number.isFinite(value) ? value : 0;
+        const plugins = productCarouselEmbla.plugins();
+        return plugins && plugins.autoScroll ? plugins.autoScroll : null;
       }
 
-      function markProductCarouselProgrammaticScroll() {
-        productCarouselProgrammaticScrollUntil = window.performance.now() + 160;
+      function destroyProductCarousel() {
+        if (productCarouselEmbla) {
+          productCarouselEmbla.destroy();
+          productCarouselEmbla = null;
+        }
+        if (productGrid) {
+          productGrid.classList.remove('is-pointer-dragging');
+        }
       }
 
-      function setProductCarouselScrollLeft(scrollLeft) {
-        if (!productGrid) {
+      function getProductCarouselViewportWidth() {
+        const gridWidth = productGrid ? productGrid.clientWidth : 0;
+        return Math.max(gridWidth, Math.round(window.innerWidth) || 0);
+      }
+
+      // Embla の loop はコンテンツ幅がビューポートを十分上回っている必要があるため、
+      // 描画時にクローンセットを静的に複製して確保する。スクロール中の DOM 追加/削除は
+      // iOS Safari で描画抜けや位置ずれ(カードが消える不具合)の原因になるので行わない。
+      function fillProductCarouselSets(track, appendCloneSet) {
+        const targetWidth = getProductCarouselViewportWidth() * 2;
+        let sets = 1;
+        while (sets < PRODUCT_CAROUSEL_MAX_SETS && track.scrollWidth < targetWidth) {
+          appendCloneSet();
+          sets += 1;
+        }
+      }
+
+      function setupProductCarousel(realCount) {
+        if (!productGrid || realCount <= 1) {
           return;
         }
-        markProductCarouselProgrammaticScroll();
-        productGrid.scrollLeft = scrollLeft;
-        productCarouselProgrammaticScrollLeft = productGrid.scrollLeft;
-      }
-
-      function isProductCarouselProgrammaticScroll() {
-        return (
-          window.performance.now() < productCarouselProgrammaticScrollUntil &&
-          productCarouselProgrammaticScrollLeft !== null &&
-          Math.abs(productGrid.scrollLeft - productCarouselProgrammaticScrollLeft) <= 2
-        );
-      }
-
-      function markProductCarouselUserScroll() {
-        if (!productGrid) {
+        if (typeof window.EmblaCarousel !== 'function') {
+          productGrid.classList.add('home-product-grid--native-scroll');
           return;
         }
-        productCarouselLastUserScrollAt = window.performance.now();
-        productGrid.classList.add('is-user-scrolling');
-      }
-
-      function isProductCarouselUserScrollSettling() {
-        if (productCarouselPointerState || touchPointsActive > 0) {
-          return true;
+        productGrid.classList.remove('home-product-grid--native-scroll');
+        const plugins = [];
+        if (typeof window.EmblaCarouselAutoScroll === 'function') {
+          plugins.push(window.EmblaCarouselAutoScroll({
+            speed: PRODUCT_CAROUSEL_SPEED / 60,
+            startDelay: PRODUCT_CAROUSEL_RESUME_DELAY_MS,
+            playOnInit: !reduceMotion.matches,
+            stopOnInteraction: false,
+            stopOnMouseEnter: fineHoverPointer.matches,
+            stopOnFocusIn: true
+          }));
         }
-        return (
-          productCarouselLastUserScrollAt > 0 &&
-          window.performance.now() - productCarouselLastUserScrollAt < PRODUCT_CAROUSEL_SCROLL_SETTLE_MS
-        );
-      }
-
-      function scheduleProductCarouselTrim(delay = PRODUCT_CAROUSEL_SCROLL_SETTLE_MS + 80) {
-        if (!productGrid) {
-          return;
+        if (typeof window.EmblaCarouselWheelGestures === 'function') {
+          plugins.push(window.EmblaCarouselWheelGestures());
         }
-        if (productCarouselTrimTimer !== null) {
-          window.clearTimeout(productCarouselTrimTimer);
-        }
-        productCarouselTrimTimer = window.setTimeout(() => {
-          productCarouselTrimTimer = null;
-          if (isProductCarouselUserScrollSettling()) {
-            scheduleProductCarouselTrim(80);
-            return;
+        productCarouselEmbla = window.EmblaCarousel(productGrid, {
+          loop: true,
+          align: 'start',
+          dragFree: true,
+          skipSnaps: true,
+          watchSlides: false
+        }, plugins);
+        productCarouselEmbla.on('pointerDown', () => {
+          productGrid.classList.add('is-pointer-dragging');
+          productCarouselDragStartLocation = productCarouselEmbla.internalEngine().location.get();
+        });
+        productCarouselEmbla.on('pointerUp', () => {
+          productGrid.classList.remove('is-pointer-dragging');
+          const location = productCarouselEmbla.internalEngine().location.get();
+          if (
+            productCarouselDragStartLocation !== null &&
+            Math.abs(location - productCarouselDragStartLocation) > 5
+          ) {
+            // ドラッグ直後に発生するクリックでリンク遷移しないよう短時間抑止する。
+            // theme.js のページ遷移ハンドラは document キャプチャ段で動くため、
+            // 抑止はさらに手前の window キャプチャ段で行う(setupProductCarouselClickGuard)。
+            productCarouselSuppressClickUntil = Date.now() + 250;
           }
-          trimProductCarouselBuffers();
-        }, delay);
+          productCarouselDragStartLocation = null;
+        });
+        // 回帰テスト(tests/playwright/home-product-carousel-mobile-loop.js)から
+        // 自動スクロール状態を検証するための参照。
+        productGrid.emblaApi = productCarouselEmbla;
       }
 
-      function isProductCarouselAutoPaused() {
-        if (!productGrid) {
-          return true;
-        }
-        return (
-          reduceMotion.matches ||
-          document.hidden ||
-          productCarouselPointerState ||
-          productGrid.classList.contains('is-user-scrolling') ||
-          (fineHoverPointer.matches && productGrid.matches(':hover')) ||
-          productGrid.contains(document.activeElement)
-        );
-      }
-
-      function stopProductCarouselAutoScroll() {
-        if (productCarouselAutoFrame !== null) {
-          window.cancelAnimationFrame(productCarouselAutoFrame);
-          productCarouselAutoFrame = null;
-        }
-        productCarouselAutoLastFrameAt = 0;
-        productCarouselAutoRemainder = 0;
-      }
-
-      function runProductCarouselAutoScroll(timestamp) {
-        productCarouselAutoFrame = window.requestAnimationFrame(runProductCarouselAutoScroll);
-        if (!productGrid || typeof productCarouselAppendSet !== 'function' || typeof productCarouselPrependSet !== 'function') {
-          productCarouselAutoLastFrameAt = timestamp;
-          return;
-        }
-        if (isProductCarouselAutoPaused()) {
-          productCarouselAutoLastFrameAt = timestamp;
-          return;
-        }
-        const distance = getProductCarouselDistance();
-        if (distance <= 1 || productGrid.scrollWidth <= productGrid.clientWidth + 1) {
-          productCarouselAutoLastFrameAt = timestamp;
-          return;
-        }
-        ensureProductCarouselBuffers();
-        if (productCarouselAutoLastFrameAt === 0) {
-          productCarouselAutoLastFrameAt = timestamp;
-          return;
-        }
-        const elapsedSeconds = Math.min(0.12, Math.max(0, (timestamp - productCarouselAutoLastFrameAt) / 1000));
-        productCarouselAutoLastFrameAt = timestamp;
-        const delta = PRODUCT_CAROUSEL_SPEED * elapsedSeconds + productCarouselAutoRemainder;
-        const wholePixels = Math.trunc(delta);
-        productCarouselAutoRemainder = delta - wholePixels;
-        if (wholePixels <= 0) {
-          return;
-        }
-        setProductCarouselScrollLeft(productGrid.scrollLeft + wholePixels);
-        ensureProductCarouselBuffers();
-      }
-
-      function startProductCarouselAutoScroll() {
-        stopProductCarouselAutoScroll();
-        if (!productGrid || typeof productCarouselAppendSet !== 'function' || typeof productCarouselPrependSet !== 'function') {
-          return;
-        }
-        productCarouselAutoFrame = window.requestAnimationFrame(runProductCarouselAutoScroll);
-      }
-
-      function ensureProductCarouselBuffers() {
-        if (!productGrid || typeof productCarouselAppendSet !== 'function' || typeof productCarouselPrependSet !== 'function') {
-          return;
-        }
-        const distance = getProductCarouselDistance();
-        if (distance <= 1 || productGrid.scrollWidth <= productGrid.clientWidth + 1) {
-          return;
-        }
-        const minimumRemaining = Math.max(
-          distance * PRODUCT_CAROUSEL_BUFFER_SETS,
-          productGrid.clientWidth * 2
-        );
-        let maxScrollLeft = productGrid.scrollWidth - productGrid.clientWidth;
-        let appendedSets = 0;
-        while (
-          maxScrollLeft - productGrid.scrollLeft < minimumRemaining &&
-          appendedSets < PRODUCT_CAROUSEL_BUFFER_SETS + 2
-        ) {
-          productCarouselAppendSet();
-          appendedSets += 1;
-          maxScrollLeft = productGrid.scrollWidth - productGrid.clientWidth;
-        }
-        let prependedSets = 0;
-        while (
-          productGrid.scrollLeft < minimumRemaining &&
-          prependedSets < PRODUCT_CAROUSEL_BUFFER_SETS + 2
-        ) {
-          productCarouselPrependSet();
-          prependedSets += 1;
-        }
-        trimProductCarouselBuffers();
-      }
-
-      function trimProductCarouselBuffers() {
-        if (!productGrid) {
-          return;
-        }
-        if (isProductCarouselUserScrollSettling()) {
-          scheduleProductCarouselTrim();
+      function refreshProductCarouselSets() {
+        if (!productGrid || !productCarouselEmbla) {
           return;
         }
         const track = productGrid.querySelector('.home-product-track');
-        const setSize = Number.parseInt(productGrid.style.getPropertyValue('--home-product-count'), 10);
-        const distance = getProductCarouselDistance();
-        if (!track || !Number.isFinite(setSize) || setSize <= 0 || distance <= 1) {
+        if (!track) {
           return;
         }
-        const keepDistance = Math.max(
-          distance * PRODUCT_CAROUSEL_MAX_BUFFER_SETS,
-          productGrid.clientWidth * 3
-        );
+        const cardCount = track.querySelectorAll('.home-product-card').length;
+        const needsMoreSets =
+          track.scrollWidth < getProductCarouselViewportWidth() * 2 &&
+          cardCount < productCatalog.length * PRODUCT_CAROUSEL_MAX_SETS;
+        if (needsMoreSets) {
+          renderProductCards(currentLang);
+        }
+      }
 
-        let cards = Array.from(track.querySelectorAll('.home-product-card'));
-        while (cards.length > setSize * (PRODUCT_CAROUSEL_MAX_BUFFER_SETS * 2 + 1) && productGrid.scrollLeft > keepDistance) {
-          const beforeWidth = productGrid.scrollWidth;
-          cards.slice(0, setSize).forEach((card) => card.remove());
-          const removedWidth = Math.max(0, beforeWidth - productGrid.scrollWidth);
-          if (removedWidth <= 0) {
-            break;
+      function scheduleProductCarouselSetRefresh() {
+        if (productCarouselSetRefreshTimer !== null) {
+          window.clearTimeout(productCarouselSetRefreshTimer);
+        }
+        productCarouselSetRefreshTimer = window.setTimeout(() => {
+          productCarouselSetRefreshTimer = null;
+          refreshProductCarouselSets();
+        }, 200);
+      }
+
+      function setupProductCarouselClickGuard() {
+        window.addEventListener('click', (event) => {
+          if (Date.now() < productCarouselSuppressClickUntil && isProductCarouselEvent(event)) {
+            event.preventDefault();
+            event.stopPropagation();
           }
-          setProductCarouselScrollLeft(Math.max(0, productGrid.scrollLeft - removedWidth));
-          cards = Array.from(track.querySelectorAll('.home-product-card'));
-        }
-
-        cards = Array.from(track.querySelectorAll('.home-product-card'));
-        let maxScrollLeft = productGrid.scrollWidth - productGrid.clientWidth;
-        while (
-          cards.length > setSize * (PRODUCT_CAROUSEL_MAX_BUFFER_SETS * 2 + 1) &&
-          maxScrollLeft - productGrid.scrollLeft > keepDistance
-        ) {
-          const removeStart = Math.max(0, cards.length - setSize);
-          cards.slice(removeStart).forEach((card) => card.remove());
-          cards = Array.from(track.querySelectorAll('.home-product-card'));
-          maxScrollLeft = productGrid.scrollWidth - productGrid.clientWidth;
-        }
+        }, true);
       }
 
-      function scheduleProductCarouselResume(delay = 900) {
-        if (!productGrid) {
+      function handleReduceMotionChange() {
+        const autoScroll = getProductCarouselAutoScroll();
+        if (!autoScroll) {
           return;
         }
-        if (productCarouselInteractionTimer !== null) {
-          window.clearTimeout(productCarouselInteractionTimer);
+        if (reduceMotion.matches) {
+          autoScroll.stop();
+        } else {
+          autoScroll.play();
         }
-        productCarouselInteractionTimer = window.setTimeout(() => {
-          productCarouselInteractionTimer = null;
-          if (!productCarouselPointerState) {
-            productGrid.classList.remove('is-user-scrolling');
-            ensureProductCarouselBuffers();
-          }
-        }, delay);
-      }
-
-      function pauseProductCarouselForInteraction(delay = 900) {
-        if (!productGrid) {
-          return;
-        }
-        markProductCarouselUserScroll();
-        ensureProductCarouselBuffers();
-        scheduleProductCarouselTrim();
-        if (!productCarouselPointerState) {
-          scheduleProductCarouselResume(delay);
-        }
-      }
-
-      function handleProductCarouselPointerDown(event) {
-        if (!productGrid || event.pointerType !== 'mouse' || event.button !== 0) {
-          return;
-        }
-        productCarouselPointerState = {
-          pointerId: event.pointerId,
-          startX: event.clientX,
-          startScrollLeft: productGrid.scrollLeft,
-          moved: false
-        };
-        productGrid.classList.add('is-pointer-dragging');
-        pauseProductCarouselForInteraction();
-        productGrid.setPointerCapture(event.pointerId);
-      }
-
-      function handleProductCarouselPointerMove(event) {
-        if (!productGrid || !productCarouselPointerState || productCarouselPointerState.pointerId !== event.pointerId) {
-          return;
-        }
-        const deltaX = event.clientX - productCarouselPointerState.startX;
-        if (Math.abs(deltaX) > 3) {
-          productCarouselPointerState.moved = true;
-        }
-        productGrid.scrollLeft = productCarouselPointerState.startScrollLeft - deltaX;
-        ensureProductCarouselBuffers();
-        event.preventDefault();
-      }
-
-      function endProductCarouselPointer(event) {
-        if (!productGrid || !productCarouselPointerState || productCarouselPointerState.pointerId !== event.pointerId) {
-          return;
-        }
-        const didMove = productCarouselPointerState.moved;
-        if (productGrid.hasPointerCapture(event.pointerId)) {
-          productGrid.releasePointerCapture(event.pointerId);
-        }
-        productCarouselPointerState = null;
-        productGrid.classList.remove('is-pointer-dragging');
-        scheduleProductCarouselResume();
-        if (didMove) {
-          productCarouselSuppressClick = true;
-          window.setTimeout(() => {
-            productCarouselSuppressClick = false;
-          }, 120);
-        }
-      }
-
-      function handleProductCarouselClick(event) {
-        if (!productCarouselSuppressClick) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-      }
-
-      function setupProductCarouselInteraction() {
-        if (!productGrid || productGrid.dataset.carouselInteractionBound === 'true') {
-          return;
-        }
-        productGrid.dataset.carouselInteractionBound = 'true';
-        productGrid.addEventListener('scroll', () => {
-          const wasProgrammaticScroll = isProductCarouselProgrammaticScroll();
-          if (!wasProgrammaticScroll) {
-            markProductCarouselUserScroll();
-          }
-          ensureProductCarouselBuffers();
-          if (wasProgrammaticScroll) {
-            return;
-          }
-          scheduleProductCarouselTrim();
-          scheduleProductCarouselResume();
-        }, { passive: true });
-        productGrid.addEventListener('wheel', (event) => {
-          if (Math.abs(event.deltaX) > 1 || event.shiftKey) {
-            pauseProductCarouselForInteraction();
-          }
-        }, { passive: true });
-        productGrid.addEventListener('pointerdown', handleProductCarouselPointerDown);
-        productGrid.addEventListener('pointermove', handleProductCarouselPointerMove);
-        productGrid.addEventListener('pointerup', endProductCarouselPointer);
-        productGrid.addEventListener('pointercancel', endProductCarouselPointer);
-        productGrid.addEventListener('click', handleProductCarouselClick, true);
       }
 
       function renderProductCards(lang) {
         if (!productGrid || productCatalog.length === 0) {
           return;
         }
-        stopProductCarouselAutoScroll();
+        destroyProductCarousel();
         const entries = productCatalog
           .slice()
           .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
         productGrid.innerHTML = '';
-        setProductCarouselScrollLeft(0);
         productGrid.style.setProperty('--home-product-count', String(entries.length));
 
         const track = document.createElement('div');
         track.className = 'home-product-track';
 
-        const appendProductCard = (item, index, isClone, beforeNode = null) => {
+        const appendProductCard = (item, index, isClone) => {
           const linkInfo = buildProductHref(item);
           const link = document.createElement('a');
           link.href = linkInfo.href;
@@ -777,46 +558,23 @@
           body.appendChild(description);
           body.appendChild(meta);
           link.appendChild(body);
-          track.insertBefore(link, beforeNode);
+          // Embla は loop 時にスライド(track の直接の子)へインライン transform を
+          // 設定する。カード自身の transform(hover や入場アニメーション)と競合
+          // しないよう、カードはラッパーで包んでおく。
+          const slide = document.createElement('div');
+          slide.className = 'home-product-slide';
+          slide.appendChild(link);
+          track.appendChild(slide);
         };
 
-        if (entries.length > 1) {
-          productCarouselAppendSet = () => {
-            entries.forEach((item, index) => appendProductCard(item, index, true));
-          };
-          productCarouselPrependSet = () => {
-            const beforeNode = track.firstChild;
-            const previousScrollWidth = productGrid.scrollWidth;
-            entries.forEach((item, index) => appendProductCard(item, index, true, beforeNode));
-            const addedWidth = Math.max(0, productGrid.scrollWidth - previousScrollWidth);
-            if (addedWidth > 0 && productGrid.contains(track)) {
-              setProductCarouselScrollLeft(productGrid.scrollLeft + addedWidth);
-            }
-          };
-          for (let cloneSet = 0; cloneSet < PRODUCT_CAROUSEL_BUFFER_SETS; cloneSet += 1) {
-            const beforeNode = track.firstChild;
-            entries.forEach((item, index) => appendProductCard(item, index, true, beforeNode));
-          }
-        } else {
-          productCarouselAppendSet = null;
-          productCarouselPrependSet = null;
-        }
-
         entries.forEach((item, index) => appendProductCard(item, index, false));
-        if (entries.length > 1) {
-          for (let cloneSet = 0; cloneSet < PRODUCT_CAROUSEL_BUFFER_SETS; cloneSet += 1) {
-            productCarouselAppendSet();
-          }
-        }
         productGrid.appendChild(track);
-        syncProductCarouselMetrics();
-        const initialDistance = getProductCarouselDistance();
-        if (initialDistance > 1) {
-          setProductCarouselScrollLeft(initialDistance * PRODUCT_CAROUSEL_BUFFER_SETS);
+        if (entries.length > 1) {
+          fillProductCarouselSets(track, () => {
+            entries.forEach((item, index) => appendProductCard(item, index, true));
+          });
         }
-        ensureProductCarouselBuffers();
-        window.requestAnimationFrame(syncProductCarouselMetrics);
-        startProductCarouselAutoScroll();
+        setupProductCarousel(entries.length);
 
         if (window.mdwTheme && typeof window.mdwTheme.focusPressables === 'function') {
           window.mdwTheme.focusPressables(productGrid);
@@ -1243,7 +1001,7 @@
 
       function handleSectionWheel(event) {
         if (isProductCarouselEvent(event) && (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY))) {
-          pauseProductCarouselForInteraction();
+          // 横優勢のホイールは WheelGestures プラグインがカルーセルを動かす。
           return;
         }
         const deltaY = normalizeWheelDelta(event);
@@ -1304,7 +1062,7 @@
         const absDeltaY = Math.abs(deltaY);
         if (isProductCarouselEvent(event)) {
           if (absDeltaX >= TOUCH_INTENT_THRESHOLD && absDeltaX > absDeltaY) {
-            pauseProductCarouselForInteraction();
+            // 横方向のドラッグは Embla が制御する(preventDefault も Embla 側で行う)。
             return;
           }
           if (absDeltaY < TOUCH_INTENT_THRESHOLD) {
@@ -1453,7 +1211,10 @@
       setupSectionViewportSizing();
       applyLanguage(currentLang);
       setupSectionNavigation();
-      setupProductCarouselInteraction();
+      setupProductCarouselClickGuard();
+      if (typeof reduceMotion.addEventListener === 'function') {
+        reduceMotion.addEventListener('change', handleReduceMotionChange);
+      }
       loadFeaturedProducts();
       setupLanguageSelector();
       window.addEventListener('mdw:footer-loaded', () => {
