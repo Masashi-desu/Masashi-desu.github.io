@@ -205,6 +205,8 @@
       const TOUCH_ACTIVITY_STALE_MS = 1100;
       const PRODUCT_CAROUSEL_SPEED = 26;
       const PRODUCT_CAROUSEL_MIN_DURATION = 54;
+      const PRODUCT_CAROUSEL_BUFFER_SETS = 2;
+      const PRODUCT_CAROUSEL_MAX_BUFFER_SETS = 4;
       let productCatalog = [];
       let activeSectionTarget = sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : '';
       let activeNavTarget = activeSectionTarget;
@@ -216,6 +218,8 @@
       let restAlignTimer = null;
       let restSampleScrollY = null;
       let productCarouselInteractionTimer = null;
+      let productCarouselAppendSet = null;
+      let productCarouselPrependSet = null;
       let productCarouselPointerState = null;
       let productCarouselSuppressClick = false;
       let productCarouselNormalizingScroll = false;
@@ -316,15 +320,18 @@
         if (!track) {
           return;
         }
-        const firstClone = track.querySelector('.home-product-card--clone');
-        if (!firstClone) {
+        const cards = Array.from(track.querySelectorAll('.home-product-card'));
+        const setSize = Number.parseInt(productGrid.style.getPropertyValue('--home-product-count'), 10);
+        const firstCard = cards[0];
+        const firstRepeatedCard = Number.isFinite(setSize) && setSize > 0 ? cards[setSize] : null;
+        if (!firstCard || !firstRepeatedCard) {
           track.classList.add('home-product-track--static');
           productGrid.style.setProperty('--home-product-distance', '0px');
           productGrid.style.setProperty('--home-product-duration', `${PRODUCT_CAROUSEL_MIN_DURATION}s`);
           return;
         }
         track.classList.remove('home-product-track--static');
-        const distance = Math.max(0, Math.round(firstClone.offsetLeft));
+        const distance = Math.max(0, Math.round(firstRepeatedCard.offsetLeft - firstCard.offsetLeft));
         const duration = Math.max(
           PRODUCT_CAROUSEL_MIN_DURATION,
           Number((distance / PRODUCT_CAROUSEL_SPEED).toFixed(2))
@@ -373,6 +380,79 @@
         });
       }
 
+      function ensureProductCarouselBuffers() {
+        if (!productGrid || typeof productCarouselAppendSet !== 'function' || typeof productCarouselPrependSet !== 'function') {
+          return;
+        }
+        const distance = getProductCarouselDistance();
+        if (distance <= 1 || productGrid.scrollWidth <= productGrid.clientWidth + 1) {
+          return;
+        }
+        const minimumRemaining = Math.max(
+          distance * PRODUCT_CAROUSEL_BUFFER_SETS,
+          productGrid.clientWidth * 2
+        );
+        let maxScrollLeft = productGrid.scrollWidth - productGrid.clientWidth;
+        let appendedSets = 0;
+        while (
+          maxScrollLeft - productGrid.scrollLeft < minimumRemaining &&
+          appendedSets < PRODUCT_CAROUSEL_BUFFER_SETS + 2
+        ) {
+          productCarouselAppendSet();
+          appendedSets += 1;
+          maxScrollLeft = productGrid.scrollWidth - productGrid.clientWidth;
+        }
+        let prependedSets = 0;
+        while (
+          productGrid.scrollLeft < minimumRemaining &&
+          prependedSets < PRODUCT_CAROUSEL_BUFFER_SETS + 2
+        ) {
+          productCarouselPrependSet();
+          prependedSets += 1;
+        }
+        trimProductCarouselBuffers();
+      }
+
+      function trimProductCarouselBuffers() {
+        if (!productGrid) {
+          return;
+        }
+        const track = productGrid.querySelector('.home-product-track');
+        const setSize = Number.parseInt(productGrid.style.getPropertyValue('--home-product-count'), 10);
+        const distance = getProductCarouselDistance();
+        if (!track || !Number.isFinite(setSize) || setSize <= 0 || distance <= 1) {
+          return;
+        }
+        const keepDistance = Math.max(
+          distance * PRODUCT_CAROUSEL_MAX_BUFFER_SETS,
+          productGrid.clientWidth * 3
+        );
+
+        let cards = Array.from(track.querySelectorAll('.home-product-card'));
+        while (cards.length > setSize * (PRODUCT_CAROUSEL_MAX_BUFFER_SETS * 2 + 1) && productGrid.scrollLeft > keepDistance) {
+          const beforeWidth = productGrid.scrollWidth;
+          cards.slice(0, setSize).forEach((card) => card.remove());
+          const removedWidth = Math.max(0, beforeWidth - productGrid.scrollWidth);
+          if (removedWidth <= 0) {
+            break;
+          }
+          productGrid.scrollLeft = Math.max(0, productGrid.scrollLeft - removedWidth);
+          cards = Array.from(track.querySelectorAll('.home-product-card'));
+        }
+
+        cards = Array.from(track.querySelectorAll('.home-product-card'));
+        let maxScrollLeft = productGrid.scrollWidth - productGrid.clientWidth;
+        while (
+          cards.length > setSize * (PRODUCT_CAROUSEL_MAX_BUFFER_SETS * 2 + 1) &&
+          maxScrollLeft - productGrid.scrollLeft > keepDistance
+        ) {
+          const removeStart = Math.max(0, cards.length - setSize);
+          cards.slice(removeStart).forEach((card) => card.remove());
+          cards = Array.from(track.querySelectorAll('.home-product-card'));
+          maxScrollLeft = productGrid.scrollWidth - productGrid.clientWidth;
+        }
+      }
+
       function scheduleProductCarouselResume(delay = 900) {
         if (!productGrid) {
           return;
@@ -393,6 +473,7 @@
           return;
         }
         productGrid.classList.add('is-user-scrolling');
+        ensureProductCarouselBuffers();
         if (!productCarouselPointerState) {
           scheduleProductCarouselResume(delay);
         }
@@ -422,6 +503,7 @@
           productCarouselPointerState.moved = true;
         }
         productGrid.scrollLeft = productCarouselPointerState.startScrollLeft - deltaX;
+        ensureProductCarouselBuffers();
         event.preventDefault();
       }
 
@@ -481,12 +563,13 @@
           .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
         productGrid.innerHTML = '';
+        productGrid.scrollLeft = 0;
         productGrid.style.setProperty('--home-product-count', String(entries.length));
 
         const track = document.createElement('div');
         track.className = 'home-product-track';
 
-        const appendProductCard = (item, index, isClone) => {
+        const appendProductCard = (item, index, isClone, beforeNode = null) => {
           const linkInfo = buildProductHref(item);
           const link = document.createElement('a');
           link.href = linkInfo.href;
@@ -572,17 +655,44 @@
           body.appendChild(description);
           body.appendChild(meta);
           link.appendChild(body);
-          track.appendChild(link);
+          track.insertBefore(link, beforeNode);
         };
+
+        if (entries.length > 1) {
+          productCarouselAppendSet = () => {
+            entries.forEach((item, index) => appendProductCard(item, index, true));
+          };
+          productCarouselPrependSet = () => {
+            const beforeNode = track.firstChild;
+            const previousScrollWidth = productGrid.scrollWidth;
+            entries.forEach((item, index) => appendProductCard(item, index, true, beforeNode));
+            const addedWidth = Math.max(0, productGrid.scrollWidth - previousScrollWidth);
+            if (addedWidth > 0 && productGrid.contains(track)) {
+              productGrid.scrollLeft += addedWidth;
+            }
+          };
+          for (let cloneSet = 0; cloneSet < PRODUCT_CAROUSEL_BUFFER_SETS; cloneSet += 1) {
+            const beforeNode = track.firstChild;
+            entries.forEach((item, index) => appendProductCard(item, index, true, beforeNode));
+          }
+        } else {
+          productCarouselAppendSet = null;
+          productCarouselPrependSet = null;
+        }
 
         entries.forEach((item, index) => appendProductCard(item, index, false));
         if (entries.length > 1) {
-          for (let cloneSet = 0; cloneSet < 2; cloneSet += 1) {
-            entries.forEach((item, index) => appendProductCard(item, index, true));
+          for (let cloneSet = 0; cloneSet < PRODUCT_CAROUSEL_BUFFER_SETS; cloneSet += 1) {
+            productCarouselAppendSet();
           }
         }
         productGrid.appendChild(track);
         syncProductCarouselMetrics();
+        const initialDistance = getProductCarouselDistance();
+        if (initialDistance > 1) {
+          productGrid.scrollLeft = initialDistance * PRODUCT_CAROUSEL_BUFFER_SETS;
+        }
+        ensureProductCarouselBuffers();
         window.requestAnimationFrame(syncProductCarouselMetrics);
 
         if (window.mdwTheme && typeof window.mdwTheme.focusPressables === 'function') {

@@ -1,7 +1,7 @@
 /**
  * テスト概要:
  *  - 目的: ホームのプロダクトカード carousel がスマホ表示で速くなりすぎず、手動の横スクロール操作にも反応し、アニメーション終端後も途切れずにループすることを検証する。
- *  - 期待値: iPhone 幅で 1 周分の移動距離が最初の clone カード位置と一致し、duration は距離ベースで 54s 以上、横スクロール可能で操作中は一時停止し、ユーザー操作中にscrollLeftが巻き戻らず、carousel領域は透明背景かつ通常時の影なし、終端を跨いだ後もカードが viewport 内に表示される。
+ *  - 期待値: iPhone 幅で 1 周分の移動距離が隣接カードセット間隔と一致し、duration は距離ベースで 54s 以上、横スクロール可能で操作中は一時停止し、ユーザー操作中にscrollLeftが巻き戻らず、両端付近ではカードセットが継ぎ足され、不要になった端のカードは破棄され、carousel領域は透明背景かつ通常時の影なし、終端を跨いだ後もカードが viewport 内に表示される。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium mobile context で CSS 変数・computed style・scrollLeft・カード矩形・CSS Animation currentTime を計測する。
  */
 const http = require('http');
@@ -12,6 +12,7 @@ const { chromium, devices } = require('playwright');
 const ROOT = path.resolve(__dirname, '../../');
 const MOBILE_VIEWPORT = { width: 393, height: 852 };
 const MIN_DURATION_SECONDS = 54;
+const MAX_EXPECTED_CARD_SETS = 9;
 
 function serveStatic(req, res) {
   const urlPath = req.url.split('?')[0];
@@ -66,6 +67,19 @@ async function getCarouselState(page) {
     const trackStyle = getComputedStyle(track);
     const firstCard = document.querySelector('.home-product-card:not(.home-product-card--clone)');
     const firstCardStyle = firstCard ? getComputedStyle(firstCard) : null;
+    const setSize = Number.parseInt(gridStyle.getPropertyValue('--home-product-count'), 10);
+    const cards = Array.from(document.querySelectorAll('.home-product-card'));
+    const firstRepeatedSetDistance = Number.isFinite(setSize) && cards[0] && cards[setSize]
+      ? cards[setSize].offsetLeft - cards[0].offsetLeft
+      : null;
+    let trackTransformX = 0;
+    if (trackStyle.transform && trackStyle.transform !== 'none') {
+      try {
+        trackTransformX = new DOMMatrixReadOnly(trackStyle.transform).m41;
+      } catch (error) {
+        trackTransformX = 0;
+      }
+    }
     const visibleCards = Array.from(document.querySelectorAll('.home-product-card')).filter((card) => {
       const rect = card.getBoundingClientRect();
       return rect.right > gridRect.left + 24 && rect.left < gridRect.right - 24;
@@ -73,6 +87,7 @@ async function getCarouselState(page) {
     return {
       cardCount: document.querySelectorAll('.home-product-card').length,
       cloneCount: document.querySelectorAll('.home-product-card--clone').length,
+      setSize,
       distance: Number.parseFloat(gridStyle.getPropertyValue('--home-product-distance')),
       duration: Number.parseFloat(gridStyle.getPropertyValue('--home-product-duration')),
       animationDuration: Number.parseFloat(trackStyle.animationDuration),
@@ -82,10 +97,12 @@ async function getCarouselState(page) {
       trackBackgroundColor: trackStyle.backgroundColor,
       cardBoxShadow: firstCardStyle ? firstCardStyle.boxShadow : null,
       firstCloneOffsetLeft: firstClone ? firstClone.offsetLeft : null,
+      firstRepeatedSetDistance,
       clientWidth: grid.clientWidth,
       scrollWidth: grid.scrollWidth,
       scrollLeft: Math.round(grid.scrollLeft),
       trackLeft: Number(trackRect.left.toFixed(2)),
+      trackTransformX: Number(trackTransformX.toFixed(2)),
       transform: trackStyle.transform,
       visibleCards
     };
@@ -136,11 +153,11 @@ async function main() {
     await page.waitForTimeout(600);
 
     const initial = await getCarouselState(page);
-    if (initial.cloneCount === 0 || initial.firstCloneOffsetLeft === null) {
+    if (initial.cloneCount === 0 || initial.firstRepeatedSetDistance === null) {
       throw new Error(`Expected cloned product cards for looping: ${JSON.stringify(initial)}`);
     }
-    if (Math.abs(initial.distance - initial.firstCloneOffsetLeft) > 1) {
-      throw new Error(`Carousel distance should match first clone offset: ${JSON.stringify(initial)}`);
+    if (Math.abs(initial.distance - initial.firstRepeatedSetDistance) > 1) {
+      throw new Error(`Carousel distance should match adjacent set distance: ${JSON.stringify(initial)}`);
     }
     if (initial.duration < MIN_DURATION_SECONDS || initial.animationDuration < MIN_DURATION_SECONDS) {
       throw new Error(`Mobile carousel duration should not be faster than desktop baseline: ${JSON.stringify(initial)}`);
@@ -157,8 +174,12 @@ async function main() {
     if (initial.scrollWidth <= initial.clientWidth) {
       throw new Error(`Expected product carousel to be horizontally scrollable: ${JSON.stringify(initial)}`);
     }
+    if (initial.scrollLeft < initial.distance) {
+      throw new Error(`Expected carousel to start with room for leftward manual scrolling: ${JSON.stringify(initial)}`);
+    }
+    const maxExpectedCards = initial.setSize * MAX_EXPECTED_CARD_SETS;
 
-    const manualScrollTarget = Math.round(initial.distance + 180);
+    const manualScrollTarget = Math.round(initial.scrollLeft + initial.distance + 180);
     await page.evaluate((scrollLeft) => {
       const grid = document.querySelector('.home-product-grid');
       grid.scrollLeft = scrollLeft;
@@ -173,13 +194,70 @@ async function main() {
       throw new Error(`Expected carousel animation to pause during manual scroll: ${JSON.stringify(manualScroll)}`);
     }
 
-    await page.evaluate(() => {
+    const beforeEndScroll = await getCarouselState(page);
+    const nearEndTarget = Math.max(0, beforeEndScroll.scrollWidth - beforeEndScroll.clientWidth - 24);
+    await page.evaluate((scrollLeft) => {
       const grid = document.querySelector('.home-product-grid');
-      grid.scrollLeft = 0;
+      grid.scrollLeft = scrollLeft;
+    }, nearEndTarget);
+    await page.waitForTimeout(120);
+
+    const afterEndScroll = await getCarouselState(page);
+    if (afterEndScroll.scrollLeft < nearEndTarget - 60) {
+      throw new Error(`Expected near-end manual scroll not to be pulled back: ${JSON.stringify({ nearEndTarget, beforeEndScroll, afterEndScroll })}`);
+    }
+    if (afterEndScroll.scrollWidth <= beforeEndScroll.scrollWidth) {
+      throw new Error(`Expected carousel to append product cards before the end is exposed: ${JSON.stringify({ nearEndTarget, beforeEndScroll, afterEndScroll })}`);
+    }
+    if (afterEndScroll.visibleCards < 1) {
+      throw new Error(`Expected visible product cards after extending the carousel: ${JSON.stringify(afterEndScroll)}`);
+    }
+
+    const beforeStartScroll = await getCarouselState(page);
+    const nearStartTarget = 24;
+    await page.evaluate((scrollLeft) => {
+      const grid = document.querySelector('.home-product-grid');
+      grid.scrollLeft = scrollLeft;
+    }, nearStartTarget);
+    await page.waitForTimeout(120);
+
+    const afterStartScroll = await getCarouselState(page);
+    if (afterStartScroll.scrollWidth <= beforeStartScroll.scrollWidth) {
+      throw new Error(`Expected carousel to prepend product cards before the start is exposed: ${JSON.stringify({ nearStartTarget, beforeStartScroll, afterStartScroll })}`);
+    }
+    if (afterStartScroll.scrollLeft <= nearStartTarget + 60) {
+      throw new Error(`Expected prepending to preserve the visible position with leftward buffer: ${JSON.stringify({ nearStartTarget, beforeStartScroll, afterStartScroll })}`);
+    }
+    if (afterStartScroll.visibleCards < 1) {
+      throw new Error(`Expected visible product cards after extending the carousel start: ${JSON.stringify(afterStartScroll)}`);
+    }
+
+    await page.evaluate(async () => {
+      const grid = document.querySelector('.home-product-grid');
+      for (let index = 0; index < 12; index += 1) {
+        grid.scrollLeft = grid.scrollWidth - grid.clientWidth - 24;
+        grid.dispatchEvent(new Event('scroll'));
+        await new Promise((resolve) => setTimeout(resolve, 16));
+      }
+      for (let index = 0; index < 12; index += 1) {
+        grid.scrollLeft = 24;
+        grid.dispatchEvent(new Event('scroll'));
+        await new Promise((resolve) => setTimeout(resolve, 16));
+      }
     });
+    await page.waitForTimeout(180);
+
+    const afterStressScroll = await getCarouselState(page);
+    if (afterStressScroll.cardCount > maxExpectedCards) {
+      throw new Error(`Expected carousel to trim offscreen product cards: ${JSON.stringify({ maxExpectedCards, afterStressScroll })}`);
+    }
+    if (afterStressScroll.visibleCards < 1) {
+      throw new Error(`Expected visible product cards after repeated bidirectional extension and trimming: ${JSON.stringify(afterStressScroll)}`);
+    }
+
     await page.waitForFunction(() => {
       const grid = document.querySelector('.home-product-grid');
-      return grid.scrollLeft === 0 && !grid.classList.contains('is-user-scrolling');
+      return !grid.classList.contains('is-user-scrolling');
     }, null, { timeout: 1600 });
 
     await page.evaluate(() => {
@@ -198,7 +276,7 @@ async function main() {
     if (afterWrap.visibleCards < 1) {
       throw new Error(`Expected visible product cards after crossing loop boundary: ${JSON.stringify(afterWrap)}`);
     }
-    if (afterWrap.trackLeft < -80) {
+    if (afterWrap.trackTransformX < -80) {
       throw new Error(`Carousel did not wrap back to the start after animation boundary: ${JSON.stringify(afterWrap)}`);
     }
 
