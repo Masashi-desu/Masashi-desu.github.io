@@ -635,11 +635,12 @@ body.page-product--surround .page-background {
 }
 
 .home-section-nav__track {
+  --footer-control-size: clamp(2.125rem, 6vh, 2.375rem);
   --segment-x: 0px;
   --segment-width: 0px;
   position: relative;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) clamp(2.125rem, 6vh, 2.375rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr)) var(--footer-control-size);
   gap: 0.25rem;
   padding: 0.25rem;
   border: 1px solid var(--home-line);
@@ -700,9 +701,11 @@ body.page-product--surround .page-background {
   position: relative;
   z-index: 1;
   display: grid;
-  min-height: clamp(2.125rem, 6vh, 2.375rem);
-  aspect-ratio: 1;
+  width: var(--footer-control-size);
+  height: var(--footer-control-size);
+  min-width: 0;
   place-items: center;
+  overflow: visible;
   border-radius: var(--radius-pill);
   color: var(--text-secondary);
   text-decoration: none;
@@ -727,6 +730,7 @@ body.page-product--surround .page-background {
 .home-section-nav__footer-link svg {
   width: 1.05rem;
   height: 1.05rem;
+  overflow: visible;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
