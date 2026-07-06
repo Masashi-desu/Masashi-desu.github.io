@@ -900,6 +900,7 @@ body.page-product--surround .page-background {
 
 .home-product-grid {
   --home-product-gap: clamp(0.75rem, 1.25vw, 1rem);
+  --home-product-card-basis: clamp(16.5rem, 22vw, 18.75rem);
   position: relative;
   width: var(--home-section-width, 100vw);
   margin-left: calc((100% - var(--home-section-width, 100vw)) / 2);
@@ -944,16 +945,20 @@ body.page-product--surround .page-background {
 
 /* Embla のスライド。loop 用のインライン transform はこのラッパーにだけ当たる。
    カード間隔は flex gap だと loop の継ぎ目で消えるため margin-right で表現する
-   (Embla は末尾スライドの margin-right を継ぎ目の gap として測定する)。 */
+   (Embla は末尾スライドの margin-right を継ぎ目の gap として測定する)。
+   幅は必ず明示指定する: iOS Safari は入れ子 flex コンテナの max-content 幅を
+   子の flex-basis ではなく内容の固有幅(遅延読み込み画像の natural width 等)で
+   計算するため、auto 幅だとスライドが画像幅まで膨張しカード間隔が壊れる。 */
 .home-product-slide {
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 0 var(--home-product-card-basis);
+  width: var(--home-product-card-basis);
   min-width: 0;
   margin-right: var(--home-product-gap);
 }
 
 .home-product-card {
-  flex: 0 0 clamp(16.5rem, 22vw, 18.75rem);
+  flex: 0 0 100%;
   display: grid;
   grid-template-columns: 1fr;
   grid-template-rows: auto 1fr;
@@ -1388,10 +1393,10 @@ body.page-product--surround .site-footer__icon {
 
   .home-product-grid {
     --home-product-gap: 0.75rem;
+    --home-product-card-basis: clamp(14rem, 76vw, 18rem);
   }
 
   .home-product-card {
-    flex-basis: clamp(14rem, 76vw, 18rem);
     min-height: clamp(15rem, calc(var(--home-section-height, 100vh) * 0.4), 18rem);
   }
 
@@ -1496,8 +1501,11 @@ body.page-product--surround .site-footer__icon {
 }
 
 @media (min-width: 72rem) {
+  .home-product-grid {
+    --home-product-card-basis: clamp(16.5rem, 20vw, 18.75rem);
+  }
+
   .home-product-card {
-    flex-basis: clamp(16.5rem, 20vw, 18.75rem);
     min-height: clamp(17rem, calc(var(--home-section-height, 100vh) * 0.43), 21rem);
   }
 

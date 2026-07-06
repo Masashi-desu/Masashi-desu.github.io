@@ -82,6 +82,15 @@ async function getCarouselState(page) {
     }
     const api = grid.emblaApi || null;
     const autoScroll = api && api.plugins() ? api.plugins().autoScroll : null;
+    const slides = Array.from(document.querySelectorAll('.home-product-slide'));
+    const slideWidths = slides.map((slide) => slide.offsetWidth);
+    const slideCardWidthGaps = slides.map((slide) => {
+      const card = slide.querySelector('.home-product-card');
+      return card ? Math.abs(slide.offsetWidth - card.offsetWidth) : Number.POSITIVE_INFINITY;
+    });
+    const slideOffsets = slides.map((slide) => slide.offsetLeft);
+    const slideLayoutDeltas = slideOffsets.slice(1).map((offset, index) => offset - slideOffsets[index]);
+    const slideFlexBasis = slides[0] ? getComputedStyle(slides[0]).flexBasis : null;
     const visibleCards = Array.from(document.querySelectorAll('.home-product-card')).filter((card) => {
       const rect = card.getBoundingClientRect();
       return rect.right > gridRect.left + 24 && rect.left < gridRect.right - 24;
@@ -95,6 +104,12 @@ async function getCarouselState(page) {
       emblaLoop: api ? api.internalEngine().options.loop : null,
       autoScrollPlaying: autoScroll ? autoScroll.isPlaying() : null,
       trackTranslateX,
+      slideWidthSpread: Math.max(...slideWidths) - Math.min(...slideWidths),
+      maxSlideCardWidthGap: Math.max(...slideCardWidthGaps),
+      slideLayoutDeltaSpread: slideLayoutDeltas.length > 0
+        ? Math.max(...slideLayoutDeltas) - Math.min(...slideLayoutDeltas)
+        : 0,
+      slideFlexBasis,
       gridOverflowX: gridStyle.overflowX,
       gridBackgroundColor: gridStyle.backgroundColor,
       gridPaddingBottom: gridStyle.paddingBottom,
@@ -269,6 +284,17 @@ async function runCarouselAssertions(browserType, browserName, port) {
     }
     if (initial.slideCount !== initial.cardCount) {
       throw new Error(`Expected every card to be wrapped in a slide element: ${JSON.stringify(initial)}`);
+    }
+    // スライド幅は明示指定であること(auto だと iOS Safari が入れ子 flex の
+    // max-content を画像の固有幅で計算し、カード間隔が大きく壊れる)
+    if (!initial.slideFlexBasis || initial.slideFlexBasis === 'auto') {
+      throw new Error(`Expected slides to have an explicit flex-basis: ${JSON.stringify(initial)}`);
+    }
+    if (initial.maxSlideCardWidthGap > 1 || initial.slideWidthSpread > 1) {
+      throw new Error(`Expected slide width to match card width for every slide: ${JSON.stringify(initial)}`);
+    }
+    if (initial.slideLayoutDeltaSpread > 1) {
+      throw new Error(`Expected uniform spacing between carousel cards: ${JSON.stringify(initial)}`);
     }
     if (initial.trackScrollWidth <= initial.clientWidth) {
       throw new Error(`Expected carousel content to be wider than the viewport: ${JSON.stringify(initial)}`);
