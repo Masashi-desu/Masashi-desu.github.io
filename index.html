@@ -208,6 +208,7 @@
       const PRODUCT_CAROUSEL_MIN_DURATION = 54;
       const PRODUCT_CAROUSEL_BUFFER_SETS = 2;
       const PRODUCT_CAROUSEL_MAX_BUFFER_SETS = 4;
+      const PRODUCT_CAROUSEL_SCROLL_SETTLE_MS = 180;
       let productCatalog = [];
       let activeSectionTarget = sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : '';
       let activeNavTarget = activeSectionTarget;
@@ -228,6 +229,8 @@
       let productCarouselAutoRemainder = 0;
       let productCarouselProgrammaticScrollUntil = 0;
       let productCarouselProgrammaticScrollLeft = null;
+      let productCarouselLastUserScrollAt = 0;
+      let productCarouselTrimTimer = null;
       let touchPointsActive = 0;
       let lastTouchEventAt = 0;
       let wheelDeltaY = 0;
@@ -385,6 +388,41 @@
         );
       }
 
+      function markProductCarouselUserScroll() {
+        if (!productGrid) {
+          return;
+        }
+        productCarouselLastUserScrollAt = window.performance.now();
+        productGrid.classList.add('is-user-scrolling');
+      }
+
+      function isProductCarouselUserScrollSettling() {
+        if (productCarouselPointerState || touchPointsActive > 0) {
+          return true;
+        }
+        return (
+          productCarouselLastUserScrollAt > 0 &&
+          window.performance.now() - productCarouselLastUserScrollAt < PRODUCT_CAROUSEL_SCROLL_SETTLE_MS
+        );
+      }
+
+      function scheduleProductCarouselTrim(delay = PRODUCT_CAROUSEL_SCROLL_SETTLE_MS + 80) {
+        if (!productGrid) {
+          return;
+        }
+        if (productCarouselTrimTimer !== null) {
+          window.clearTimeout(productCarouselTrimTimer);
+        }
+        productCarouselTrimTimer = window.setTimeout(() => {
+          productCarouselTrimTimer = null;
+          if (isProductCarouselUserScrollSettling()) {
+            scheduleProductCarouselTrim(80);
+            return;
+          }
+          trimProductCarouselBuffers();
+        }, delay);
+      }
+
       function isProductCarouselAutoPaused() {
         if (!productGrid) {
           return true;
@@ -485,6 +523,10 @@
         if (!productGrid) {
           return;
         }
+        if (isProductCarouselUserScrollSettling()) {
+          scheduleProductCarouselTrim();
+          return;
+        }
         const track = productGrid.querySelector('.home-product-track');
         const setSize = Number.parseInt(productGrid.style.getPropertyValue('--home-product-count'), 10);
         const distance = getProductCarouselDistance();
@@ -532,6 +574,7 @@
           productCarouselInteractionTimer = null;
           if (!productCarouselPointerState) {
             productGrid.classList.remove('is-user-scrolling');
+            ensureProductCarouselBuffers();
           }
         }, delay);
       }
@@ -540,8 +583,9 @@
         if (!productGrid) {
           return;
         }
-        productGrid.classList.add('is-user-scrolling');
+        markProductCarouselUserScroll();
         ensureProductCarouselBuffers();
+        scheduleProductCarouselTrim();
         if (!productCarouselPointerState) {
           scheduleProductCarouselResume(delay);
         }
@@ -609,11 +653,15 @@
         productGrid.dataset.carouselInteractionBound = 'true';
         productGrid.addEventListener('scroll', () => {
           const wasProgrammaticScroll = isProductCarouselProgrammaticScroll();
+          if (!wasProgrammaticScroll) {
+            markProductCarouselUserScroll();
+          }
           ensureProductCarouselBuffers();
           if (wasProgrammaticScroll) {
             return;
           }
-          pauseProductCarouselForInteraction();
+          scheduleProductCarouselTrim();
+          scheduleProductCarouselResume();
         }, { passive: true });
         productGrid.addEventListener('wheel', (event) => {
           if (Math.abs(event.deltaX) > 1 || event.shiftKey) {

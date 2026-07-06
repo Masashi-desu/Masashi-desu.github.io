@@ -1,7 +1,7 @@
 /**
  * テスト概要:
  *  - 目的: ホームのプロダクトカード carousel がスマホ表示で速くなりすぎず、手動の横スクロール操作にも反応し、自動移動・手動操作・viewport resize 後も途切れずにループすることを検証する。
- *  - 期待値: iPhone 幅で 1 周分の移動距離が隣接カードセット間隔と一致し、duration は距離ベースで 54s 以上、横スクロール可能で自動移動は scrollLeft で進み、操作中は一時停止し、ユーザー操作中にscrollLeftが巻き戻らず、両端付近ではカードセットが継ぎ足され、不要になった端のカードは破棄され、carousel領域は透明背景かつ通常時の影なし、viewport resize 後もカードが viewport 内に表示される。
+ *  - 期待値: iPhone 幅で 1 周分の移動距離が隣接カードセット間隔と一致し、duration は距離ベースで 54s 以上、横スクロール可能で自動移動は scrollLeft で進み、操作中は一時停止し、ユーザー操作中にscrollLeftが巻き戻らず、両端付近ではカードセットが継ぎ足され、不要になった端のカードはスクロールが静まってから破棄され、carousel領域は透明背景かつ通常時の影なし、viewport resize 後もカードが viewport 内に表示される。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium/WebKit mobile context で CSS 変数・computed style・scrollLeft・カード矩形を計測する。
  */
 const http = require('http');
@@ -98,6 +98,71 @@ async function getCarouselState(page) {
       visibleCards
     };
   });
+}
+
+async function dispatchNativeHorizontalSwipe(cdp, startX, endX, y) {
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: startX, y }]
+  });
+  const steps = 18;
+  for (let index = 1; index <= steps; index += 1) {
+    const x = startX + ((endX - startX) * index) / steps;
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y }]
+    });
+    await new Promise((resolve) => setTimeout(resolve, 16));
+  }
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: []
+  });
+}
+
+async function assertNativeTouchScrollKeepsCardsVisible(page, context, maxExpectedCards) {
+  const cdp = await context.newCDPSession(page);
+  const gridBox = await page.locator('.home-product-grid').boundingBox();
+  if (!gridBox) {
+    throw new Error('Expected product carousel bounds before native touch scroll');
+  }
+  const y = Math.round(gridBox.y + gridBox.height / 2);
+  const leftSwipeStart = Math.round(gridBox.x + gridBox.width - 36);
+  const leftSwipeEnd = Math.round(gridBox.x + 44);
+  const rightSwipeStart = leftSwipeEnd;
+  const rightSwipeEnd = leftSwipeStart;
+
+  for (let index = 0; index < 12; index += 1) {
+    await dispatchNativeHorizontalSwipe(cdp, leftSwipeStart, leftSwipeEnd, y);
+    await page.waitForTimeout(120);
+    const duringSwipe = await getCarouselState(page);
+    if (duringSwipe.visibleCards < 1) {
+      throw new Error(`Expected visible product cards during native left swipes: ${JSON.stringify(duringSwipe)}`);
+    }
+  }
+
+  for (let index = 0; index < 12; index += 1) {
+    await dispatchNativeHorizontalSwipe(cdp, rightSwipeStart, rightSwipeEnd, y);
+    await page.waitForTimeout(120);
+    const duringSwipe = await getCarouselState(page);
+    if (duringSwipe.visibleCards < 1) {
+      throw new Error(`Expected visible product cards during native right swipes: ${JSON.stringify(duringSwipe)}`);
+    }
+  }
+
+  await page.waitForFunction((maxCards) => {
+    const grid = document.querySelector('.home-product-grid');
+    return (
+      grid &&
+      !grid.classList.contains('is-user-scrolling') &&
+      document.querySelectorAll('.home-product-card').length <= maxCards
+    );
+  }, maxExpectedCards, { timeout: 2400 });
+
+  const afterNativeTouch = await getCarouselState(page);
+  if (afterNativeTouch.visibleCards < 1 || afterNativeTouch.cardCount > maxExpectedCards) {
+    throw new Error(`Expected carousel to stay visible and trimmed after native touch scroll: ${JSON.stringify({ maxExpectedCards, afterNativeTouch })}`);
+  }
 }
 
 async function runCarouselAssertions(browserType, browserName, port) {
@@ -250,7 +315,9 @@ async function runCarouselAssertions(browserType, browserName, port) {
         await new Promise((resolve) => setTimeout(resolve, 16));
       }
     });
-    await page.waitForTimeout(180);
+    await page.waitForFunction((maxCards) => {
+      return document.querySelectorAll('.home-product-card').length <= maxCards;
+    }, maxExpectedCards, { timeout: 1800 });
 
     const afterStressScroll = await getCarouselState(page);
     if (afterStressScroll.cardCount > maxExpectedCards) {
@@ -258,6 +325,10 @@ async function runCarouselAssertions(browserType, browserName, port) {
     }
     if (afterStressScroll.visibleCards < 1) {
       throw new Error(`Expected visible product cards after repeated bidirectional extension and trimming: ${JSON.stringify(afterStressScroll)}`);
+    }
+
+    if (browserName === 'Chromium') {
+      await assertNativeTouchScrollKeepsCardsVisible(page, context, maxExpectedCards);
     }
 
     await page.setViewportSize({ width: MOBILE_VIEWPORT.width, height: MOBILE_VIEWPORT.height - 92 });
