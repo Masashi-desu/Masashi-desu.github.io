@@ -14,3 +14,6 @@ Icon?
 node_modules/
 dist/
 package-lock.json
+
+# Claude Code (local tooling)
+.claude/
