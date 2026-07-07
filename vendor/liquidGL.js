@@ -69,8 +69,38 @@
   /* --------------------------------------------------
    *  Shared renderer (one per page)
    * ------------------------------------------------*/
+  function timeoutPromise(promise, timeoutMs, message) {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+      return promise;
+    }
+
+    let timeoutId;
+    const watchdog = new Promise((_, reject) => {
+      timeoutId = window.setTimeout(() => {
+        reject(new Error(message));
+      }, timeoutMs);
+    });
+
+    return Promise.race([promise, watchdog]).finally(() => {
+      window.clearTimeout(timeoutId);
+    });
+  }
+
+  function emitRendererEvent(name, detail) {
+    try {
+      window.dispatchEvent(new CustomEvent(name, { detail }));
+    } catch (e) {
+      // Ignore event dispatch failures in older embedded browsers.
+    }
+  }
+
   class liquidGLRenderer {
-    constructor(snapshotSelector, snapshotResolution = 1.0, snapshotImageTimeout = 15000) {
+    constructor(
+      snapshotSelector,
+      snapshotResolution = 1.0,
+      snapshotImageTimeout = 15000,
+      snapshotCaptureTimeout = 8000
+    ) {
       this.canvas = document.createElement("canvas");
       this.canvas.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;`;
       this.canvas.setAttribute("data-liquid-ignore", "");
@@ -93,6 +123,7 @@
       this.textureHeight = 0;
       this.scaleFactor = 1;
       this.snapshotImageTimeout = snapshotImageTimeout;
+      this.snapshotCaptureTimeout = snapshotCaptureTimeout;
       this.startTime = Date.now();
       this._scrollUpdateCounter = 0;
 
@@ -462,7 +493,7 @@
             );
           };
 
-          const snapCanvas = await html2canvas(this.snapshotTarget, {
+          const capture = html2canvas(this.snapshotTarget, {
             allowTaint: false,
             useCORS: true,
             backgroundColor: null,
@@ -475,9 +506,13 @@
             imageTimeout: this.snapshotImageTimeout,
             ignoreElements: ignoreElementsFunc,
           });
+          const snapCanvas = await timeoutPromise(
+            capture,
+            this.snapshotCaptureTimeout,
+            `liquidGL snapshot timed out after ${this.snapshotCaptureTimeout}ms`
+          );
 
-          this._uploadTexture(snapCanvas);
-          return true;
+          return this._uploadTexture(snapCanvas);
         } catch (e) {
           console.error("liquidGL snapshot failed on attempt " + attempt, e);
           if (attempt < maxAttempts) {
@@ -488,6 +523,10 @@
             return await attemptCapture(attempt + 1, maxAttempts, delayMs);
           } else {
             console.error("liquidGL: All snapshot attempts failed.", e);
+            emitRendererEvent("liquidgl:snapshot-failed", {
+              renderer: this,
+              error: e,
+            });
             return false;
           }
         } finally {
@@ -503,13 +542,13 @@
 
     /* ----------------------------- */
     _uploadTexture(srcCanvas) {
-      if (!srcCanvas) return;
+      if (!srcCanvas) return false;
 
       if (!(srcCanvas instanceof HTMLCanvasElement)) {
         const tmp = document.createElement("canvas");
         tmp.width = srcCanvas.width || 0;
         tmp.height = srcCanvas.height || 0;
-        if (tmp.width === 0 || tmp.height === 0) return;
+        if (tmp.width === 0 || tmp.height === 0) return false;
         try {
           const ctx = tmp.getContext("2d");
           ctx.drawImage(srcCanvas, 0, 0);
@@ -519,11 +558,11 @@
             "liquidGL: Unable to convert OffscreenCanvas for upload",
             e
           );
-          return;
+          return false;
         }
       }
 
-      if (srcCanvas.width === 0 || srcCanvas.height === 0) return;
+      if (srcCanvas.width === 0 || srcCanvas.height === 0) return false;
       this.staticSnapshotCanvas = srcCanvas;
       const gl = this.gl;
       if (!this.texture) this.texture = gl.createTexture();
@@ -547,10 +586,17 @@
 
       this.render();
 
-      if (this._pendingReveal.length) {
+      if (Array.isArray(this._pendingReveal) && this._pendingReveal.length) {
         this._pendingReveal.forEach((ln) => ln._reveal());
         this._pendingReveal.length = 0;
       }
+
+      emitRendererEvent("liquidgl:snapshot-ready", {
+        renderer: this,
+        width: this.textureWidth,
+        height: this.textureHeight,
+      });
+      return true;
     }
 
     /* ----------------------------- */
@@ -1941,6 +1987,7 @@
       bevelWidth: 0.15,
       frost: 0,
       snapshotImageTimeout: 15000,
+      snapshotCaptureTimeout: 8000,
       shadow: true,
       specular: true,
       reveal: "fade",
@@ -1984,7 +2031,8 @@
       renderer = new liquidGLRenderer(
         options.snapshot,
         options.resolution,
-        options.snapshotImageTimeout
+        options.snapshotImageTimeout,
+        options.snapshotCaptureTimeout
       );
       window.__liquidGLRenderer__ = renderer;
     }
