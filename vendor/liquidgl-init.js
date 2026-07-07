@@ -2,6 +2,8 @@
   const TARGET_SELECTOR = '.liquidGL';
   const INIT_DELAY_MS = 0;
   const REFRESH_DELAY_MS = 320;
+  const PENDING_REVEAL_DELAY_MS = 900;
+  const FALLBACK_RESTORE_MAX_ATTEMPTS = 40;
   let initialized = false;
   let refreshTimer = null;
 
@@ -23,7 +25,10 @@
           }
         });
       }
-      renderer.captureSnapshot();
+      const snapshot = renderer.captureSnapshot();
+      if (snapshot && typeof snapshot.then === 'function') {
+        snapshot.then(restorePendingFallback).catch(() => {});
+      }
     }, delay);
   }
 
@@ -32,6 +37,58 @@
       return [];
     }
     return Array.isArray(result) ? result.filter(Boolean) : [result];
+  }
+
+  function revealPendingLenses() {
+    const renderer = getRenderer();
+    if (!renderer || renderer.texture || !Array.isArray(renderer.lenses)) {
+      return;
+    }
+
+    renderer.lenses.forEach((lens) => {
+      if (!lens || !lens.el) {
+        return;
+      }
+      lens.revealTypeIndex = 0;
+      lens._revealProgress = 1;
+      lens._mdwPendingFallback = true;
+      lens.el.classList.add('is-liquidgl-fallback');
+      lens.el.style.opacity = lens.originalOpacity || '1';
+      lens.el.style.transition = lens.originalTransition || '';
+      lens.el.style.background = 'var(--home-nav-bg)';
+      lens.el.style.backdropFilter = 'blur(18px)';
+      lens.el.style.webkitBackdropFilter = 'blur(18px)';
+    });
+  }
+
+  function restorePendingFallback(attempt = 0) {
+    const renderer = getRenderer();
+    if (!renderer || !Array.isArray(renderer.lenses)) {
+      return;
+    }
+    if (!renderer.texture) {
+      if (attempt < FALLBACK_RESTORE_MAX_ATTEMPTS) {
+        window.setTimeout(() => restorePendingFallback(attempt + 1), REFRESH_DELAY_MS);
+      }
+      return;
+    }
+
+    renderer.lenses.forEach((lens) => {
+      if (!lens || !lens.el || !lens._mdwPendingFallback) {
+        return;
+      }
+      lens._mdwPendingFallback = false;
+      lens.el.classList.remove('is-liquidgl-fallback');
+      lens.el.style.background = 'transparent';
+      lens.el.style.backdropFilter = 'none';
+      lens.el.style.webkitBackdropFilter = 'none';
+      lens.el.style.opacity = lens.originalOpacity || '1';
+    });
+
+    renderer.canvas.style.opacity = '1';
+    if (typeof renderer.render === 'function') {
+      renderer.render();
+    }
   }
 
   function init() {
@@ -51,6 +108,7 @@
         target: TARGET_SELECTOR,
         snapshot: 'body',
         resolution: 1.25,
+        snapshotImageTimeout: 600,
         refraction: 0,
         bevelDepth: 0.052,
         bevelWidth: 0.211,
@@ -72,6 +130,8 @@
     if (!getRenderer()) {
       targets.forEach((target) => target.classList.add('is-liquidgl-fallback'));
     }
+    window.setTimeout(revealPendingLenses, PENDING_REVEAL_DELAY_MS);
+    window.setTimeout(restorePendingFallback, PENDING_REVEAL_DELAY_MS + REFRESH_DELAY_MS);
     refresh(700);
   }
 
@@ -83,12 +143,13 @@
     refresh
   };
 
-  if (document.readyState === 'complete') {
-    scheduleInit();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scheduleInit, { once: true });
   } else {
-    window.addEventListener('load', scheduleInit, { once: true });
+    scheduleInit();
   }
 
+  window.addEventListener('load', () => refresh(REFRESH_DELAY_MS), { once: true });
   window.addEventListener('mdw:footer-loaded', () => refresh(REFRESH_DELAY_MS));
   window.addEventListener('mdw:transition-enter-complete', () => refresh(REFRESH_DELAY_MS));
   document.addEventListener('change', (event) => {

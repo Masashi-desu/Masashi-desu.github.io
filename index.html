@@ -4,6 +4,46 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Masahi_desu</title>
+  <script>
+    (function () {
+      const entries = typeof performance.getEntriesByType === 'function'
+        ? performance.getEntriesByType('navigation')
+        : [];
+      const navEntry = entries && entries[0] ? entries[0] : null;
+      const legacyReload = performance.navigation && performance.navigation.type === 1;
+      const isReload = navEntry ? navEntry.type === 'reload' : legacyReload;
+      if (!isReload) {
+        return;
+      }
+      const canControlScrollRestoration = 'scrollRestoration' in history;
+      const previousScrollRestoration = canControlScrollRestoration ? history.scrollRestoration : null;
+      if (canControlScrollRestoration) {
+        history.scrollRestoration = 'manual';
+      }
+      const restoreScrollRestoration = () => {
+        if (canControlScrollRestoration && previousScrollRestoration) {
+          history.scrollRestoration = previousScrollRestoration;
+        }
+      };
+      const resetScroll = () => {
+        window.scrollTo({
+          left: 0,
+          top: 0,
+          behavior: 'auto'
+        });
+        if (window.MDWLiquidGL && typeof window.MDWLiquidGL.refresh === 'function') {
+          window.MDWLiquidGL.refresh(0);
+        }
+      };
+      resetScroll();
+      document.addEventListener('DOMContentLoaded', resetScroll, { once: true });
+      window.addEventListener('load', resetScroll, { once: true });
+      window.addEventListener('pageshow', () => {
+        resetScroll();
+        window.setTimeout(restoreScrollRestoration, 0);
+      }, { once: true });
+    })();
+  </script>
   <!-- mdw:meta-config
   {
     "title": "Masahi_desu",

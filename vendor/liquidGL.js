@@ -70,7 +70,7 @@
    *  Shared renderer (one per page)
    * ------------------------------------------------*/
   class liquidGLRenderer {
-    constructor(snapshotSelector, snapshotResolution = 1.0) {
+    constructor(snapshotSelector, snapshotResolution = 1.0, snapshotImageTimeout = 15000) {
       this.canvas = document.createElement("canvas");
       this.canvas.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;`;
       this.canvas.setAttribute("data-liquid-ignore", "");
@@ -92,6 +92,7 @@
       this.textureWidth = 0;
       this.textureHeight = 0;
       this.scaleFactor = 1;
+      this.snapshotImageTimeout = snapshotImageTimeout;
       this.startTime = Date.now();
       this._scrollUpdateCounter = 0;
 
@@ -471,6 +472,7 @@
             scrollX: 0,
             scrollY: 0,
             scale: scale,
+            imageTimeout: this.snapshotImageTimeout,
             ignoreElements: ignoreElementsFunc,
           });
 
@@ -1938,6 +1940,7 @@
       bevelDepth: 0.08,
       bevelWidth: 0.15,
       frost: 0,
+      snapshotImageTimeout: 15000,
       shadow: true,
       specular: true,
       reveal: "fade",
@@ -1978,7 +1981,11 @@
 
     let renderer = window.__liquidGLRenderer__;
     if (!renderer) {
-      renderer = new liquidGLRenderer(options.snapshot, options.resolution);
+      renderer = new liquidGLRenderer(
+        options.snapshot,
+        options.resolution,
+        options.snapshotImageTimeout
+      );
       window.__liquidGLRenderer__ = renderer;
     }
 
