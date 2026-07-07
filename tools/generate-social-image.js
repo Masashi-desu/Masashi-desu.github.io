@@ -30,71 +30,59 @@ async function generate() {
           margin: 0;
         }
         body {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: radial-gradient(circle at 20% 20%, rgba(56, 249, 215, 0.35), transparent 55%),
-                      radial-gradient(circle at 85% 40%, rgba(99, 102, 241, 0.45), transparent 60%),
-                      linear-gradient(135deg, #0f172a, #182a4a 45%, #214d6b 68%, #38f9d7 100%);
-          font-family: 'Outfit', 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
-          color: #f8fafc;
+          --paper: #f4f1ea;
+          --ink: #161512;
+          --muted: #6f685d;
+          --accent: #2f49ff;
+          background: var(--paper);
+          color: var(--ink);
+          font-family: 'Instrument Sans', 'Hiragino Sans', 'Noto Sans JP', system-ui, -apple-system, sans-serif;
         }
-        .card {
-          width: 1080px;
-          padding: 88px 120px;
-          border-radius: 40px;
-          background: rgba(10, 18, 35, 0.55);
-          backdrop-filter: blur(28px);
-          box-shadow: 0 50px 120px -60px rgba(56, 249, 215, 0.35), 0 30px 80px -60px rgba(15, 23, 42, 0.7);
-          border: 1px solid rgba(148, 163, 184, 0.25);
+        .frame {
+          position: absolute;
+          inset: 0;
           display: flex;
           flex-direction: column;
-          gap: 32px;
+          justify-content: center;
+          gap: 38px;
+          padding: 80px 88px;
+        }
+        .kicker {
+          margin: 0;
+          font-size: 27px;
+          font-weight: 700;
+          color: var(--muted);
         }
         .headline {
-          font-size: 72px;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
           margin: 0;
+          font-family: 'Instrument Serif', Georgia, serif;
+          font-weight: 400;
+          font-size: 164px;
+          line-height: 0.9;
+          letter-spacing: 0;
         }
-        .subline {
-          font-size: 26px;
-          letter-spacing: 0.24em;
-          text-transform: uppercase;
+        .headline span { display: block; white-space: nowrap; }
+        .headline .dot { display: inline; color: var(--accent); }
+        .body-jp {
           margin: 0;
-          color: rgba(226, 232, 240, 0.75);
-        }
-        .footer {
-          margin-top: auto;
-          display: flex;
-          gap: 24px;
-          align-items: center;
-          font-size: 20px;
-          color: rgba(226, 232, 240, 0.65);
-          letter-spacing: 0.2em;
-          text-transform: uppercase;
-        }
-        .glow {
-          width: 54px;
-          height: 54px;
-          border-radius: 16px;
-          background: linear-gradient(135deg, rgba(56, 249, 215, 0.95), rgba(99, 102, 241, 0.85));
-          box-shadow: 0 20px 40px -16px rgba(56, 249, 215, 0.6);
+          font-size: 25px;
+          line-height: 1.5;
+          letter-spacing: 0.04em;
+          color: var(--muted);
         }
       </style>
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&display=swap" rel="stylesheet">
+      <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     </head>
     <body>
-      <div class="card">
-        <p class="subline">Designing Ideas Into Motion</p>
-        <h1 class="headline">Masahi_desu Works</h1>
-        <div class="footer">
-          <div class="glow"></div>
-          <span>macOS Tools</span>
-          <span>Hardware Prototypes</span>
-        </div>
+      <div class="frame">
+        <p class="kicker">Masahi_desu</p>
+        <h1 class="headline">
+          <span>Behavior</span>
+          <span>for Behavior<span class="dot">.</span></span>
+        </h1>
+        <p class="body-jp">ふるまいを観察し、ふるまいに返す。日々の手ざわりを静かに変える。</p>
       </div>
     </body>
     </html>
