@@ -82,65 +82,101 @@
   </script>
 </head>
 <body class="page-shell page-catalog">
-  <div class="page-background" data-transition-ignore>
-    <div class="page-orb page-orb--catalog-accent"></div>
-    <div class="page-orb page-orb--catalog-glow"></div>
-  </div>
-  <main class="page-container catalog-main" data-transition-ignore>
-    <header class="catalog-header" data-transition-fade>
-      <!-- 製品一覧 -->
-      <p class="section-label" data-i18n="sectionLabel">Product Portfolio</p>
-      <h1 class="section-title" data-i18n="sectionTitle">Product</h1>
-      <p class="section-copy" data-i18n="sectionBody">
-        macOS向けのプロダクティビティツールからハードウェアまで。ビルドを重ねてきたプロジェクトのスナップショットをこちらにまとめています。
-      </p>
-    </header>
-    <div id="product-controls" class="catalog-panel page-surface" data-transition-fade>
-      <div class="catalog-panel__filters">
-        <div class="catalog-filter-row">
-          <div class="catalog-filter-group">
-            <span id="category-filter-label" class="catalog-filter-label" data-i18n="categoryFilterLabel">カテゴリ</span>
-            <div class="select-shell">
-              <select id="category-filter" class="select-field" aria-labelledby="category-filter-label">
-            <option value="all">読み込み中...</option>
-              </select>
-              <span class="select-shell__icon">
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                </svg>
-              </span>
+  <header class="catalog-section-nav" data-transition-ignore>
+    <nav class="catalog-section-nav__track" aria-label="製品一覧セグメント">
+      <button type="button" class="catalog-section-nav__icon-button is-active" data-section-target="catalog-search-section" aria-label="検索と絞り込み" aria-current="true" title="検索と絞り込み">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.5"></circle>
+          <path d="m16 16 4 4"></path>
+        </svg>
+      </button>
+      <div id="catalog-product-nav" class="catalog-section-nav__numbers" aria-label="プロダクトページ"></div>
+      <button type="button" id="catalog-pagination-nav" class="catalog-section-nav__icon-button" data-pagination-target="catalog-pagination-section" aria-label="ページネーション" title="ページネーション">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m8.5 7.5-4 4.5 4 4.5"></path>
+          <circle cx="12" cy="12" r="2.1"></circle>
+          <path d="m15.5 7.5 4 4.5-4 4.5"></path>
+        </svg>
+      </button>
+      <a href="#catalog-footer" class="catalog-section-nav__footer-link" data-footer-target="catalog-footer" aria-label="フッター設定" aria-current="false" title="フッター設定">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"></path>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2.1 2.1 0 0 1-3 3l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.3a2.1 2.1 0 0 1-4.2 0v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2.1 2.1 0 0 1-3-3l.1-.1A1.7 1.7 0 0 0 4 15a1.7 1.7 0 0 0-1.5-1H2.2a2.1 2.1 0 0 1 0-4.2h.2A1.7 1.7 0 0 0 4 8a1.7 1.7 0 0 0-.3-1.9L3.6 6a2.1 2.1 0 0 1 3-3l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5v-.3a2.1 2.1 0 0 1 4.2 0v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2.1 2.1 0 0 1 3 3l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.3a2.1 2.1 0 0 1 0 4.2h-.2a1.7 1.7 0 0 0-1.7 1.7Z"></path>
+        </svg>
+      </a>
+    </nav>
+  </header>
+
+  <main class="catalog-sections" data-transition-ignore>
+    <section id="catalog-search-section" class="catalog-section catalog-section--search is-visible" data-catalog-section="search" aria-labelledby="catalog-search-title" data-transition-fade>
+      <div class="catalog-section__inner catalog-search">
+        <header class="catalog-header" data-catalog-animate>
+          <p class="section-label" data-i18n="sectionLabel">Product Portfolio</p>
+          <h1 id="catalog-search-title" class="section-title" data-i18n="sectionTitle">Product</h1>
+          <p class="section-copy" data-i18n="sectionBody">
+            macOS向けのプロダクティビティツールからハードウェアまで。ビルドを重ねてきたプロジェクトのスナップショットをこちらにまとめています。
+          </p>
+        </header>
+        <div id="product-controls" class="catalog-panel page-surface" data-catalog-animate>
+          <div class="catalog-panel__filters">
+            <div class="catalog-filter-row">
+              <div class="catalog-filter-group">
+                <span id="category-filter-label" class="catalog-filter-label" data-i18n="categoryFilterLabel">カテゴリ</span>
+                <div class="select-shell">
+                  <select id="category-filter" class="select-field" aria-labelledby="category-filter-label">
+                    <option value="all">読み込み中...</option>
+                  </select>
+                  <span class="select-shell__icon">
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                      <path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                  </span>
+                </div>
+              </div>
+              <div class="catalog-filter-group">
+                <span id="sort-order-label" class="catalog-filter-label" data-i18n="sortOrderLabel">並び替え</span>
+                <div class="select-shell">
+                  <select id="sort-order" class="select-field" aria-labelledby="sort-order-label">
+                    <option value="date">読み込み中...</option>
+                  </select>
+                  <span class="select-shell__icon">
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                      <path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="catalog-filter-group">
-            <span id="sort-order-label" class="catalog-filter-label" data-i18n="sortOrderLabel">並び替え</span>
-            <div class="select-shell">
-              <select id="sort-order" class="select-field" aria-labelledby="sort-order-label">
-            <option value="date">読み込み中...</option>
-              </select>
-              <span class="select-shell__icon">
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                </svg>
-              </span>
-            </div>
+          <div class="catalog-count">
+            <span id="product-count">--</span>
           </div>
         </div>
+        <div class="catalog-meta" data-catalog-animate>
+          <a href="../index.html" data-transition-direction="left" class="page-backlink page-backlink--muted" data-i18n="backHome">
+            ← ホーム
+          </a>
+          <span class="catalog-updated" data-i18n-scope="updatedLabel">
+            更新日: <time id="catalog-updated"></time>
+          </span>
+        </div>
       </div>
-      <div class="catalog-count">
-        <span id="product-count">--</span>
+    </section>
+
+    <div id="product-grid" class="catalog-product-sections" data-lang-sensitive aria-live="polite"></div>
+
+    <section id="catalog-pagination-section" class="catalog-pagination-band" data-transition-ignore aria-label="ページネーション">
+      <div class="page-container catalog-pagination-band__inner">
+        <nav class="catalog-pagination-band__control" aria-label="ページネーション">
+          <button type="button" id="catalog-pagination-prev" class="catalog-pagination-band__button" aria-label="前のページ" disabled>‹</button>
+          <span id="catalog-pagination-status" class="catalog-pagination-band__current" aria-current="page">1</span>
+          <button type="button" id="catalog-pagination-next" class="catalog-pagination-band__button" aria-label="次のページ" disabled>›</button>
+        </nav>
       </div>
-    </div>
-    <div id="product-grid" class="catalog-grid" data-transition-fade data-lang-sensitive></div>
-    <div class="catalog-meta" data-transition-fade>
-      <a href="../index.html" data-transition-direction="left" class="page-backlink page-backlink--muted" data-i18n="backHome">
-        ← ホーム
-      </a>
-      <span class="catalog-updated" data-i18n-scope="updatedLabel">
-        更新日: <time id="catalog-updated"></time>
-      </span>
-    </div>
+    </section>
   </main>
-  <footer class="site-footer catalog-footer">
+
+  <footer id="catalog-footer" class="site-footer catalog-footer" data-transition-ignore>
     <div class="page-container site-footer__inner">
       <span class="site-footer__copyright">© 2026 Masahi_desu</span>
       <div data-include="footer" data-footer-src="../partials/footer.html"></div>
@@ -148,493 +184,6 @@
   </footer>
   <script vite-ignore src="../theme.js"></script>
   <script vite-ignore src="../footer.js"></script>
-  <script>
-    (function () {
-      const STORAGE_KEY = 'mdw-lang';
-      const grid = document.getElementById('product-grid');
-      const updated = document.getElementById('catalog-updated');
-      const updatedScope = document.querySelector('[data-i18n-scope="updatedLabel"]');
-      const controls = {
-        wrapper: document.getElementById('product-controls'),
-        category: document.getElementById('category-filter'),
-        categoryLabel: document.getElementById('category-filter-label'),
-        sort: document.getElementById('sort-order'),
-        sortLabel: document.getElementById('sort-order-label'),
-        count: document.getElementById('product-count')
-      };
-      const fallbackCopy = {};
-      const localeConfig = {
-        ja: {
-          sectionLabel: 'Product Portfolio',
-          sectionTitle: 'Product',
-          sectionBody: 'macOS向けのプロダクティビティツールからハードウェアまで。ビルドを重ねてきたプロジェクトのスナップショットをこちらにまとめています。',
-          backHome: '← ホーム',
-          updatedLabel: '更新日: ',
-          ctaExternal: '公式サイトへ',
-          ctaInternal: '詳細を見る',
-          themeLabel: 'テーマ',
-          themeSystem: 'システム',
-          themeLight: 'ライト',
-          themeDark: 'ダーク',
-          dateFormat: new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }),
-          updatedFormat: new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }),
-          categoryFilterLabel: 'カテゴリ',
-          sortOrderLabel: '並び替え',
-          allCategoriesOption: 'すべて',
-          sortOptionDate: '新しい順',
-          sortOptionCategory: 'カテゴリ順',
-          emptyState: '該当するプロダクトがありません。',
-          formatResultCount: (shown, total) => `${shown}件表示 / 全${total}件`
-        },
-        en: {
-          sectionLabel: 'Product Portfolio',
-          sectionTitle: 'Product',
-          sectionBody: 'From macOS productivity tools to experimental hardware—discover snapshots of the projects we keep iterating on.',
-          backHome: '← Home',
-          updatedLabel: 'Updated: ',
-          ctaExternal: 'Visit Website',
-          ctaInternal: 'View Details',
-          themeLabel: 'Theme',
-          themeSystem: 'System',
-          themeLight: 'Light',
-          themeDark: 'Dark',
-          dateFormat: new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-          updatedFormat: new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }),
-          categoryFilterLabel: 'Category',
-          sortOrderLabel: 'Sort',
-          allCategoriesOption: 'All categories',
-          sortOptionDate: 'Newest first',
-          sortOptionCategory: 'Category (A–Z)',
-          emptyState: 'No products match this filter.',
-          formatResultCount: (shown, total) => `Showing ${shown} of ${total}`
-        }
-      };
-
-      let catalog = [];
-      let currentLocale = resolveLocale(readStoredLanguage() || 'ja');
-      let activeCategory = 'all';
-      let activeSort = 'date';
-      let dataLoaded = false;
-
-      function readStoredLanguage() {
-        try {
-          return localStorage.getItem(STORAGE_KEY);
-        } catch (error) {
-          return null;
-        }
-      }
-
-      function resolveLocale(locale) {
-        return localeConfig[locale] ? locale : 'ja';
-      }
-
-      function recordFallbacks() {
-        document.querySelectorAll('[data-i18n]').forEach((el) => {
-          const key = el.getAttribute('data-i18n');
-          if (!key || Object.prototype.hasOwnProperty.call(fallbackCopy, key)) {
-            return;
-          }
-          fallbackCopy[key] = el.textContent.replace(/\s+$/u, '');
-        });
-      }
-
-      function syncLanguageSelects(lang) {
-        document.querySelectorAll('.lang-select').forEach((select) => {
-          if (select.value !== lang) {
-            select.value = lang;
-          }
-        });
-      }
-
-      function updateControlsLocale(lang) {
-        const config = localeConfig[lang];
-        if (controls.categoryLabel && config.categoryFilterLabel) {
-          controls.categoryLabel.textContent = config.categoryFilterLabel;
-        }
-        if (controls.sortLabel && config.sortOrderLabel) {
-          controls.sortLabel.textContent = config.sortOrderLabel;
-        }
-      }
-
-      function refreshSortOptions(lang) {
-        if (!controls.sort) {
-          return;
-        }
-        const config = localeConfig[lang];
-        const previous = controls.sort.value || activeSort || 'date';
-        const optionDescriptors = [
-          { value: 'date', label: config.sortOptionDate },
-          { value: 'category', label: config.sortOptionCategory }
-        ];
-        controls.sort.innerHTML = '';
-        optionDescriptors.forEach((descriptor) => {
-          const option = document.createElement('option');
-          option.value = descriptor.value;
-          option.textContent = descriptor.label;
-          controls.sort.appendChild(option);
-        });
-        const nextValue = optionDescriptors.some((descriptor) => descriptor.value === previous)
-          ? previous
-          : 'date';
-        controls.sort.value = nextValue;
-        activeSort = nextValue;
-      }
-
-      function refreshCategoryOptions(lang) {
-        if (!controls.category) {
-          return;
-        }
-        const config = localeConfig[lang];
-        const discovered = new Set();
-        catalog.forEach((item) => {
-          if (!item || !Array.isArray(item.categories)) {
-            return;
-          }
-          item.categories.forEach((category) => {
-            if (category) {
-              discovered.add(category);
-            }
-          });
-        });
-        const sortedCategories = Array.from(discovered).sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }));
-        const previous = controls.category.value || activeCategory || 'all';
-        controls.category.innerHTML = '';
-        const allOption = document.createElement('option');
-        allOption.value = 'all';
-        allOption.textContent = config.allCategoriesOption;
-        controls.category.appendChild(allOption);
-        sortedCategories.forEach((category) => {
-          const option = document.createElement('option');
-          option.value = category;
-          option.textContent = category;
-          controls.category.appendChild(option);
-        });
-        const nextValue = previous === 'all' || sortedCategories.includes(previous)
-          ? previous
-          : 'all';
-        controls.category.value = nextValue;
-        activeCategory = nextValue;
-      }
-
-      function getFilteredCatalog() {
-        const baseline = Array.isArray(catalog) ? catalog.slice() : [];
-        const filtered = activeCategory === 'all'
-          ? baseline
-          : baseline.filter((item) => Array.isArray(item.categories) && item.categories.includes(activeCategory));
-        const working = filtered.slice();
-        if (activeSort === 'category') {
-          working.sort((a, b) => {
-            const categoryA = Array.isArray(a.categories) && a.categories.length > 0 ? a.categories[0] : '';
-            const categoryB = Array.isArray(b.categories) && b.categories.length > 0 ? b.categories[0] : '';
-            const primary = categoryA.localeCompare(categoryB, 'en', { sensitivity: 'base' });
-            if (primary !== 0) {
-              return primary;
-            }
-            const dateCompare = (b.date || '').localeCompare(a.date || '');
-            if (dateCompare !== 0) {
-              return dateCompare;
-            }
-            return (a.title_en || a.title || '').localeCompare(b.title_en || b.title || '', 'en', { sensitivity: 'base' });
-          });
-        } else {
-          working.sort((a, b) => {
-            const dateCompare = (b.date || '').localeCompare(a.date || '');
-            if (dateCompare !== 0) {
-              return dateCompare;
-            }
-            return (a.title_en || a.title || '').localeCompare(b.title_en || b.title || '', 'en', { sensitivity: 'base' });
-          });
-        }
-        return working;
-      }
-
-      function updateResultCount(lang, shown) {
-        if (!controls.count) {
-          return;
-        }
-        const total = catalog.length;
-        const config = localeConfig[lang];
-        if (typeof config.formatResultCount === 'function') {
-          controls.count.textContent = config.formatResultCount(shown, total);
-        } else {
-          controls.count.textContent = `${shown}/${total}`;
-        }
-      }
-
-      function setupControls() {
-        if (controls.category && controls.category.dataset.bound !== 'true') {
-          controls.category.dataset.bound = 'true';
-          controls.category.addEventListener('change', (event) => {
-            activeCategory = event.target.value || 'all';
-            renderCards(currentLocale);
-          });
-        }
-        if (controls.sort && controls.sort.dataset.bound !== 'true') {
-          controls.sort.dataset.bound = 'true';
-          controls.sort.addEventListener('change', (event) => {
-            activeSort = event.target.value || 'date';
-            renderCards(currentLocale);
-          });
-        }
-      }
-
-      function renderCards(locale) {
-        const lang = resolveLocale(locale);
-        grid.innerHTML = '';
-        const entries = getFilteredCatalog();
-
-        if (entries.length === 0) {
-          if (dataLoaded) {
-            const emptyState = document.createElement('div');
-            emptyState.className = 'catalog-empty-state';
-            emptyState.textContent = localeConfig[lang].emptyState;
-            grid.appendChild(emptyState);
-            updateResultCount(lang, 0);
-          }
-          return;
-        }
-
-        entries.forEach((item) => {
-          const isExternal = item.url && item.url.trim() !== '';
-          const link = document.createElement('a');
-          let internalHref = `${item.dir || ''}`;
-          if (!isExternal) {
-            if (!/\.html?$/.test(internalHref)) {
-              if (!internalHref.endsWith('/')) {
-                internalHref = `${internalHref}/`;
-              }
-              internalHref = `${internalHref}index.html`;
-            }
-          }
-          link.href = isExternal ? item.url : internalHref;
-          link.className = 'catalog-card';
-          link.setAttribute('data-transition-fade', 'true');
-          link.dataset.pressable = 'true';
-          if (isExternal) {
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-          } else {
-            link.dataset.transitionDirection = 'right';
-          }
-
-          const glow = document.createElement('div');
-          glow.className = 'catalog-card__glow';
-          glow.style.zIndex = '-1';
-
-          const baseTitle = item.title_en || item.title;
-          const headerPath = (item.header || '').trim();
-          const iconPath = (item.image || '').trim();
-          let icon = null;
-          if (iconPath) {
-            icon = document.createElement('img');
-            icon.src = `${item.dir}${iconPath}`;
-            icon.alt = `${baseTitle} icon`;
-          }
-
-          const hasHeader = Boolean(headerPath);
-          const hasIcon = Boolean(icon);
-          const hasMedia = hasHeader || hasIcon;
-
-          if (hasMedia) {
-            const mediaWrapper = document.createElement('div');
-            mediaWrapper.className = 'catalog-card__media';
-            mediaWrapper.dataset.mdwMedia = 'true';
-            const observedImages = [];
-
-            if (hasHeader) {
-              const headerImg = document.createElement('img');
-              headerImg.src = `${item.dir}${headerPath}`;
-              headerImg.alt = `${baseTitle} header image`;
-              headerImg.className = 'catalog-card__media-image';
-              headerImg.loading = 'lazy';
-              observedImages.push(headerImg);
-              mediaWrapper.appendChild(headerImg);
-            } else {
-              const placeholder = document.createElement('div');
-              placeholder.className = 'catalog-card__media-placeholder';
-              mediaWrapper.appendChild(placeholder);
-            }
-
-            if (hasIcon) {
-              const iconBadge = document.createElement('div');
-              iconBadge.className = 'catalog-card__icon-badge';
-              icon.className = 'catalog-card__icon';
-              icon.loading = 'lazy';
-              observedImages.push(icon);
-              iconBadge.appendChild(icon);
-              mediaWrapper.appendChild(iconBadge);
-            }
-
-            if (observedImages.length > 0 && window.MDWMediaLoader && typeof window.MDWMediaLoader.attach === 'function') {
-              window.MDWMediaLoader.attach(mediaWrapper, { targets: observedImages });
-            }
-
-            link.appendChild(mediaWrapper);
-          }
-
-          const title = document.createElement('h2');
-          title.textContent = lang === 'en' ? (item.title_en || item.title) : (item.title_ja || item.title);
-          title.className = 'catalog-card__title';
-          if (hasMedia) {
-            title.classList.add('catalog-card__title--with-media');
-          }
-
-          const desc = document.createElement('p');
-          desc.textContent = lang === 'en' ? (item.desc_en || item.desc) : (item.desc_ja || item.desc);
-          desc.className = 'catalog-card__description';
-
-          const categories = item.categories;
-          let tagList = null;
-          if (Array.isArray(categories) && categories.length > 0) {
-            tagList = document.createElement('div');
-            tagList.className = 'catalog-card__tags';
-            categories.forEach((category) => {
-              if (!category) {
-                return;
-              }
-              const tag = document.createElement('span');
-              tag.textContent = category;
-              tag.className = 'catalog-card__tag';
-              tagList.appendChild(tag);
-            });
-          }
-
-          const date = document.createElement('time');
-          date.dateTime = item.date;
-          date.textContent = localeConfig[lang].dateFormat.format(new Date(item.date));
-          date.className = 'catalog-card__date';
-
-          const cta = document.createElement('span');
-          cta.className = 'catalog-card__cta';
-          cta.textContent = isExternal ? localeConfig[lang].ctaExternal : localeConfig[lang].ctaInternal;
-
-          const arrow = document.createElement('span');
-          arrow.textContent = isExternal ? '↗' : '→';
-          arrow.className = 'catalog-card__cta-arrow';
-          cta.appendChild(arrow);
-
-          link.appendChild(glow);
-          link.appendChild(title);
-          link.appendChild(desc);
-          if (tagList) {
-            link.appendChild(tagList);
-          }
-          const footer = document.createElement('div');
-          footer.className = 'catalog-card__footer';
-          footer.appendChild(date);
-          footer.appendChild(cta);
-          link.appendChild(footer);
-          grid.appendChild(link);
-        });
-
-        updateResultCount(lang, entries.length);
-
-        if (window.mdwTheme && typeof window.mdwTheme.focusPressables === 'function') {
-          window.mdwTheme.focusPressables(grid);
-        }
-
-        updated.textContent = localeConfig[lang].updatedFormat.format(new Date());
-        updatedScope.textContent = `${localeConfig[lang].updatedLabel}`;
-        updatedScope.appendChild(updated);
-      }
-
-      function updateLanguage(locale) {
-        recordFallbacks();
-        const lang = resolveLocale(locale);
-        currentLocale = lang;
-        document.documentElement.lang = lang;
-        document.querySelectorAll('[data-i18n]').forEach((el) => {
-          const key = el.getAttribute('data-i18n');
-          if (!key) {
-            return;
-          }
-          if (lang === 'ja') {
-            const fallback = fallbackCopy[key];
-            if (typeof fallback === 'string') {
-              el.textContent = fallback;
-            }
-          } else {
-            const copy = localeConfig[lang][key];
-            if (typeof copy === 'string') {
-              el.textContent = copy;
-            } else {
-              const fallback = fallbackCopy[key];
-              if (typeof fallback === 'string') {
-                el.textContent = fallback;
-              }
-            }
-          }
-        });
-        updateControlsLocale(lang);
-        refreshSortOptions(lang);
-        refreshCategoryOptions(lang);
-        syncLanguageSelects(lang);
-        try {
-          localStorage.setItem(STORAGE_KEY, lang);
-        } catch (error) {
-          /* ignore */
-        }
-        renderCards(lang);
-        return lang;
-      }
-
-      const controller = window.MDWLanguageTransition
-        ? window.MDWLanguageTransition.create((lang) => updateLanguage(lang), { duration: 320 })
-        : null;
-
-      function applyLanguage(locale, options = {}) {
-        const target = resolveLocale(locale);
-        if (controller) {
-          controller.apply(target, options);
-        } else {
-          updateLanguage(target);
-        }
-      }
-
-      function setupLanguageSelector() {
-        document.querySelectorAll('.lang-select').forEach((select) => {
-          if (select.dataset.bound === 'true') {
-            select.value = currentLocale;
-            return;
-          }
-          select.dataset.bound = 'true';
-          select.addEventListener('change', (event) => {
-            applyLanguage(event.target.value, { animate: true });
-          });
-          select.value = currentLocale;
-        });
-      }
-
-      window.addEventListener('mdw:footer-loaded', () => {
-        setupControls();
-        setupLanguageSelector();
-        applyLanguage(currentLocale);
-      });
-
-      setupControls();
-      applyLanguage(currentLocale);
-      setupLanguageSelector();
-
-      fetch('index.json')
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error('index.json の読み込みに失敗しました');
-          }
-          return response.json();
-        })
-        .then((items) => {
-          catalog = items;
-          dataLoaded = true;
-          applyLanguage(currentLocale);
-        })
-        .catch((error) => {
-          dataLoaded = true;
-          const notice = document.createElement('div');
-          notice.className = 'catalog-error-notice';
-          notice.textContent = error.message;
-          grid.replaceWith(notice);
-        });
-    })();
-  </script>
+  <script vite-ignore src="catalog.js"></script>
 </body>
 </html>
