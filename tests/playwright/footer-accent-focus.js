@@ -1,8 +1,8 @@
 /**
  * テスト概要:
- *  - 目的: フッターの言語・テーマセレクタがフォーカス時にアクセントのオレンジ系カラーへ変化することを確認する。
- *  - 期待値: フォーカスリングの box-shadow はアクセントカラー (rgb(253,139,44) 付近)、境界線は赤優位の暖色になる。
- *  - 検証方法: ローカルサーバーで製品ページを配信し、Playwright で該当セレクタをフォーカスして計測する。
+ *  - 目的: フッターの言語・テーマセレクタがフォーカス時に現在テーマのアクセントカラーへ変化することを確認する。
+ *  - 期待値: 境界線は --border-focus、フォーカスリングは --focus-ring-color と同系色になる。
+ *  - 検証方法: ローカルサーバーで製品ページを配信し、Playwright で CSS 変数と該当セレクタの focus style を計測する。
  */
 const http = require('http');
 const fs = require('fs');
@@ -12,7 +12,6 @@ const { chromium } = require('playwright');
 const ROOT = path.resolve(__dirname, '../../');
 const PORT = 3015;
 const PAGE_URL = `http://127.0.0.1:${PORT}/products/index.html`;
-const EXPECTED_RGB = { r: 253, g: 139, b: 44 };
 
 function serveStatic(req, res) {
   const urlPath = req.url.split('?')[0];
@@ -60,14 +59,6 @@ function assertWithinRange(measured, expected, delta, label) {
   }
 }
 
-function assertWarmHue(measured, label) {
-  if (!(measured.r > measured.g && measured.g >= measured.b)) {
-    throw new Error(
-      `${label} should be warm-toned but was (${measured.r}, ${measured.g}, ${measured.b})`
-    );
-  }
-}
-
 async function run() {
   const server = http.createServer(serveStatic);
   await new Promise((resolve) => server.listen(PORT, resolve));
@@ -92,11 +83,47 @@ async function run() {
       timeout: 60000
     });
     await page.waitForSelector('#footer-language', { timeout: 1000 });
+    await page.waitForTimeout(850);
+
+    const expected = await page.evaluate(() => {
+      const parseChannels = (input) => {
+        if (!input) {
+          return null;
+        }
+        const matches = input.match(/[\d.]+/g);
+        if (!matches || matches.length < 3) {
+          return null;
+        }
+        const [r, g, b] = matches.slice(0, 3).map(Number);
+        if ([r, g, b].some(Number.isNaN)) {
+          return null;
+        }
+        return { r, g, b, raw: input };
+      };
+      const resolveColor = (value) => {
+        const probe = document.createElement('span');
+        probe.style.color = value.trim();
+        document.body.appendChild(probe);
+        const resolved = getComputedStyle(probe).color;
+        probe.remove();
+        return parseChannels(resolved);
+      };
+      const style = getComputedStyle(document.body);
+      return {
+        border: resolveColor(style.getPropertyValue('--border-focus')),
+        ring: resolveColor(style.getPropertyValue('--focus-ring-color'))
+      };
+    });
+
+    if (!expected.border || !expected.ring) {
+      console.error('Expected CSS variable snapshot:', JSON.stringify(expected, null, 2));
+      throw new Error('Failed to resolve expected focus colors from CSS variables');
+    }
 
     const results = {};
     for (const id of ['footer-language', 'footer-theme']) {
       await page.focus(`#${id}`);
-      await page.waitForTimeout(50);
+      await page.waitForTimeout(220);
       results[id] = await page.$eval(`#${id}`, (el) => {
         const style = getComputedStyle(el);
         const parseChannels = (input) => {
@@ -131,12 +158,12 @@ async function run() {
     }
 
     const tolerance = 20;
-    assertWarmHue(langBorder, 'Language border color');
-    assertWithinRange(langRing, EXPECTED_RGB, tolerance, 'Language ring color');
-    assertWarmHue(themeBorder, 'Theme border color');
-    assertWithinRange(themeRing, EXPECTED_RGB, tolerance, 'Theme ring color');
+    assertWithinRange(langBorder, expected.border, tolerance, 'Language border color');
+    assertWithinRange(langRing, expected.ring, tolerance, 'Language ring color');
+    assertWithinRange(themeBorder, expected.border, tolerance, 'Theme border color');
+    assertWithinRange(themeRing, expected.ring, tolerance, 'Theme ring color');
 
-    console.log('Playwright MPC: footer selects use accent orange on focus.');
+    console.log('Playwright MPC: footer selects use theme focus colors.');
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

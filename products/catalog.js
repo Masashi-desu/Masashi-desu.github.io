@@ -27,6 +27,7 @@
   const updated = document.getElementById('catalog-updated');
   const updatedScope = document.querySelector('[data-i18n-scope="updatedLabel"]');
   const searchSection = document.getElementById('catalog-search-section');
+  const sectionNav = document.querySelector('.catalog-section-nav__track');
   const searchNavButton = document.querySelector('.catalog-section-nav__icon-button[data-section-target="catalog-search-section"]');
   const numberNav = document.getElementById('catalog-product-nav');
   const paginationButton = document.getElementById('catalog-pagination-nav');
@@ -396,6 +397,16 @@
     return [searchNavButton, ...getNumberButtons(), paginationButton, footerNavLink].filter(Boolean);
   }
 
+  function updateSectionNavIndicator(activeControl) {
+    if (!sectionNav || !activeControl) {
+      return;
+    }
+    const navRect = sectionNav.getBoundingClientRect();
+    const controlRect = activeControl.getBoundingClientRect();
+    sectionNav.style.setProperty('--segment-x', `${controlRect.left - navRect.left}px`);
+    sectionNav.style.setProperty('--segment-width', `${controlRect.width}px`);
+  }
+
   function updateSectionNav(targetId) {
     const isFooterTarget = Boolean(footerTarget && targetId === footerTarget.id);
     const isPaginationTarget = Boolean(paginationTarget && targetId === paginationTarget.id);
@@ -406,11 +417,15 @@
       activeNavTarget = targetId;
     }
     const visibleTarget = activeNavTarget || activeSectionTarget;
+    let activeControl = null;
     getAllNavControls().forEach((control) => {
       const controlTarget = control.dataset.sectionTarget || control.dataset.paginationTarget || control.dataset.footerTarget || '';
       const active = controlTarget === visibleTarget;
       control.classList.toggle('is-active', active);
       control.setAttribute('aria-current', active ? 'true' : 'false');
+      if (active) {
+        activeControl = control;
+      }
     });
     const activeNumber = numberNav ? numberNav.querySelector(`[data-section-target="${visibleTarget}"]`) : null;
     if (activeNumber) {
@@ -420,6 +435,7 @@
         inline: 'center'
       });
     }
+    updateSectionNavIndicator(activeControl);
     updatePaginationStatus(currentLocale);
   }
 
@@ -1025,6 +1041,14 @@
         event.preventDefault();
         scrollToFooter();
       });
+    }
+    if (numberNav) {
+      numberNav.addEventListener('scroll', () => {
+        const activeControl = numberNav.querySelector('.catalog-section-nav__number.is-active');
+        if (activeControl) {
+          updateSectionNavIndicator(activeControl);
+        }
+      }, { passive: true });
     }
     window.addEventListener('wheel', handleSectionWheel, { passive: false });
     window.addEventListener('scroll', syncFooterNavState, { passive: true });
