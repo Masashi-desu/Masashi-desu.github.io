@@ -134,6 +134,7 @@
   let touchStartX = 0;
   let touchStartY = 0;
   let touchSectionHandled = false;
+  let touchStartSegmentKind = '';
 
   function syncSectionViewportSize() {
     const viewport = window.visualViewport;
@@ -439,10 +440,6 @@
     updatePaginationStatus(currentLocale);
   }
 
-  function getSectionIndexById(sectionId) {
-    return sections.findIndex((section) => section.id === sectionId);
-  }
-
   function getFooterAdjacentSection() {
     return sections.length > 0 ? sections[sections.length - 1] : null;
   }
@@ -489,6 +486,89 @@
 
   function getSectionScrollTop(section) {
     return Math.round(section.getBoundingClientRect().top + window.scrollY);
+  }
+
+  function readManagedStopTop(stop) {
+    if (!stop) {
+      return null;
+    }
+    if (stop.kind === 'pagination') {
+      return getPaginationScrollTop();
+    }
+    if (stop.kind === 'footer') {
+      return getDocumentBottomScrollTop();
+    }
+    return stop.element ? getSectionScrollTop(stop.element) : null;
+  }
+
+  function getManagedScrollStops() {
+    const stops = sections
+      .filter((section) => section && section.id)
+      .map((section) => ({
+        kind: 'section',
+        id: section.id,
+        element: section,
+        top: getSectionScrollTop(section)
+      }));
+    const paginationTop = getPaginationScrollTop();
+    if (paginationTarget && paginationTop !== null) {
+      stops.push({
+        kind: 'pagination',
+        id: paginationTarget.id,
+        element: paginationTarget,
+        top: paginationTop
+      });
+    }
+    if (footerTarget) {
+      stops.push({
+        kind: 'footer',
+        id: footerTarget.id,
+        element: footerTarget,
+        top: getDocumentBottomScrollTop()
+      });
+    }
+    return stops
+      .filter((stop) => Number.isFinite(stop.top))
+      .sort((a, b) => a.top - b.top);
+  }
+
+  function eventIncludesElement(event, element) {
+    if (!event || !element) {
+      return false;
+    }
+    if (typeof event.composedPath === 'function') {
+      return event.composedPath().includes(element);
+    }
+    return event.target instanceof Node && element.contains(event.target);
+  }
+
+  function getEventSegmentKind(event) {
+    if (eventIncludesElement(event, footerTarget)) {
+      return 'footer';
+    }
+    if (eventIncludesElement(event, paginationTarget)) {
+      return 'pagination';
+    }
+    return '';
+  }
+
+  function updateManagedStopNav(stop) {
+    if (!stop) {
+      return;
+    }
+    if (stop.kind === 'footer') {
+      updateFooterNav();
+      return;
+    }
+    if (stop.kind === 'pagination') {
+      updatePaginationNav();
+      return;
+    }
+    updateSectionNav(stop.id);
+  }
+
+  function enforceManagedStopAlignment(stop) {
+    enforceScrollAlignment(() => readManagedStopTop(stop));
   }
 
   function isSectionNavigationLocked() {
@@ -570,57 +650,28 @@
       return;
     }
     restSampleScrollY = null;
-    let nearestSection = null;
-    let nearestDistance = Infinity;
-    sections.forEach((section) => {
-      const distance = Math.abs(getSectionScrollTop(section) - current);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestSection = section;
-      }
-    });
-    if (!nearestSection) {
+    const stops = getManagedScrollStops();
+    if (stops.length === 0) {
       return;
     }
-    let alignToPagination = false;
-    let alignToFooter = false;
-    if (paginationTarget) {
-      const paginationTop = getPaginationScrollTop();
-      if (paginationTop !== null) {
-        const paginationDistance = Math.abs(paginationTop - current);
-        if (paginationDistance < nearestDistance) {
-          nearestDistance = paginationDistance;
-          alignToPagination = true;
-        }
+    let nearestStop = null;
+    let nearestDistance = Infinity;
+    stops.forEach((stop) => {
+      const distance = Math.abs(stop.top - current);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestStop = stop;
       }
-    }
-    if (footerTarget) {
-      const footerDistance = Math.abs(getDocumentBottomScrollTop() - current);
-      if (footerDistance < nearestDistance) {
-        nearestDistance = footerDistance;
-        alignToPagination = false;
-        alignToFooter = true;
-      }
+    });
+    if (!nearestStop) {
+      return;
     }
     const tolerance = Math.max(4, Math.round(window.innerHeight * 0.02));
     if (nearestDistance > tolerance) {
       sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : 480);
-      if (alignToFooter) {
-        enforceScrollAlignment(() => getDocumentBottomScrollTop());
-      } else if (alignToPagination) {
-        enforceScrollAlignment(() => getPaginationScrollTop());
-      } else {
-        const target = nearestSection;
-        enforceScrollAlignment(() => getSectionScrollTop(target));
-      }
+      enforceManagedStopAlignment(nearestStop);
     }
-    if (alignToFooter) {
-      updateFooterNav();
-    } else if (alignToPagination) {
-      updatePaginationNav();
-    } else {
-      updateSectionNav(nearestSection.id);
-    }
+    updateManagedStopNav(nearestStop);
   }
 
   function settleCatalogSection(section, delay = SECTION_SCROLL_SETTLE_MS) {
@@ -761,86 +812,56 @@
     }
   }
 
-  function getDirectionalSection(direction) {
-    if (direction === 0 || sections.length === 0) {
+  function getDirectionalStop(direction, event, preferredSegmentKind = '') {
+    if (direction === 0) {
       return null;
     }
-    if (isFooterNavPosition()) {
-      if (direction > 0) {
-        return null;
+    const stops = getManagedScrollStops();
+    if (stops.length === 0) {
+      return null;
+    }
+    const segmentKind = preferredSegmentKind || getEventSegmentKind(event);
+    if (segmentKind) {
+      const currentIndex = stops.findIndex((stop) => stop.kind === segmentKind);
+      if (currentIndex >= 0) {
+        return stops[currentIndex + direction] || null;
       }
-      return paginationTarget ? null : getFooterAdjacentSection();
     }
-    if (isPaginationNavPosition()) {
-      return direction > 0 ? null : getFooterAdjacentSection();
-    }
-    const tolerance = Math.max(4, Math.round(window.innerHeight * 0.06));
+    const current = window.scrollY;
+    const tolerance = 1;
     if (direction > 0) {
-      const nextVisible = sections.find((section) => section.getBoundingClientRect().top > tolerance);
-      if (nextVisible) {
-        return nextVisible;
-      }
-      const activeIndex = getSectionIndexById(activeSectionTarget);
-      return activeIndex >= 0 && activeIndex < sections.length - 1 ? sections[activeIndex + 1] : null;
+      return stops.find((stop) => stop.top > current + tolerance) || null;
     }
-    for (let index = sections.length - 1; index >= 0; index -= 1) {
-      if (sections[index].getBoundingClientRect().top < -tolerance) {
-        return sections[index];
+    for (let index = stops.length - 1; index >= 0; index -= 1) {
+      if (stops[index].top < current - tolerance) {
+        return stops[index];
       }
     }
-    const activeIndex = getSectionIndexById(activeSectionTarget);
-    return activeIndex > 0 ? sections[activeIndex - 1] : null;
+    return null;
   }
 
-  function canNavigateInDirection(direction) {
-    if (getDirectionalSection(direction)) {
-      return true;
-    }
-    if (direction < 0 && paginationTarget && isFooterNavPosition()) {
-      return true;
-    }
-    if (direction > 0 && paginationTarget && !isPaginationNavPosition() && !isFooterNavPosition()) {
-      return true;
-    }
-    return direction > 0 && Boolean(footerTarget) && !isFooterNavPosition();
+  function canNavigateInDirection(direction, event, preferredSegmentKind = '') {
+    return Boolean(getDirectionalStop(direction, event, preferredSegmentKind));
   }
 
-  function navigateSectionByDirection(direction, event) {
-    const target = getDirectionalSection(direction);
+  function scrollToManagedStop(stop) {
+    if (!stop) {
+      return;
+    }
+    if (stop.kind === 'footer') {
+      scrollToFooter({ updateHistory: false });
+      return;
+    }
+    if (stop.kind === 'pagination') {
+      scrollToPagination({ updateHistory: false });
+      return;
+    }
+    scrollToCatalogSection(stop.element);
+  }
+
+  function navigateSectionByDirection(direction, event, preferredSegmentKind = '') {
+    const target = getDirectionalStop(direction, event, preferredSegmentKind);
     if (!target) {
-      if (direction < 0 && paginationTarget && isFooterNavPosition()) {
-        if (event && event.cancelable) {
-          event.preventDefault();
-        }
-        if (isSectionNavigationLocked()) {
-          return true;
-        }
-        clearWheelAccumulation();
-        scrollToPagination({ updateHistory: false });
-        return true;
-      }
-      if (direction > 0 && paginationTarget && !isPaginationNavPosition() && !isFooterNavPosition()) {
-        if (event && event.cancelable) {
-          event.preventDefault();
-        }
-        if (isSectionNavigationLocked()) {
-          return true;
-        }
-        clearWheelAccumulation();
-        scrollToPagination({ updateHistory: false });
-        return true;
-      }
-      if (direction > 0 && footerTarget && !isFooterNavPosition()) {
-        if (event && event.cancelable) {
-          event.preventDefault();
-        }
-        if (isSectionNavigationLocked()) {
-          return true;
-        }
-        clearWheelAccumulation();
-        scrollToFooter({ updateHistory: false });
-        return true;
-      }
       clearWheelAccumulation();
       return false;
     }
@@ -851,7 +872,7 @@
       return true;
     }
     clearWheelAccumulation();
-    scrollToCatalogSection(target);
+    scrollToManagedStop(target);
     return true;
   }
 
@@ -878,7 +899,7 @@
       return;
     }
     const direction = deltaY > 0 ? 1 : -1;
-    if (!canNavigateInDirection(direction)) {
+    if (!canNavigateInDirection(direction, event)) {
       clearWheelAccumulation();
       return;
     }
@@ -910,11 +931,13 @@
     markTouchActivity(event);
     scheduleRestAlignmentCheck(TOUCH_ACTIVITY_STALE_MS + 320);
     if (event.touches.length !== 1) {
+      touchStartSegmentKind = '';
       return;
     }
     touchStartX = event.touches[0].clientX;
     touchStartY = event.touches[0].clientY;
     touchSectionHandled = false;
+    touchStartSegmentKind = getEventSegmentKind(event);
   }
 
   function handleSectionTouchMove(event) {
@@ -937,13 +960,14 @@
       return;
     }
     const direction = deltaY > 0 ? 1 : -1;
-    if (!canNavigateInDirection(direction)) {
+    const preferredSegmentKind = touchStartSegmentKind || getEventSegmentKind(event);
+    if (!canNavigateInDirection(direction, event, preferredSegmentKind)) {
       return;
     }
     if (touchSectionHandled || absDeltaY < TOUCH_SECTION_THRESHOLD) {
       return;
     }
-    touchSectionHandled = navigateSectionByDirection(direction);
+    touchSectionHandled = navigateSectionByDirection(direction, event, preferredSegmentKind);
   }
 
   function handleSectionTouchEnd(event) {
@@ -965,6 +989,7 @@
       }
     }
     touchSectionHandled = false;
+    touchStartSegmentKind = '';
     if (touchPointsActive === 0) {
       scheduleRestAlignmentCheck(TOUCH_MOMENTUM_SETTLE_MS + 200);
     }
