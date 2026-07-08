@@ -291,7 +291,13 @@
       }
       internalHref = `${internalHref}index.html`;
     }
-    return { href: internalHref, external: false };
+    return { href: appendProductSource(internalHref, 'catalog'), external: false };
+  }
+
+  function appendProductSource(href, source) {
+    const [baseWithSearch, hash = ''] = href.split('#');
+    const separator = baseWithSearch.includes('?') ? '&' : '?';
+    return `${baseWithSearch}${separator}from=${encodeURIComponent(source)}${hash ? `#${hash}` : ''}`;
   }
 
   function buildAssetPath(item, assetPath) {

@@ -350,7 +350,13 @@
           }
           path = `${path}index.html`;
         }
-        return { href: path, external: false };
+        return { href: appendProductSource(path, 'home'), external: false };
+      }
+
+      function appendProductSource(href, source) {
+        const [baseWithSearch, hash = ''] = href.split('#');
+        const separator = baseWithSearch.includes('?') ? '&' : '?';
+        return `${baseWithSearch}${separator}from=${encodeURIComponent(source)}${hash ? `#${hash}` : ''}`;
       }
 
       function isProductCarouselTarget(target) {

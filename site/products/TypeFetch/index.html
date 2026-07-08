@@ -99,8 +99,8 @@
   </div>
   <div class="page-backbar" data-transition-fade>
     <div class="page-container page-container--standard page-backbar__inner">
-      <a href="../index.html" data-transition-direction="left" class="page-backlink">
-        <span data-i18n="back">← 一覧に戻る</span>
+      <a href="../index.html" data-transition-direction="left" class="page-backlink" data-product-backlink>
+        <span data-i18n="back" data-product-backlink-label>← 一覧に戻る</span>
       </a>
     </div>
   </div>
@@ -150,8 +150,8 @@
   </main>
   <div class="page-bottom-bar" data-transition-fade>
     <div class="page-container page-container--standard page-bottom-bar__inner">
-      <a href="../index.html" data-transition-direction="left" class="page-backlink">
-        <span data-i18n="back">← 一覧に戻る</span>
+      <a href="../index.html" data-transition-direction="left" class="page-backlink" data-product-backlink>
+        <span data-i18n="back" data-product-backlink-label>← 一覧に戻る</span>
       </a>
     </div>
   </div>
@@ -162,6 +162,7 @@
   </footer>
   <script vite-ignore src="../../theme.js"></script>
   <script vite-ignore src="../../footer.js"></script>
+  <script vite-ignore src="../product-backlink.js"></script>
   <script>
     (function () {
       const STORAGE_KEY = 'mdw-lang';
@@ -249,6 +250,9 @@
           localStorage.setItem(STORAGE_KEY, lang);
         } catch (error) {
           /* ignore */
+        }
+        if (window.MDWProductBacklink) {
+          window.MDWProductBacklink.sync(lang);
         }
         return lang;
       }

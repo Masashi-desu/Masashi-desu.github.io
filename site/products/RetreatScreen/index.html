@@ -480,8 +480,8 @@
 </head>
 <body class="page-shell retreat-landing villa-bg">
   <div class="page-container retreat-backbar" data-transition-fade>
-    <a href="../index.html" data-transition-direction="left" class="page-backlink page-backlink--muted">
-      <span data-i18n="back">← 一覧に戻る</span>
+    <a href="../index.html" data-transition-direction="left" class="page-backlink page-backlink--muted" data-product-backlink>
+      <span data-i18n="back" data-product-backlink-label>← 一覧に戻る</span>
     </a>
   </div>
 
@@ -674,6 +674,7 @@
 
   <script vite-ignore src="../../theme.js"></script>
   <script vite-ignore src="../../footer.js"></script>
+  <script vite-ignore src="../product-backlink.js"></script>
   <script>
     (function () {
       const STORAGE_KEY = 'mdw-lang';
@@ -809,6 +810,9 @@
           localStorage.setItem(STORAGE_KEY, lang);
         } catch (error) {
           /* ignore */
+        }
+        if (window.MDWProductBacklink) {
+          window.MDWProductBacklink.sync(lang);
         }
         return lang;
       }
