@@ -21,7 +21,7 @@ async function main() {
   const browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
 
-  const productData = require(path.resolve(__dirname, '../../products/index.json'));
+  const productData = require(path.resolve(__dirname, '../../site/products/index.json'));
   const footerMarkup = '<footer data-test="injected">Playwright Footer</footer>';
 
   await context.addInitScript(({ data, footer }) => {
@@ -75,7 +75,7 @@ async function main() {
     };
   }, { data: productData, footer: footerMarkup });
   const page = await context.newPage();
-  const indexPath = path.resolve(__dirname, '../../index.html');
+  const indexPath = path.resolve(__dirname, '../../site/index.html');
   await page.goto(`file://${indexPath}`);
 
   // Navigate to products (rightward exit expected -> leftward entrance)

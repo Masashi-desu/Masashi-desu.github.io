@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium, devices } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../');
+const ROOT = path.resolve(__dirname, '../../site');
 const MOBILE_VIEWPORT = { width: 393, height: 852 };
 const SECTION_TOLERANCE = 4;
 

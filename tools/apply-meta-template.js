@@ -4,21 +4,19 @@ const fs = require('fs/promises');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const TEMPLATE_PATH = path.join(ROOT, 'partials', 'meta-template.html');
+const SITE_ROOT = path.join(ROOT, 'site');
+const TEMPLATE_PATH = path.join(SITE_ROOT, 'partials', 'meta-template.html');
 const META_CONFIG_COMMENT = /<!--\s*mdw:meta-config\s*([\s\S]*?)\s*-->/i;
 const START_MARKER = '<!-- mdw:meta:start -->';
 const END_MARKER = '<!-- mdw:meta:end -->';
 
 async function main() {
   const template = await fs.readFile(TEMPLATE_PATH, 'utf8');
-  const files = await collectHtmlFiles(ROOT);
+  const files = await collectHtmlFiles(SITE_ROOT);
   let updatedCount = 0;
 
   for (const file of files) {
-    const relative = path.relative(ROOT, file);
-    if (relative.startsWith('node_modules/')) {
-      continue;
-    }
+    const relative = path.relative(SITE_ROOT, file);
     const original = await fs.readFile(file, 'utf8');
     if (!original.includes('mdw:meta-config')) {
       continue;

@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../');
+const ROOT = path.resolve(__dirname, '../../site');
 const OVERFLOW_TOLERANCE = 1;
 const MAX_CAROUSEL_CTA_GAP_RATIO = 0.045;
 const RESET_CSS = `

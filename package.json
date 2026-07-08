@@ -2,7 +2,7 @@
   "name": "masashi-desu.github.io",
   "version": "1.0.0",
   "description": "製品ページなどの長文説明では、HTML の `<br>` ではなく改行コード (`\\n`) と `white-space: pre-line;` を組み合わせて改行を表現します。",
-  "main": "footer.js",
+  "main": "site/footer.js",
   "directories": {
     "doc": "docs"
   },

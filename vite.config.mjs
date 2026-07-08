@@ -3,16 +3,18 @@ import { dirname, extname, relative, resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 const ROOT = import.meta.dirname;
+const SITE_ROOT = resolve(ROOT, 'site');
 const OUT_DIR = resolve(ROOT, 'dist');
-const HTML_INPUTS = collectHtmlInputs(ROOT);
+const HTML_INPUTS = collectHtmlInputs(SITE_ROOT);
 const ROOT_STATIC_FILES = ['theme.css', 'theme.js', 'footer.js'];
 const STATIC_DIRS = ['partials', 'products', 'vendor'];
 
 export default defineConfig({
+  root: SITE_ROOT,
   appType: 'mpa',
   base: '/',
   build: {
-    outDir: 'dist',
+    outDir: OUT_DIR,
     emptyOutDir: true,
     rolldownOptions: {
       input: HTML_INPUTS,
@@ -34,7 +36,7 @@ function collectHtmlInputs(dir, inputs = {}) {
     }
 
     if (entry.isFile() && entry.name.endsWith('.html')) {
-      const relativePath = relative(ROOT, entryPath);
+      const relativePath = relative(SITE_ROOT, entryPath);
       inputs[relativePath.replace(/\.html$/u, '')] = entryPath;
     }
   }
@@ -43,7 +45,7 @@ function collectHtmlInputs(dir, inputs = {}) {
 }
 
 function shouldSkipDirectory(name) {
-  return name === '.git' || name === 'dist' || name === 'docs' || name === 'node_modules' || name === 'partials';
+  return name === 'partials';
 }
 
 function copyStaticSiteAssets() {
@@ -55,11 +57,11 @@ function copyStaticSiteAssets() {
       writeFileSync(resolve(OUT_DIR, '.nojekyll'), '');
 
       for (const file of ROOT_STATIC_FILES) {
-        copyFileIfExists(resolve(ROOT, file), resolve(OUT_DIR, file));
+        copyFileIfExists(resolve(SITE_ROOT, file), resolve(OUT_DIR, file));
       }
 
       for (const dir of STATIC_DIRS) {
-        copyDirectory(resolve(ROOT, dir), resolve(OUT_DIR, dir), {
+        copyDirectory(resolve(SITE_ROOT, dir), resolve(OUT_DIR, dir), {
           excludeHtml: dir === 'products',
         });
       }

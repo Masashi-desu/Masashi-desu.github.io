@@ -4,7 +4,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const { chromium } = require('playwright');
 
-const OUTPUT_PATH = path.resolve(__dirname, '..', 'products', 'social', 'site-default.png');
+const OUTPUT_PATH = path.resolve(__dirname, '..', 'site', 'products', 'social', 'site-default.png');
 const VIEWPORT = { width: 1200, height: 630, deviceScaleFactor: 2 };
 
 async function ensureDirExists(filePath) {

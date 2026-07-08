@@ -43,7 +43,7 @@ async function main() {
   });
 
   const page = await context.newPage();
-  const filePath = path.resolve(__dirname, '../../products/Surround1x0-AKDK/index.html');
+  const filePath = path.resolve(__dirname, '../../site/products/Surround1x0-AKDK/index.html');
   await page.goto(`file://${filePath}`);
   await page.waitForTimeout(500);
 

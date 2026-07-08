@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../');
+const ROOT = path.resolve(__dirname, '../../site');
 const PORT = 3015;
 const PAGE_URL = `http://127.0.0.1:${PORT}/products/index.html`;
 

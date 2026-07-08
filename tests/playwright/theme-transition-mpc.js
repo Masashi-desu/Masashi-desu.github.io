@@ -41,7 +41,7 @@ async function detectSkipReason(filePath) {
 }
 
 async function collectPageEntries() {
-  const rootDir = path.resolve(__dirname, '../../');
+  const rootDir = path.resolve(__dirname, '../../site');
   const entries = [];
 
   async function pushEntry(slug, filePath) {
