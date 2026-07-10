@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>RetreatScreen | Masahi Desu Works</title>
   <!-- mdw:meta-config
   {
@@ -72,392 +75,10 @@
   }
   </script>
   <!-- mdw:meta:end -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/regular/style.css">
   <link rel="stylesheet" href="../../theme.css">
-  <style>
-    html { scroll-behavior: smooth; }
-    .retreat-landing {
-      --accent-color: #ff6b4a;
-      --text-primary: #ffffff;
-      --text-secondary: #dfe5f5;
-    }
-    :root {
-      --bg-from: #1b2347;
-      --bg-via: #0e183a;
-      --bg-to: #050c21;
-      --bg-g1: rgba(255, 142, 102, 0.16);
-      --bg-g2: rgba(55, 87, 217, 0.18);
-      --bg-g3: rgba(255, 199, 142, 0.12);
-      --bg-spot-accent: rgba(255, 107, 74, 0.25);
-      --bg-spot-glow: rgba(15, 22, 40, 0.25);
-      --glass-panel-start: rgba(255, 255, 255, 0.15);
-      --glass-panel-end: rgba(255, 255, 255, 0.07);
-      --glass-chip-start: rgba(255, 255, 255, 0.2);
-      --glass-chip-end: rgba(255, 255, 255, 0.1);
-      --glass-border: rgba(255, 255, 255, 0.24);
-      --glass-shadow: 0 24px 80px -46px rgba(4, 16, 77, 0.65);
-      --text-muted: #dfe6ff;
-    }
-    :root[data-theme="light"] {
-      --bg-from: #f8a45f;
-      --bg-via: #f27a6b;
-      --bg-to: #7b3f74;
-      --bg-g1: rgba(255, 198, 140, 0.35);
-      --bg-g2: rgba(255, 122, 110, 0.25);
-      --bg-g3: rgba(120, 88, 180, 0.18);
-      --bg-spot-accent: rgba(255, 122, 110, 0.22);
-      --bg-spot-glow: rgba(123, 63, 116, 0.18);
-      --glass-panel-start: rgba(255, 255, 255, 0.28);
-      --glass-panel-end: rgba(255, 255, 255, 0.16);
-      --glass-chip-start: rgba(255, 255, 255, 0.32);
-      --glass-chip-end: rgba(255, 255, 255, 0.18);
-      --glass-border: rgba(255, 255, 255, 0.36);
-      --glass-shadow: 0 24px 80px -46px rgba(232, 115, 95, 0.45);
-      --text-muted: #2d2c4f;
-    }
-    :root[data-theme="dark"] {
-      --bg-from: #0c122e;
-      --bg-via: #121c3f;
-      --bg-to: #06102c;
-      --bg-g1: rgba(255, 124, 92, 0.18);
-      --bg-g2: rgba(52, 82, 193, 0.2);
-      --bg-g3: rgba(255, 182, 141, 0.12);
-      --bg-spot-accent: rgba(255, 107, 74, 0.28);
-      --bg-spot-glow: rgba(15, 22, 40, 0.28);
-      --glass-panel-start: rgba(255, 255, 255, 0.18);
-      --glass-panel-end: rgba(255, 255, 255, 0.08);
-      --glass-chip-start: rgba(255, 255, 255, 0.22);
-      --glass-chip-end: rgba(255, 255, 255, 0.1);
-      --glass-border: rgba(255, 255, 255, 0.2);
-      --glass-shadow: 0 24px 80px -46px rgba(6, 12, 46, 0.78);
-      --text-muted: #dfe5f5;
-      --text-on-bg: #ffffff;
-    }
-    .villa-bg {
-      background: radial-gradient(circle at 18% -10%, var(--bg-spot-accent), transparent 45%),
-                  radial-gradient(circle at 110% 90%, var(--bg-spot-glow), transparent 55%),
-                  radial-gradient(circle at 15% 18%, var(--bg-g1), transparent 38%),
-                  radial-gradient(circle at 82% 20%, var(--bg-g2), transparent 34%),
-                  radial-gradient(circle at 50% 82%, var(--bg-g3), transparent 46%),
-                  linear-gradient(135deg, var(--bg-from), var(--bg-via), var(--bg-to));
-      transition: background-color 0.9s ease, background-image 0.9s ease, background-position 0.9s ease, background-size 0.9s ease, color 0.4s ease;
-    }
-    .glass-panel {
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      background: linear-gradient(135deg, var(--glass-panel-start), var(--glass-panel-end));
-      border: 1px solid var(--glass-border);
-      box-shadow: var(--glass-shadow);
-      transition: background 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
-    }
-    .glass-chip {
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      background: linear-gradient(135deg, var(--glass-chip-start), var(--glass-chip-end));
-      border: 1px solid var(--glass-border);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
-      transition: background 0.45s ease, border-color 0.45s ease;
-    }
-    .glass-cta {
-      background: linear-gradient(120deg, #ff6b4a 0%, #f48b61 34%, #3052d9 100%);
-      box-shadow: 0 18px 52px -28px rgba(255, 107, 74, 0.55), 0 24px 80px -54px rgba(4, 16, 77, 0.7);
-    }
-    .glass-cta:hover { filter: saturate(1.08); }
-    .liquid-glow { background: transparent; }
-    .section-card {
-      border-radius: 32px;
-      padding: 2rem;
-      background: linear-gradient(135deg, var(--glass-panel-start), var(--glass-panel-end));
-      border: 1px solid var(--glass-border);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      box-shadow: var(--glass-shadow);
-    }
-    .hero-header-card {
-      border-radius: 18px;
-      padding: 0.9rem 1.25rem;
-      background: linear-gradient(135deg, var(--glass-chip-start), var(--glass-chip-end));
-      border: 1px solid var(--glass-border);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 20px 60px -48px rgba(4, 16, 77, 0.75);
-    }
-    .app-store-link {
-      display: inline-flex;
-      align-items: center;
-    }
-    .app-store-badge {
-      display: block;
-      height: 40px;
-      width: auto;
-    }
-    .retreat-backbar {
-      margin-bottom: 1.5rem;
-      padding-top: 1.5rem;
-    }
-    .retreat-header-card {
-      display: flex;
-      width: 100%;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    .retreat-header-card__icon {
-      width: 3rem;
-      height: 3rem;
-      flex-shrink: 0;
-      border-radius: 1rem;
-      object-fit: cover;
-    }
-    .retreat-header-card__body {
-      display: flex;
-      flex-direction: column;
-      line-height: 1.15;
-    }
-    .retreat-header-card__title {
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: #ffffff;
-    }
-    .retreat-header-card__tag {
-      margin-top: 0.25rem;
-      font-size: 0.75rem;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.8);
-    }
-    .retreat-hero {
-      margin-top: clamp(0.875rem, 2.2vw, 1.25rem);
-      padding-bottom: 4rem;
-    }
-    .retreat-hero__surface {
-      display: flex;
-      flex-direction: column;
-      gap: 2rem;
-    }
-    .retreat-preview {
-      position: relative;
-      overflow: hidden;
-      aspect-ratio: 16 / 10;
-      border-radius: 2rem;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 48px 120px -60px rgba(255, 107, 74, 0.65);
-    }
-    .retreat-preview__overlay {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent, rgba(255, 107, 74, 0.1));
-    }
-    .retreat-preview__image {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .retreat-copy {
-      max-width: 100%;
-      font-size: 1rem;
-      line-height: 1.8;
-      color: var(--text-muted);
-      white-space: pre-line;
-    }
-    .retreat-actions {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 0.75rem;
-    }
-    .retreat-secondary-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      min-height: 3.25rem;
-      padding: 0.75rem 1.25rem;
-      border-radius: 999px;
-      color: #ffffff;
-      font-size: 0.9375rem;
-      font-weight: 500;
-      transition: color 180ms ease, border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
-    }
-    .retreat-secondary-link:hover {
-      color: var(--accent-color);
-      border-color: rgba(255, 107, 74, 0.6);
-      transform: translateY(-1px);
-    }
-    .retreat-section {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-      padding-bottom: 4rem;
-    }
-    .retreat-section__head {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-    .retreat-section__label {
-      font-size: 0.75rem;
-      letter-spacing: 0.35em;
-      text-transform: uppercase;
-      color: #ffffff;
-    }
-    .retreat-section__title {
-      font-size: clamp(1.875rem, 3vw, 2.5rem);
-      font-weight: 600;
-      color: #ffffff;
-    }
-    .retreat-section__copy {
-      max-width: 48rem;
-      font-size: 1rem;
-      line-height: 1.8;
-      color: #ffffff;
-      white-space: pre-line;
-    }
-    .retreat-feature-grid,
-    .retreat-step-grid,
-    .retreat-spec-grid {
-      display: grid;
-      gap: 1rem;
-    }
-    .retreat-feature-card,
-    .retreat-step-card {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      padding: 1.5rem;
-      border-radius: 1.5rem;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.05));
-    }
-    .retreat-feature-card__header,
-    .retreat-step-card__header {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    .retreat-feature-card__badge,
-    .retreat-step-card__badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 2.75rem;
-      height: 2.75rem;
-      flex-shrink: 0;
-      border-radius: 1rem;
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--accent-color);
-    }
-    .retreat-feature-card__title,
-    .retreat-step-card__title {
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: #ffffff;
-    }
-    .retreat-feature-card__copy,
-    .retreat-step-card__copy {
-      font-size: 0.9375rem;
-      line-height: 1.8;
-      color: #ffffff;
-    }
-    .retreat-step-card__badge {
-      font-weight: 600;
-      font-size: 1rem;
-    }
-    .retreat-spec-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      padding: 1.5rem;
-      border-radius: 1.5rem;
-      color: #f8fafc;
-    }
-    .retreat-spec-list__row {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 1rem;
-      padding: 0.75rem 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      font-size: 0.9375rem;
-      line-height: 1.6;
-    }
-    .retreat-spec-list__row:last-child {
-      border-bottom: 0;
-      padding-bottom: 0;
-    }
-    .retreat-spec-list__row:first-child {
-      padding-top: 0;
-    }
-    .retreat-spec-list__value {
-      font-weight: 600;
-      color: #ffffff;
-      text-align: right;
-    }
-    .retreat-care-card {
-      padding: 1.5rem;
-      border-radius: 1.5rem;
-    }
-    .retreat-care-card__title {
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: #ffffff;
-    }
-    .retreat-care-card__copy {
-      margin-top: 0.75rem;
-      font-size: 0.9375rem;
-      line-height: 1.8;
-      color: #f8fafc;
-      white-space: pre-line;
-    }
-    .retreat-cta-card__inner {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-    }
-    .retreat-footer {
-      padding-bottom: 3rem;
-    }
-    .retreat-footer__inner {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-    @media (min-width: 40rem) {
-      .retreat-header-card {
-        gap: 1rem;
-      }
-      .retreat-header-card__title {
-        font-size: 1.25rem;
-      }
-    }
-    @media (min-width: 48rem) {
-      .retreat-step-grid,
-      .retreat-spec-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      .retreat-cta-card__inner {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-      }
-      .retreat-cta-card__actions {
-        align-items: flex-end;
-      }
-    }
-    @media (min-width: 64rem) {
-      .retreat-preview {
-        aspect-ratio: 16 / 9;
-      }
-      .retreat-feature-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-      .retreat-step-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="./retreat-home.css">
   <script>
     (function () {
       const root = document.documentElement;
@@ -471,383 +92,312 @@
         root.dataset.theme = effective;
         root.dataset.themePreference = preference;
       } catch (error) {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        root.dataset.theme = prefersDark ? 'dark' : 'light';
+        root.dataset.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         root.dataset.themePreference = 'system';
+      }
+
+      if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+      }
+      const navigation = performance.getEntriesByType('navigation')[0];
+      if (navigation && navigation.type === 'reload') {
+        window.scrollTo(0, 0);
       }
     })();
   </script>
 </head>
-<body class="page-shell retreat-landing villa-bg">
-  <div class="page-container retreat-backbar" data-transition-fade>
-    <a href="../index.html" data-transition-direction="left" class="page-backlink page-backlink--muted" data-product-backlink>
-      <span data-i18n="back" data-product-backlink-label>← 一覧に戻る</span>
-    </a>
-  </div>
-
-  <div class="page-container" data-transition-fade>
-    <div class="hero-header-card retreat-header-card">
-      <img src="icon.png" alt="RetreatScreen icon" class="retreat-header-card__icon" loading="lazy" data-mdw-media>
-      <div class="retreat-header-card__body">
-        <h1 class="retreat-header-card__title" data-i18n="title">RetreatScreen</h1>
-        <span class="retreat-header-card__tag" data-i18n="tag">macOS Launcher</span>
+<body class="page-shell retreat-landing">
+  <div class="retreat-home" data-transition-fade>
+    <section id="launcher" class="retreat-viewport" aria-labelledby="retreat-title">
+      <div class="retreat-screen">
+        <div class="retreat-screen__wallpaper" aria-hidden="true"></div>
+        <div id="retreat-screen-glass" class="retreat-screen__glass liquidGL" aria-hidden="true"></div>
       </div>
-    </div>
-  </div>
+      <div class="retreat-screen__content" data-liquid-ignore>
 
-  <main class="page-container retreat-hero" data-transition-fade>
-    <div class="section-card retreat-hero__surface">
-      <div class="retreat-preview glass-panel" data-mdw-media>
-        <div class="retreat-preview__overlay"></div>
-        <img src="screenshot.png" alt="RetreatScreen preview" class="retreat-preview__image" loading="lazy">
-      </div>
+        <a
+          href="../index.html"
+          class="retreat-close"
+          data-product-backlink
+          data-transition-direction="left"
+          data-pressable="true"
+        >
+          <i class="ph ph-x" aria-hidden="true"></i>
+          <span class="visually-hidden" data-product-backlink-label>← 一覧に戻る</span>
+        </a>
 
-      <div class="product-stack">
-        <p class="retreat-copy" data-i18n="lede">
-          ⌘⇧Spaceを押すだけで、iPhoneのホーム画面のようなグリッドランチャーがフルスクリーンで立ち上がります。
-          常駐するアクセサリアプリとして、集中を切らさず次のアプリやファイルにジャンプできます。
+        <header class="retreat-launcher-header">
+          <div class="retreat-title-wrap">
+            <h1 id="retreat-title" class="retreat-title" data-i18n="title">RetreatScreen</h1>
+            <input
+              id="retreat-title-input"
+              class="retreat-title-input"
+              type="text"
+              maxlength="36"
+              value="RetreatScreen"
+              aria-label="ページ名を変更"
+              hidden
+            >
+          </div>
+          <button
+            id="retreat-edit-toggle"
+            class="retreat-edit-toggle"
+            type="button"
+            aria-pressed="false"
+            data-pressable="true"
+          >
+            <i class="ph ph-keyboard" aria-hidden="true"></i>
+            <span data-i18n="edit">Edit</span>
+          </button>
+        </header>
+
+        <div class="retreat-launcher-panel__content">
+          <div id="retreat-app-grid" class="retreat-app-grid" role="list" aria-label="RetreatScreen navigation">
+              <article class="retreat-app-item" role="listitem" data-launcher-item="download" data-page="1">
+                <a
+                  class="retreat-app-link"
+                  href="https://apps.apple.com/us/app/retreatscreen/id6757686282?mt=12&amp;itscg=30200&amp;itsct=apps_box_badge&amp;mttnsubad=6757686282"
+                  data-pressable="true"
+                >
+                  <span class="retreat-app-icon retreat-app-icon--image">
+                    <img src="./icon.png" alt="" width="96" height="96">
+                  </span>
+                  <span class="retreat-app-label" data-i18n="launcherDownload">Mac App Store</span>
+                </a>
+                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Mac App Store の名前を変更" hidden>
+              </article>
+
+              <article class="retreat-app-item" role="listitem" data-launcher-item="features" data-page="1">
+                <a class="retreat-app-link" href="#details" data-pressable="true">
+                  <span class="retreat-app-icon retreat-app-icon--yellow"><i class="ph ph-command" aria-hidden="true"></i></span>
+                  <span class="retreat-app-label" data-i18n="launcherFeatures">Features</span>
+                </a>
+                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Features の名前を変更" hidden>
+              </article>
+
+              <article class="retreat-app-item" role="listitem" data-launcher-item="flow" data-page="1">
+                <a class="retreat-app-link" href="#flow" data-pressable="true">
+                  <span class="retreat-app-icon retreat-app-icon--coral"><i class="ph ph-path" aria-hidden="true"></i></span>
+                  <span class="retreat-app-label" data-i18n="launcherFlow">Flow</span>
+                </a>
+                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Flow の名前を変更" hidden>
+              </article>
+
+              <article class="retreat-app-item" role="listitem" data-launcher-item="specs" data-page="1">
+                <a class="retreat-app-link" href="#specs" data-pressable="true">
+                  <span class="retreat-app-icon retreat-app-icon--blue"><i class="ph ph-cpu" aria-hidden="true"></i></span>
+                  <span class="retreat-app-label" data-i18n="launcherSpecs">Tech Specs</span>
+                </a>
+                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Tech Specs の名前を変更" hidden>
+              </article>
+
+              <article class="retreat-app-item" role="listitem" data-launcher-item="privacy" data-page="1">
+                <a class="retreat-app-link" href="./privacy.html" data-transition-direction="right" data-pressable="true">
+                  <span class="retreat-app-icon retreat-app-icon--silver"><i class="ph ph-shield-check" aria-hidden="true"></i></span>
+                  <span class="retreat-app-label" data-i18n="launcherPrivacy">Privacy</span>
+                </a>
+                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Privacy の名前を変更" hidden>
+              </article>
+
+              <article class="retreat-app-item" role="listitem" data-launcher-item="support" data-page="1">
+                <a class="retreat-app-link" href="./support.html" data-transition-direction="right" data-pressable="true">
+                  <span class="retreat-app-icon retreat-app-icon--cyan"><i class="ph ph-lifebuoy" aria-hidden="true"></i></span>
+                  <span class="retreat-app-label" data-i18n="launcherSupport">Support</span>
+                </a>
+                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Support の名前を変更" hidden>
+              </article>
+
+              <article class="retreat-app-item" role="listitem" data-launcher-item="preview" data-page="2" hidden>
+                <a class="retreat-app-link" href="#showcase" data-pressable="true">
+                  <span class="retreat-app-icon retreat-app-icon--violet"><i class="ph ph-image-square" aria-hidden="true"></i></span>
+                  <span class="retreat-app-label" data-i18n="launcherPreview">Preview</span>
+                </a>
+                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Preview の名前を変更" hidden>
+              </article>
+
+              <article class="retreat-app-item" role="listitem" data-launcher-item="products" data-page="2" hidden>
+                <a class="retreat-app-link" href="../index.html" data-product-backlink data-transition-direction="left" data-pressable="true">
+                  <span class="retreat-app-icon retreat-app-icon--green"><i class="ph ph-squares-four" aria-hidden="true"></i></span>
+                  <span class="retreat-app-label" data-i18n="launcherProducts">Products</span>
+                  <span class="visually-hidden" data-product-backlink-label>← 一覧に戻る</span>
+                </a>
+                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Products の名前を変更" hidden>
+              </article>
+          </div>
+        </div>
+
+        <p id="retreat-edit-hint" class="retreat-edit-hint" data-i18n="editHint" hidden>
+          アイコンをドラッグして並べ替え、名前を入力して変更できます。
         </p>
-        <div class="retreat-actions">
-          <a href="https://apps.apple.com/us/app/retreatscreen/id6757686282?mt=12&itscg=30200&itsct=apps_box_badge&mttnsubad=6757686282" class="app-store-link" aria-label="Download on the Mac App Store">
-            <img src="Download_on_the_Mac_App_Store_Badge_US-UK_RGB_blk_092917.svg" alt="Download on the Mac App Store" class="app-store-badge">
-          </a>
-          <a href="#details" data-pressable="true" class="glass-chip retreat-secondary-link" aria-label="特徴を詳しく見る">
-            <span data-i18n="secondaryCta">特徴を詳しく見る</span>
-            <span aria-hidden="true">→</span>
-          </a>
-        </div>
-      </div>
+        <p id="retreat-live-status" class="visually-hidden" aria-live="polite"></p>
 
-    </div>
-  </main>
+        <nav class="retreat-page-dots" aria-label="Launcher pages">
+          <button class="retreat-page-dot is-active" type="button" data-page-target="1" aria-label="1ページ目" aria-current="page"></button>
+          <button class="retreat-page-dot" type="button" data-page-target="2" aria-label="2ページ目"></button>
+        </nav>
+      </div>
+    </section>
 
-  <section id="details" class="page-container retreat-section" data-transition-fade>
-    <div class="section-card product-stack">
-      <div class="retreat-section__head">
-        <p class="retreat-section__label" data-i18n="featureLabel">Key Features</p>
-        <h2 class="retreat-section__title" data-i18n="featureTitle">瞬発力のあるランチャー体験</h2>
-        <p class="retreat-section__copy" data-i18n="featureBody">
-          RetreatScreenは常駐しつつ、呼んだときだけ全面オーバーレイで現れるランチャーです。
-          ホットキーで開き、Escまたは同じキーで瞬時に閉じるので、作業のリズムを崩しません。
-        </p>
-      </div>
-      <div class="retreat-feature-grid" aria-label="Feature list">
-        <article class="retreat-feature-card glass-panel">
-          <div class="retreat-feature-card__header">
-            <div class="retreat-feature-card__badge"><span aria-hidden="true">⌘</span></div>
-            <h3 class="retreat-feature-card__title" data-i18n="f1Title">ホットキートグル</h3>
-          </div>
-          <p class="retreat-feature-card__copy" data-i18n="f1Body">初期設定の⌘⇧Spaceで表示/非表示をトグル。フォーカスが外れたら自動で閉じ、デスクトップを占有しません。</p>
-        </article>
-        <article class="retreat-feature-card glass-panel">
-          <div class="retreat-feature-card__header">
-          <div class="retreat-feature-card__badge"><span aria-hidden="true">☰</span></div>
-            <h3 class="retreat-feature-card__title" data-i18n="f2Title">編集モードのグリッド</h3>
-          </div>
-          <p class="retreat-feature-card__copy" data-i18n="f2Body">長押しまたは「編集」で編集モードへ。ドラッグで並べ替え、＋で追加、削除は×ボタンのみ。あとから名前やアイコン画像も指定できます。</p>
-        </article>
-        <article class="retreat-feature-card glass-panel">
-          <div class="retreat-feature-card__header">
-            <div class="retreat-feature-card__badge"><span aria-hidden="true">∞</span></div>
-            <h3 class="retreat-feature-card__title" data-i18n="f3Title">ガラスの別荘ランチャー</h3>
-          </div>
-          <p class="retreat-feature-card__copy" data-i18n="f3Body">ガラスエフェクトをまとったパネルで、美しいホームスクリーンの別荘のように整列。好みの配置で置いたショートカットを、呼びたいときに気持ちよく呼び出せます。</p>
-        </article>
-      </div>
-    </div>
-  </section>
+    <main id="retreat-content" class="retreat-content">
+      <section id="showcase" class="retreat-section retreat-section--showcase" data-transition-fade>
+        <div class="retreat-section-window">
+          <header class="retreat-section-header">
+            <div class="retreat-section-heading">
+              <span class="retreat-section-app-icon retreat-section-app-icon--coral"><i class="ph ph-image-square" aria-hidden="true"></i></span>
+              <div>
+                <p class="retreat-section-label" data-i18n="showcaseLabel">Live View</p>
+                <h2 class="retreat-section-title" data-i18n="showcaseTitle">呼び出した瞬間、ここが別荘になる。</h2>
+              </div>
+            </div>
+            <a
+              href="https://apps.apple.com/us/app/retreatscreen/id6757686282?mt=12&amp;itscg=30200&amp;itsct=apps_box_badge&amp;mttnsubad=6757686282"
+              class="retreat-store-badge"
+              aria-label="Download on the Mac App Store"
+            >
+              <img src="./Download_on_the_Mac_App_Store_Badge_US-UK_RGB_blk_092917.svg" alt="Download on the Mac App Store">
+            </a>
+          </header>
+          <figure class="retreat-preview-frame">
+            <img src="./screenshot.png" alt="RetreatScreen preview" loading="lazy">
+          </figure>
+          <p class="retreat-lede" data-i18n="lede">⌘⇧Spaceを押すだけで、iPhoneのホーム画面のようなグリッドランチャーがフルスクリーンで立ち上がります。
+常駐するアクセサリアプリとして、集中を切らさず次のアプリやファイルにジャンプできます。</p>
+        </div>
+      </section>
 
-  <section class="page-container retreat-section" data-transition-fade>
-    <div class="section-card product-stack">
-        <div class="retreat-section__head">
-          <div>
-          <p class="retreat-section__label" data-i18n="flowLabel">Flow</p>
-            <h2 class="retreat-section__title" data-i18n="flowTitle">起動から編集までの流れ</h2>
+      <section id="details" class="retreat-section" data-transition-fade>
+        <div class="retreat-section-window">
+          <header class="retreat-section-header retreat-section-header--stacked">
+            <div class="retreat-section-heading">
+              <span class="retreat-section-app-icon retreat-section-app-icon--yellow"><i class="ph ph-command" aria-hidden="true"></i></span>
+              <div>
+                <p class="retreat-section-label" data-i18n="featureLabel">Key Features</p>
+                <h2 class="retreat-section-title" data-i18n="featureTitle">瞬発力のあるランチャー体験</h2>
+              </div>
+            </div>
+            <p class="retreat-section-copy" data-i18n="featureBody">RetreatScreenは常駐しつつ、呼んだときだけ全面オーバーレイで現れるランチャーです。
+ホットキーで開き、Escまたは同じキーで瞬時に閉じるので、作業のリズムを崩しません。</p>
+          </header>
+          <div class="retreat-feature-grid" aria-label="Feature list">
+            <article class="retreat-info-card">
+              <span class="retreat-info-card__number">01</span>
+              <i class="ph ph-keyboard retreat-info-card__icon" aria-hidden="true"></i>
+              <h3 data-i18n="f1Title">ホットキートグル</h3>
+              <p data-i18n="f1Body">初期設定の⌘⇧Spaceで表示/非表示をトグル。フォーカスが外れたら自動で閉じ、デスクトップを占有しません。</p>
+            </article>
+            <article class="retreat-info-card">
+              <span class="retreat-info-card__number">02</span>
+              <i class="ph ph-selection-all retreat-info-card__icon" aria-hidden="true"></i>
+              <h3 data-i18n="f2Title">編集モードのグリッド</h3>
+              <p data-i18n="f2Body">長押しまたは「編集」で編集モードへ。ドラッグで並べ替え、＋で追加、削除は×ボタンのみ。あとから名前やアイコン画像も指定できます。</p>
+            </article>
+            <article class="retreat-info-card">
+              <span class="retreat-info-card__number">03</span>
+              <i class="ph ph-sparkle retreat-info-card__icon" aria-hidden="true"></i>
+              <h3 data-i18n="f3Title">ガラスの別荘ランチャー</h3>
+              <p data-i18n="f3Body">ガラスエフェクトをまとったパネルで、美しいホームスクリーンの別荘のように整列。好みの配置で置いたショートカットを、呼びたいときに気持ちよく呼び出せます。</p>
+            </article>
           </div>
         </div>
-      <div class="retreat-step-grid" aria-label="How it works">
-        <div class="retreat-step-card glass-panel">
-          <div class="retreat-step-card__header">
-            <div class="retreat-step-card__badge">1</div>
-            <h3 class="retreat-step-card__title" data-i18n="step1Title">⌘⇧Space で呼び出す</h3>
-          </div>
-          <p class="retreat-step-card__copy" data-i18n="step1Body">全画面ブラーのオーバーレイとともにランチャーを展開。Escまたは同じショートカットで即クローズ。</p>
-        </div>
-        <div class="retreat-step-card glass-panel">
-          <div class="retreat-step-card__header">
-            <div class="retreat-step-card__badge">2</div>
-            <h3 class="retreat-step-card__title" data-i18n="step2Title">アプリ/ファイルを起動</h3>
-          </div>
-          <p class="retreat-step-card__copy" data-i18n="step2Body">アイコンをクリックしてアプリ/ファイルを起動。コンテキストメニューからFinderで表示も可能です。</p>
-        </div>
-        <div class="retreat-step-card glass-panel">
-          <div class="retreat-step-card__header">
-            <div class="retreat-step-card__badge">3</div>
-            <h3 class="retreat-step-card__title" data-i18n="step3Title">編集モードで整える</h3>
-          </div>
-          <p class="retreat-step-card__copy" data-i18n="step3Body">編集モードでドラッグ並べ替え、＋で追加、削除は×ボタンのみ。あとから名前変更やアイコン画像の指定もできます。</p>
-        </div>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <section class="page-container retreat-section" data-transition-fade>
-    <div class="section-card product-stack">
-      <div class="retreat-section__head">
-        <p class="retreat-section__label" data-i18n="specLabel">Tech Specs</p>
-        <h2 class="retreat-section__title" data-i18n="specTitle">動作環境と安心設計</h2>
-        <p class="retreat-section__copy" data-i18n="specBody">最新のmacOS体験に合わせた軽さと安心設計。呼び出す瞬間だけ姿を現し、データはMacの中だけにとどまります。</p>
-      </div>
-      <div class="retreat-spec-grid">
-        <dl class="retreat-spec-list glass-panel">
-          <div class="retreat-spec-list__row">
-            <dt data-i18n="specOSLabel">対応OS</dt>
-            <dd class="retreat-spec-list__value" data-i18n="specOS">macOS Tahoe 以降</dd>
-          </div>
-          <div class="retreat-spec-list__row">
-            <dt data-i18n="specChipLabel">対応チップ</dt>
-            <dd class="retreat-spec-list__value" data-i18n="specChip">Appleシリコン / Intel</dd>
-          </div>
-          <div class="retreat-spec-list__row">
-            <dt data-i18n="specHotkeyLabel">ホットキー</dt>
-            <dd class="retreat-spec-list__value" data-i18n="specHotkey">⌘⇧Space（設定で変更可）</dd>
-          </div>
-          <div class="retreat-spec-list__row">
-            <dt data-i18n="specFocusLabel">集中モード連携</dt>
-            <dd class="retreat-spec-list__value" data-i18n="specFocus">近日対応予定</dd>
-          </div>
-        </dl>
-        <div class="retreat-care-card glass-panel">
-          <h3 class="retreat-care-card__title" data-i18n="careTitle">安心して使えるポイント</h3>
-          <p class="retreat-care-card__copy" data-i18n="careBody">・起動中も作業を妨げない全画面オーバーレイ。
+      <section id="flow" class="retreat-section" data-transition-fade>
+        <div class="retreat-section-window">
+          <header class="retreat-section-header retreat-section-header--stacked">
+            <div class="retreat-section-heading">
+              <span class="retreat-section-app-icon retreat-section-app-icon--blue"><i class="ph ph-path" aria-hidden="true"></i></span>
+              <div>
+                <p class="retreat-section-label" data-i18n="flowLabel">Flow</p>
+                <h2 class="retreat-section-title" data-i18n="flowTitle">起動から編集までの流れ</h2>
+              </div>
+            </div>
+          </header>
+          <ol class="retreat-flow-list">
+            <li>
+              <span>01</span>
+              <div><h3 data-i18n="step1Title">⌘⇧Space で呼び出す</h3><p data-i18n="step1Body">全画面ブラーのオーバーレイとともにランチャーを展開。Escまたは同じショートカットで即クローズ。</p></div>
+            </li>
+            <li>
+              <span>02</span>
+              <div><h3 data-i18n="step2Title">アプリ/ファイルを起動</h3><p data-i18n="step2Body">アイコンをクリックしてアプリ/ファイルを起動。コンテキストメニューからFinderで表示も可能です。</p></div>
+            </li>
+            <li>
+              <span>03</span>
+              <div><h3 data-i18n="step3Title">編集モードで整える</h3><p data-i18n="step3Body">編集モードでドラッグ並べ替え、＋で追加、削除は×ボタンのみ。あとから名前変更やアイコン画像の指定もできます。</p></div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="specs" class="retreat-section" data-transition-fade>
+        <div class="retreat-section-window">
+          <header class="retreat-section-header retreat-section-header--stacked">
+            <div class="retreat-section-heading">
+              <span class="retreat-section-app-icon retreat-section-app-icon--silver"><i class="ph ph-cpu" aria-hidden="true"></i></span>
+              <div>
+                <p class="retreat-section-label" data-i18n="specLabel">Tech Specs</p>
+                <h2 class="retreat-section-title" data-i18n="specTitle">動作環境と安心設計</h2>
+              </div>
+            </div>
+            <p class="retreat-section-copy" data-i18n="specBody">最新のmacOS体験に合わせた軽さと安心設計。呼び出す瞬間だけ姿を現し、データはMacの中だけにとどまります。</p>
+          </header>
+          <div class="retreat-spec-grid">
+            <dl class="retreat-spec-list">
+              <div><dt data-i18n="specOSLabel">対応OS</dt><dd data-i18n="specOS">macOS Tahoe 以降</dd></div>
+              <div><dt data-i18n="specChipLabel">対応チップ</dt><dd data-i18n="specChip">Appleシリコン / Intel</dd></div>
+              <div><dt data-i18n="specHotkeyLabel">ホットキー</dt><dd data-i18n="specHotkey">⌘⇧Space（設定で変更可）</dd></div>
+              <div><dt data-i18n="specFocusLabel">集中モード連携</dt><dd data-i18n="specFocus">近日対応予定</dd></div>
+            </dl>
+            <article class="retreat-care-card">
+              <i class="ph ph-lock-key" aria-hidden="true"></i>
+              <h3 data-i18n="careTitle">安心して使えるポイント</h3>
+              <p data-i18n="careBody">・起動中も作業を妨げない全画面オーバーレイ。
 ・ショートカットや配置はMac内にのみ保存し、外部へ出ません。
 ・初回起動もシンプルなガイドで迷わずセットアップ。</p>
+            </article>
+          </div>
         </div>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <section class="page-container retreat-section" data-transition-fade>
-    <div class="section-card retreat-cta-card">
-      <div class="retreat-cta-card__inner">
-        <div>
-          <p class="retreat-section__label" data-i18n="ctaLabel">Get Ready</p>
-          <h2 class="document-title" data-i18n="ctaTitle">デスクトップをホーム画面のように</h2>
-          <p class="document-copy" style="max-width:32rem;" data-i18n="ctaBody">
-            RetreatScreenは、散らかったデスクトップを整えて次の作業へ跳ぶためのジャンプ台です。
-          </p>
-        </div>
-        <div class="retreat-actions retreat-cta-card__actions">
-          <a href="https://apps.apple.com/us/app/retreatscreen/id6757686282?mt=12&itscg=30200&itsct=apps_box_badge&mttnsubad=6757686282" class="app-store-link" aria-label="Download on the Mac App Store">
-            <img src="Download_on_the_Mac_App_Store_Badge_US-UK_RGB_blk_092917.svg" alt="Download on the Mac App Store" class="app-store-badge">
+      <section id="get-app" class="retreat-section retreat-section--cta" data-transition-fade>
+        <div class="retreat-section-window retreat-cta-window">
+          <img src="./icon.png" alt="" class="retreat-cta-icon" width="120" height="120">
+          <div>
+            <p class="retreat-section-label" data-i18n="ctaLabel">Get Ready</p>
+            <h2 class="retreat-section-title" data-i18n="ctaTitle">デスクトップをホーム画面のように</h2>
+            <p class="retreat-section-copy" data-i18n="ctaBody">RetreatScreenは、散らかったデスクトップを整えて次の作業へ跳ぶためのジャンプ台です。</p>
+          </div>
+          <a
+            href="https://apps.apple.com/us/app/retreatscreen/id6757686282?mt=12&amp;itscg=30200&amp;itsct=apps_box_badge&amp;mttnsubad=6757686282"
+            class="retreat-store-badge"
+            aria-label="Download on the Mac App Store"
+          >
+            <img src="./Download_on_the_Mac_App_Store_Badge_US-UK_RGB_blk_092917.svg" alt="Download on the Mac App Store">
           </a>
         </div>
-      </div>
-    </div>
-  </section>
+      </section>
+    </main>
 
-  <footer class="retreat-footer">
-    <div class="page-container retreat-footer__inner">
-      <div class="document-footer-links">
-        <a
-          href="./privacy.html"
-          class="glass-chip retreat-secondary-link"
-          aria-label="プライバシーポリシー"
-          data-i18n-aria-label="privacyPolicyLink"
-        >
-          <span data-i18n="privacyPolicyLink">プライバシーポリシー</span>
-        </a>
-        <a
-          href="./support.html"
-          class="glass-chip retreat-secondary-link"
-          aria-label="サポート"
-          data-i18n-aria-label="supportLink"
-        >
-          <span data-i18n="supportLink">サポート</span>
-        </a>
-      </div>
-      <div style="display:flex; justify-content:flex-end;">
+    <footer class="retreat-footer" data-transition-ignore>
+      <div class="retreat-footer__inner">
+        <nav class="retreat-footer-links" aria-label="RetreatScreen information">
+          <a href="./privacy.html" data-i18n="privacyPolicyLink">プライバシーポリシー</a>
+          <a href="./support.html" data-i18n="supportLink">サポート</a>
+          <a href="#launcher" data-i18n="backToLauncher">ランチャーへ戻る</a>
+        </nav>
         <div data-include="footer" data-footer-src="../../partials/footer.html"></div>
       </div>
-    </div>
-  </footer>
+    </footer>
+  </div>
 
   <script vite-ignore src="../../theme.js"></script>
   <script vite-ignore src="../../footer.js"></script>
   <script vite-ignore src="../product-backlink.js"></script>
-  <script>
-    (function () {
-      const STORAGE_KEY = 'mdw-lang';
-      const translations = {
-        en: {
-          back: '← Back to List',
-          statusLabel: 'App Store Ready',
-          version: 'v1.0',
-          tag: 'macOS Launcher',
-          title: 'RetreatScreen',
-          lede: 'Press ⌘⇧Space to summon a full-screen, iOS-style launcher without breaking your flow. It lives as an accessory app and jumps you to apps or files instantly.',
-          badge1: 'One-keystroke summon',
-          badge2: 'Edit & reorder with drag',
-          badge3: 'Persistent container storage',
-          appStoreTop: 'Preparing for release',
-          appStoreBottom: 'Coming soon',
-          secondaryCta: 'See feature details',
-          reqLabel: 'Requires',
-          reqValue: 'macOS Tahoe',
-          inputLabel: 'Shortcut',
-          inputValue: '⌘⇧Space (customizable)',
-          persistenceLabel: 'Persistence',
-          persistenceValue: 'Autosaved in container',
-          featureLabel: 'Key Features',
-          featureTitle: 'A launcher with zero friction',
-          featureBody: 'RetreatScreen stays resident as an accessory app and appears only when you call it. Open with your shortcut, dismiss with Esc or the same key—keep focus on your work.',
-          f1Title: 'Hotkey toggle',
-          f1Body: 'Show or hide the overlay with ⌘⇧Space. It auto-dismisses when focus leaves, so your desktop stays clean.',
-          f2Title: 'Editable grid',
-          f2Body: 'Long-press or tap “Edit” to enter edit mode. Drag to reorder, add with the + button, delete only via the × button, and later rename items or set custom icons.',
-          f3Title: 'Glass retreat home screen',
-          f3Body: 'A glassy card layout turns the grid into a vacation home for your favorites—arrange them like your own home screen and recall them with a calm, beautiful overlay.',
-          flowLabel: 'Flow',
-          flowTitle: 'From summon to edit',
-          flowCta: 'Open tutorial (dummy)',
-          step1Title: 'Summon with ⌘⇧Space',
-          step1Body: 'A blurred full-screen overlay appears. Close with Esc or the same shortcut.',
-          step2Title: 'Launch apps/files',
-          step2Body: 'Click icons to open targets. Use the context menu to reveal in Finder.',
-          step3Title: 'Tidy in Edit Mode',
-          step3Body: 'Drag to reorder in edit mode, add with +, delete only with the × button. You can rename items or assign icons later.',
-          specLabel: 'Tech Specs',
-          specTitle: 'Environment & build',
-          specTitle: 'Compatibility & care',
-          specBody: 'Made to feel effortless on the latest macOS. It appears only when you need it and keeps your data on your Mac.',
-          specOSLabel: 'OS',
-          specOS: 'macOS Tahoe or later',
-          specChipLabel: 'Chip',
-          specChip: 'Apple silicon / Intel',
-          specHotkeyLabel: 'Hotkey',
-          specHotkey: '⌘⇧Space (customizable)',
-          specFocusLabel: 'Focus mode',
-          specFocus: 'Planned in a future update',
-          careTitle: 'Feel-good details',
-          careBody: '• Full-screen overlay that stays out of the way when you’re working.\n• Shortcuts and layouts live only on your Mac—no cloud syncing.\n• A simple first-run guide so you’re ready in moments.',
-          ctaLabel: 'Get Ready',
-          ctaTitle: 'Turn your desktop into a home screen',
-          ctaBody: 'RetreatScreen is a jump pad that resets window chaos and gets you moving again.',
-          ctaPrimary: 'Preparing for release',
-          ctaSecondary: 'Back to features',
-          privacyPolicyLink: 'Privacy Policy',
-          supportLink: 'Support'
-        }
-      };
-      const fallbackCopy = {};
-      let currentLocale = resolveLocale(readStoredLanguage() || 'ja');
-
-      function recordFallbacks() {
-        document.querySelectorAll('[data-i18n]').forEach((el) => {
-          const key = el.getAttribute('data-i18n');
-          if (!key || Object.prototype.hasOwnProperty.call(fallbackCopy, key)) {
-            return;
-          }
-          fallbackCopy[key] = el.textContent.replace(/\s+$/u, '');
-        });
-      }
-
-      function resolveLocale(locale) {
-        return Object.prototype.hasOwnProperty.call(translations, locale) ? locale : 'ja';
-      }
-
-      function syncLanguageSelects(lang) {
-        document.querySelectorAll('.lang-select').forEach((select) => {
-          if (select.value !== lang) {
-            select.value = lang;
-          }
-        });
-      }
-
-      function readStoredLanguage() {
-        try {
-          return localStorage.getItem(STORAGE_KEY);
-        } catch (error) {
-          return null;
-        }
-      }
-
-      function resolveLocalizedCopy(lang, key) {
-        if (lang === 'ja') {
-          return fallbackCopy[key];
-        }
-        const localizedCopy = translations[lang][key];
-        return typeof localizedCopy === 'string' ? localizedCopy : fallbackCopy[key];
-      }
-
-      function applyLanguage(locale) {
-        recordFallbacks();
-        const lang = resolveLocale(locale);
-        currentLocale = lang;
-        document.documentElement.lang = lang;
-        document.querySelectorAll('[data-i18n]').forEach((el) => {
-          const key = el.getAttribute('data-i18n');
-          if (!key) {
-            return;
-          }
-          const text = resolveLocalizedCopy(lang, key);
-          if (typeof text === 'string') {
-            el.textContent = text;
-          }
-        });
-        document.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
-          const key = el.getAttribute('data-i18n-aria-label');
-          if (!key) {
-            return;
-          }
-          const ariaLabel = resolveLocalizedCopy(lang, key);
-          if (typeof ariaLabel === 'string') {
-            el.setAttribute('aria-label', ariaLabel);
-          }
-        });
-        syncLanguageSelects(lang);
-        try {
-          localStorage.setItem(STORAGE_KEY, lang);
-        } catch (error) {
-          /* ignore */
-        }
-        if (window.MDWProductBacklink) {
-          window.MDWProductBacklink.sync(lang);
-        }
-        return lang;
-      }
-
-      const controller = window.MDWLanguageTransition
-        ? window.MDWLanguageTransition.create((lang) => applyLanguage(lang), { duration: 280 })
-        : null;
-
-      function setupLanguageSelector() {
-        document.querySelectorAll('.lang-select').forEach((select) => {
-          if (select.dataset.bound === 'true') {
-            select.value = currentLocale;
-            return;
-          }
-          select.dataset.bound = 'true';
-          select.addEventListener('change', (event) => {
-            if (controller) {
-              controller.apply(event.target.value, { animate: true });
-            } else {
-              applyLanguage(event.target.value);
-            }
-          });
-          select.value = currentLocale;
-        });
-      }
-
-      setupLanguageSelector();
-      applyLanguage(currentLocale);
-
-      // Footerは非同期読み込みのため、読み込み完了後に再バインド/再適用する
-      window.addEventListener('mdw:footer-loaded', () => {
-        setupLanguageSelector();
-        applyLanguage(currentLocale);
-      });
-    })();
-  </script>
+  <script vite-ignore src="./retreat-i18n.js"></script>
+  <script vite-ignore src="./retreat-home.js"></script>
+  <script vite-ignore src="../../vendor/html2canvas.min.js"></script>
+  <script vite-ignore src="../../vendor/liquidGL.js"></script>
+  <script vite-ignore src="../../vendor/liquidgl-init.js"></script>
+  <script vite-ignore src="./retreat-liquidgl-layer.js"></script>
 </body>
 </html>
