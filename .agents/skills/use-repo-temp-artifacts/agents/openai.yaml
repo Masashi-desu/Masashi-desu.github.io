@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repository Temp Artifacts"
+  short_description: "Keep local QA artifacts in ignored .temp"
+  default_prompt: "Use $use-repo-temp-artifacts to keep generated QA evidence out of release commits."
