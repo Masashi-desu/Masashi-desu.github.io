@@ -70,9 +70,10 @@
   <!-- mdw:meta:end -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&amp;family=Noto+Sans+JP:wght@400;500;600;700&amp;family=Outfit:wght@500;600;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css">
   <link rel="stylesheet" href="../../theme.css">
+  <link rel="stylesheet" href="./typefetch-home.css">
   <script>
     (function () {
       const root = document.documentElement;
@@ -80,225 +81,242 @@
         const stored = localStorage.getItem('mdw-theme');
         const preference = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const effective = preference === 'light' || preference === 'dark'
+        root.dataset.theme = preference === 'light' || preference === 'dark'
           ? preference
           : (prefersDark ? 'dark' : 'light');
-        root.dataset.theme = effective;
         root.dataset.themePreference = preference;
       } catch (error) {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        root.dataset.theme = prefersDark ? 'dark' : 'light';
+        root.dataset.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         root.dataset.themePreference = 'system';
+      }
+
+      if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+      }
+      const navigation = performance.getEntriesByType('navigation')[0];
+      if (navigation && navigation.type === 'reload') {
+        window.scrollTo(0, 0);
       }
     })();
   </script>
 </head>
-<body class="page-shell page-product page-product--typefetch">
-  <div class="page-background page-background--y" data-transition-ignore>
-    <div class="page-orb page-orb--typefetch"></div>
-  </div>
-  <div class="page-backbar" data-transition-fade>
-    <div class="page-container page-container--standard page-backbar__inner">
-      <a href="../index.html" data-transition-direction="left" class="page-backlink" data-product-backlink>
-        <span data-i18n="back" data-product-backlink-label>← 一覧に戻る</span>
+<body class="page-shell page-product--typefetch typefetch-landing">
+  <div class="tf-page" data-transition-fade>
+    <header class="tf-topbar">
+      <a
+        class="tf-backlink"
+        href="../index.html"
+        data-product-backlink
+        data-transition-direction="left"
+      >
+        <span data-product-backlink-label data-i18n="back">一覧に戻る</span>
       </a>
-    </div>
-  </div>
-  <main class="page-container page-container--standard product-main" data-transition-fade>
-    <!-- 製品詳細 -->
-    <div class="product-panel product-panel--glass product-panel--gradient-surface">
-      <div class="product-stack">
-        <div class="product-header product-header--split">
-          <div class="product-icon-stage" data-mdw-media>
-            <img src="icon.png" alt="TypeFetch icon" class="product-icon-image" loading="lazy">
-          </div>
-          <div class="product-meta">
-            <p class="product-eyebrow" data-i18n="tag">macOS Utility</p>
-            <h1 class="product-title product-title--nowrap" data-i18n="title">TypeFetch</h1>
-            <time class="product-date" datetime="2025-11-03" data-i18n="date">2025年11月3日</time>
-          </div>
-        </div>
-        <div class="product-badge-list">
-          <span class="product-badge" data-i18n="badge1">Typing Utility</span>
-          <span class="product-badge" data-i18n="badge2">Keyboard-first UX</span>
-        </div>
-        <p class="product-copy" data-i18n="body">
-          TypeFetchは、ショートカット一つで呼び出せるライトウェイトな入力ツールです。
-          ショートカットで入力欄を表示して文字列の挿入をスムーズに行えます。
-          入力、送信フローのアプリ間による差異を吸収し、モダンな入力体験を実現します。</p>
-        <div class="product-media-card" data-mdw-media>
-          <img src="TypeFetch.gif" alt="TypeFetch screenshot" class="product-media-image" loading="lazy">
-        </div>
-        <section class="product-purchase-section" aria-labelledby="purchase-card-title">
-          <div class="product-purchase-card">
-            <div class="product-purchase-card__body">
-              <h2 id="purchase-card-title" class="product-purchase-title" data-i18n="purchaseTitle">購入はこちらから</h2>
-              <div class="product-purchase-embed">
-                  <iframe
-                    frameborder="0"
-                    src="https://itch.io/embed/4010649?linkback=true&amp;bg_color=a497f7&amp;fg_color=120085&amp;link_color=120085&amp;border_color=8b97d7"
-                    width="100%"
-                    height="167"
-                    loading="lazy"
-                  ><a href="https://masashi-desu.itch.io/typefetch">TypeFetch by Masashi_desu</a></iframe>
+      <a class="tf-wordmark" href="#top" aria-label="TypeFetch トップへ">
+        <img src="./icon.png" alt="" width="40" height="40">
+        <span>TYPEFETCH</span>
+      </a>
+      <a class="tf-manual-link" href="#manual" data-i18n="manualLink">操作仕様を見る</a>
+    </header>
+
+    <main>
+      <section id="top" class="tf-hero" aria-labelledby="tf-title">
+        <p class="tf-hero__index" aria-hidden="true">INPUT / ANYWHERE</p>
+        <h1 id="tf-title" class="tf-hero__title" aria-label="TypeFetch">
+          <span>TYPE</span>
+          <span>FETCH</span>
+        </h1>
+        <p class="tf-hero__lede whitespace-pre-line" data-i18n="heroLede">入力したい場所で呼び出す。
+確定した文字だけを、前面へ。</p>
+
+        <div id="tf-demo" class="tf-demo" data-callout-open="true">
+          <section class="tf-target-window" aria-labelledby="tf-target-label">
+            <div class="tf-target-window__bar">
+              <span class="tf-target-window__lights" aria-hidden="true"><i></i><i></i><i></i></span>
+              <div class="tf-target-window__bar-title">
+                <label id="tf-target-label" for="tf-target-input" data-i18n="targetLabel">前面アプリのテキストボックス</label>
               </div>
             </div>
+            <div class="tf-target-window__body">
+              <textarea id="tf-target-input" autocomplete="off" spellcheck="true" aria-describedby="tf-demo-status">TypeFetch</textarea>
+              <div class="tf-target-window__footer">
+                <p id="tf-demo-status" role="status" aria-live="polite" data-i18n="demoReady">キャレット位置を選び、TypeFetchを呼び出せます。</p>
+                <button class="tf-open-button" type="button" data-open-callout>
+                  <span data-i18n="openButton">TypeFetchを表示</span>
+                  <kbd>⌘⇧Space</kbd>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="tf-callout"
+            class="tf-callout"
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="tf-callout-title"
+            aria-describedby="tf-callout-subtitle tf-callout-shortcuts"
+            aria-hidden="false"
+          >
+            <div class="tf-callout__heading">
+              <h2 id="tf-callout-title" data-i18n="calloutTitle">テキストを入力…</h2>
+              <p id="tf-callout-subtitle" data-i18n="calloutSubtitle">確定すると前面のアプリに入力されます。</p>
+            </div>
+            <label class="visually-hidden" for="tf-callout-input" data-i18n="calloutLabel">前面アプリへ送るテキスト</label>
+            <textarea
+              id="tf-callout-input"
+              autocomplete="off"
+              autocapitalize="sentences"
+              spellcheck="true"
+              data-i18n-placeholder="calloutPlaceholder"
+              placeholder="ここに入力してください"
+            ></textarea>
+            <div class="tf-callout__footer">
+              <p id="tf-callout-shortcuts" class="tf-callout__shortcuts">
+                <span><kbd>⌘Return</kbd> <span data-i18n="confirmHint">で確定</span></span>
+                <span><kbd>Esc</kbd> <span data-i18n="cancelHint">でキャンセル</span></span>
+              </p>
+              <div class="tf-callout__actions">
+                <button class="tf-callout-button tf-callout-button--cancel" type="button" data-cancel-callout data-i18n="cancelButton">キャンセル</button>
+                <button class="tf-callout-button tf-callout-button--confirm" type="button" data-confirm-callout data-i18n="confirmButton">確定</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <a class="tf-scroll-cue" href="#manual">
+          <span data-i18n="scrollCue">スクロールして仕様を見る</span>
+          <span aria-hidden="true">↓</span>
+        </a>
+      </section>
+
+      <section id="manual" class="tf-manual" aria-labelledby="tf-manual-title">
+        <header class="tf-manual__header">
+          <p>OPERATION / THREE MOVES</p>
+          <h2 id="tf-manual-title" class="whitespace-pre-line" data-i18n="manualTitle">キーを押す。
+書く。
+渡す。</h2>
+          <p class="whitespace-pre-line" data-i18n="manualIntro">TypeFetchは前面アプリの流れを止めません。
+必要な瞬間だけ現れ、確定したら消えます。</p>
+        </header>
+
+        <ol class="tf-move-list">
+          <li class="tf-move">
+            <span class="tf-move__number">01</span>
+            <div class="tf-move__body">
+              <p class="tf-move__key"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>Space</kbd></p>
+              <h3 data-i18n="moveOneTitle">呼び出す</h3>
+              <p class="whitespace-pre-line" data-i18n="moveOneBody">入力したいアプリを前面にしたまま、既定ショートカットで表示。
+設定から好きなキーへ変更できます。</p>
+            </div>
+          </li>
+          <li class="tf-move">
+            <span class="tf-move__number">02</span>
+            <div class="tf-move__body">
+              <p class="tf-move__key"><kbd>Return</kbd></p>
+              <h3 data-i18n="moveTwoTitle">そのまま書く</h3>
+              <p class="whitespace-pre-line" data-i18n="moveTwoBody">日本語入力や複数行のテキストにも対応。
+Return単独は改行として使えます。</p>
+            </div>
+          </li>
+          <li class="tf-move">
+            <span class="tf-move__number">03</span>
+            <div class="tf-move__body">
+              <p class="tf-move__key"><kbd>⌘</kbd><kbd>Return</kbd></p>
+              <h3 data-i18n="moveThreeTitle">前面へ渡す</h3>
+              <p class="whitespace-pre-line" data-i18n="moveThreeBody">確定すると元のアプリを再び前面にし、キャレット位置へ挿入。
+成功したTypeFetchは、そのまま静かに閉じます。</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="tf-rules" aria-labelledby="tf-rules-title">
+        <header class="tf-rules__header">
+          <p>BEHAVIOR / EXACTLY</p>
+          <h2 id="tf-rules-title" data-i18n="rulesTitle">確定とキャンセルの境界。</h2>
+        </header>
+        <dl class="tf-rule-list">
+          <div>
+            <dt><span>CONFIRM</span><kbd>⌘Return</kbd></dt>
+            <dd data-i18n="ruleConfirm">入力内容をキャレット／選択範囲へ挿入して閉じます。</dd>
           </div>
-        </section>
+          <div>
+            <dt><span>CANCEL</span><kbd>Esc</kbd></dt>
+            <dd data-i18n="ruleCancel">何も変更せず、入力ウィンドウだけを閉じます。</dd>
+          </div>
+          <div>
+            <dt><span>EMPTY</span><kbd>⌘Return</kbd></dt>
+            <dd data-i18n="ruleEmpty">空のまま確定した場合はキャンセルとして扱います。</dd>
+          </div>
+          <div>
+            <dt><span>RETRY</span><kbd>⌘Return</kbd></dt>
+            <dd data-i18n="ruleRetry">挿入に失敗した場合は、内容を保持したまま再表示します。</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="tf-showcase" aria-labelledby="tf-showcase-title">
+        <header class="tf-showcase__header">
+          <div>
+            <p>REAL MOTION / TYPEFETCH</p>
+            <h2 id="tf-showcase-title" data-i18n="showcaseTitle">前面アプリへ、途切れずに。</h2>
+          </div>
+          <p class="whitespace-pre-line" data-i18n="showcaseBody">アクセシビリティAPIを優先して挿入。
+難しい入力先には別方式へ自動で切り替えます。</p>
+        </header>
+        <figure class="tf-showcase__media" data-mdw-media>
+          <img src="./TypeFetch.gif" alt="TypeFetchでテキストを入力し、前面のメモへ確定する様子" loading="lazy">
+        </figure>
+      </section>
+
+      <section class="tf-facts" aria-labelledby="tf-facts-title">
+        <header>
+          <p>UNDER THE PANEL</p>
+          <h2 id="tf-facts-title" data-i18n="factsTitle">軽く、ローカルに、10言語で。</h2>
+        </header>
+        <dl>
+          <div><dt data-i18n="factOsLabel">対応OS</dt><dd data-i18n="factOsValue">macOS 13 Ventura 以降</dd></div>
+          <div><dt data-i18n="factResidenceLabel">動作</dt><dd data-i18n="factResidenceValue">メニューバー常駐</dd></div>
+          <div><dt data-i18n="factLanguageLabel">表示言語</dt><dd data-i18n="factLanguageValue">日本語を含む10言語</dd></div>
+          <div><dt data-i18n="factPrivacyLabel">プライバシー</dt><dd data-i18n="factPrivacyValue">解析・トラッキングなし</dd></div>
+        </dl>
+      </section>
+
+      <section id="get-typefetch" class="tf-purchase" aria-labelledby="tf-purchase-title">
+        <img src="./icon.png" alt="" class="tf-purchase__icon" width="160" height="160">
+        <div class="tf-purchase__copy">
+          <p>GET / TYPEFETCH</p>
+          <h2 id="tf-purchase-title" data-i18n="purchaseTitle">入力の一歩を、ひとつ減らす。</h2>
+          <p class="whitespace-pre-line" data-i18n="purchaseBody">TypeFetchはmacOS 13以降で動作します。
+購入・ダウンロードはitch.ioから。</p>
+        </div>
+        <div class="tf-purchase__embed">
+          <iframe
+            frameborder="0"
+            src="https://itch.io/embed/4010649?linkback=true&amp;bg_color=202430&amp;fg_color=f1f2f6&amp;link_color=4a91ff&amp;border_color=3a4052"
+            width="100%"
+            height="167"
+            loading="lazy"
+            title="TypeFetch on itch.io"
+          ><a href="https://masashi-desu.itch.io/typefetch">TypeFetch by Masashi_desu</a></iframe>
+        </div>
+      </section>
+    </main>
+
+    <footer class="tf-footer" data-transition-ignore>
+      <div class="tf-footer__lead">
+        <a href="#top">TYPEFETCH / TOP</a>
+        <a href="../index.html" data-product-backlink data-transition-direction="left">
+          <span data-product-backlink-label data-i18n="back">一覧に戻る</span>
+        </a>
       </div>
-    </div>
-  </main>
-  <div class="page-bottom-bar" data-transition-fade>
-    <div class="page-container page-container--standard page-bottom-bar__inner">
-      <a href="../index.html" data-transition-direction="left" class="page-backlink" data-product-backlink>
-        <span data-i18n="back" data-product-backlink-label>← 一覧に戻る</span>
-      </a>
-    </div>
-  </div>
-  <footer class="site-footer">
-    <div class="page-container page-container--standard site-footer__inner site-footer__inner--end">
       <div data-include="footer" data-footer-src="../../partials/footer.html"></div>
-    </div>
-  </footer>
+    </footer>
+  </div>
+
   <script vite-ignore src="../../theme.js"></script>
   <script vite-ignore src="../../footer.js"></script>
   <script vite-ignore src="../product-backlink.js"></script>
-  <script>
-    (function () {
-      const STORAGE_KEY = 'mdw-lang';
-      const translations = {
-        ja: {
-          body: 'TypeFetchは、ショートカット一つで呼び出せるライトウェイトな入力ツールです。\nショートカットで入力欄を表示して文字列の挿入をスムーズに行えます。\n入力、送信フローのアプリ間による差異を吸収し、モダンな入力体験を実現します。',
-          purchaseTitle: '購入はこちらから'
-        },
-        en: {
-          tag: 'macOS Utility',
-          title: 'TypeFetch',
-          date: 'November 3, 2025',
-          body: 'TypeFetch is a lightweight input utility you can summon with a single shortcut.\nIt instantly opens an input field so you can insert text without friction.\nBy absorbing differences in each app\'s input and send flow, it delivers a modern typing experience.',
-          badge1: 'Typing Utility',
-          badge2: 'Keyboard-first UX',
-          back: '← Back to List',
-          purchaseTitle: 'Purchase or Download',
-          themeLabel: 'Theme',
-          themeSystem: 'System',
-          themeLight: 'Light',
-          themeDark: 'Dark'
-        }
-      };
-      const fallbackCopy = {};
-      let currentLocale = resolveLocale(readStoredLanguage() || 'ja');
-
-      function recordFallbacks() {
-        document.querySelectorAll('[data-i18n]').forEach((el) => {
-          const key = el.getAttribute('data-i18n');
-          if (!key || Object.prototype.hasOwnProperty.call(fallbackCopy, key)) {
-            return;
-          }
-          fallbackCopy[key] = el.textContent.replace(/\s+$/u, '');
-        });
-      }
-
-      function resolveLocale(locale) {
-        return Object.prototype.hasOwnProperty.call(translations, locale) ? locale : 'ja';
-      }
-
-      function syncLanguageSelects(lang) {
-        document.querySelectorAll('.lang-select').forEach((select) => {
-          if (select.value !== lang) {
-            select.value = lang;
-          }
-        });
-      }
-
-      function updateLanguage(locale) {
-        recordFallbacks();
-        const lang = resolveLocale(locale);
-        currentLocale = lang;
-        document.documentElement.lang = lang;
-        document.querySelectorAll('[data-i18n]').forEach((el) => {
-          const key = el.getAttribute('data-i18n');
-          if (!key) {
-            return;
-          }
-          if (lang === 'ja') {
-            const preferred = translations.ja && Object.prototype.hasOwnProperty.call(translations.ja, key)
-              ? translations.ja[key]
-              : undefined;
-            if (typeof preferred === 'string') {
-              el.textContent = preferred;
-              return;
-            }
-            const fallback = fallbackCopy[key];
-            if (typeof fallback === 'string') {
-              el.textContent = fallback;
-            }
-            return;
-          }
-          const text = translations[lang] && translations[lang][key];
-          if (typeof text === 'string') {
-            el.textContent = text;
-            return;
-          }
-          const fallback = fallbackCopy[key];
-          if (typeof fallback === 'string') {
-            el.textContent = fallback;
-          }
-        });
-        syncLanguageSelects(lang);
-        try {
-          localStorage.setItem(STORAGE_KEY, lang);
-        } catch (error) {
-          /* ignore */
-        }
-        if (window.MDWProductBacklink) {
-          window.MDWProductBacklink.sync(lang);
-        }
-        return lang;
-      }
-
-      function readStoredLanguage() {
-        try {
-          return localStorage.getItem(STORAGE_KEY);
-        } catch (error) {
-          return null;
-        }
-      }
-
-      const controller = window.MDWLanguageTransition
-        ? window.MDWLanguageTransition.create((lang) => updateLanguage(lang), { duration: 320 })
-        : null;
-
-      function applyLanguage(locale, options = {}) {
-        const target = resolveLocale(locale);
-        if (controller) {
-          controller.apply(target, options);
-        } else {
-          updateLanguage(target);
-        }
-      }
-
-      function setupLanguageSelector() {
-        document.querySelectorAll('.lang-select').forEach((select) => {
-          if (select.dataset.bound === 'true') {
-            select.value = currentLocale;
-            return;
-          }
-          select.dataset.bound = 'true';
-          select.addEventListener('change', (event) => {
-            applyLanguage(event.target.value, { animate: true });
-          });
-          select.value = currentLocale;
-        });
-      }
-
-      applyLanguage(currentLocale);
-      setupLanguageSelector();
-      window.addEventListener('mdw:footer-loaded', () => {
-        setupLanguageSelector();
-        applyLanguage(currentLocale);
-      });
-    })();
-  </script>
+  <script vite-ignore src="./typefetch-home.js"></script>
 </body>
 </html>
