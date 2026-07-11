@@ -1,14 +1,5 @@
 (function () {
   const STORAGE_KEY = 'mdw-lang';
-  const SECTION_NAV_LOCK_MS = 720;
-  const SECTION_SCROLL_SETTLE_MS = 640;
-  const WHEEL_SECTION_THRESHOLD = 86;
-  const WHEEL_RESET_MS = 180;
-  const TOUCH_SECTION_THRESHOLD = 48;
-  const TOUCH_INTENT_THRESHOLD = 10;
-  const TOUCH_MOMENTUM_SETTLE_MS = 520;
-  const SECTION_ALIGN_ENFORCE_FRAMES = 36;
-  const TOUCH_ACTIVITY_STALE_MS = 1100;
   const PRODUCT_NAV_PAGE_SIZE = 5;
   const PRODUCT_SEGMENT_DESIGNS = {
     KeycapMaker: { className: 'catalog-product-section--right' },
@@ -111,50 +102,20 @@
   };
 
   let catalog = [];
-  let sections = [];
-  let sectionObserver = null;
   let currentLocale = resolveLocale(readStoredLanguage() || 'ja');
   let activeCategory = 'all';
   let activeSort = 'date';
   let dataLoaded = false;
-  let activeSectionTarget = searchSection ? searchSection.id : '';
-  let activeNavTarget = activeSectionTarget;
-  let sectionNavLockUntil = 0;
-  let pendingCatalogSection = null;
-  let pendingPaginationScroll = false;
-  let pendingFooterScroll = false;
-  let sectionSettleTimer = null;
-  let sectionAlignFrame = null;
-  let restAlignTimer = null;
-  let restSampleScrollY = null;
-  let touchPointsActive = 0;
-  let lastTouchEventAt = 0;
-  let wheelDeltaY = 0;
-  let wheelResetTimer = null;
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let touchSectionHandled = false;
-  let touchStartSegmentKind = '';
+  let sectionNavigation = null;
 
-  function syncSectionViewportSize() {
-    const viewport = window.visualViewport;
-    const width = Math.round(viewport && viewport.width ? viewport.width : window.innerWidth);
-    const height = Math.round(viewport && viewport.height ? viewport.height : window.innerHeight);
-    if (width > 0) {
-      document.documentElement.style.setProperty('--catalog-section-width', `${width}px`);
-    }
-    if (height > 0) {
-      document.documentElement.style.setProperty('--catalog-section-height', `${height}px`);
-    }
-  }
+  const sectionViewport = window.MDWSegmentedScroll.createViewportCssSync({
+    rootElement: document.documentElement,
+    widthProperty: '--catalog-section-width',
+    heightProperty: '--catalog-section-height'
+  });
 
   function setupSectionViewportSizing() {
-    syncSectionViewportSize();
-    window.addEventListener('resize', syncSectionViewportSize);
-    window.addEventListener('orientationchange', syncSectionViewportSize);
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', syncSectionViewportSize);
-    }
+    sectionViewport.mount();
   }
 
   function readStoredLanguage() {
@@ -346,6 +307,10 @@
     return slug || `product-${index + 1}`;
   }
 
+  function getProductSectionId(item, index) {
+    return `catalog-product-${slugifyProduct(item, index)}`;
+  }
+
   function getFilteredCatalog() {
     const baseline = Array.isArray(catalog) ? catalog.slice() : [];
     const filtered = activeCategory === 'all'
@@ -391,679 +356,176 @@
     }
   }
 
-  function collectSections() {
-    sections = Array.from(document.querySelectorAll('[data-catalog-section]'));
-    return sections;
+  function getCatalogSections() {
+    return Array.from(document.querySelectorAll('[data-catalog-section]'));
   }
 
   function getNumberButtons() {
     return numberNav ? Array.from(numberNav.querySelectorAll('.catalog-section-nav__number')) : [];
   }
 
-  function getAllNavControls() {
+  function getCatalogNavControls() {
     return [searchNavButton, ...getNumberButtons(), paginationButton, footerNavLink].filter(Boolean);
   }
 
-  function updateSectionNavIndicator(activeControl) {
-    if (!sectionNav || !activeControl) {
-      return;
-    }
-    const navRect = sectionNav.getBoundingClientRect();
-    const controlRect = activeControl.getBoundingClientRect();
-    sectionNav.style.setProperty('--segment-x', `${controlRect.left - navRect.left}px`);
-    sectionNav.style.setProperty('--segment-width', `${controlRect.width}px`);
+  function getCatalogNavControlTarget(control) {
+    return control.dataset.sectionTarget || control.dataset.paginationTarget || control.dataset.footerTarget || '';
   }
 
-  function updateSectionNav(targetId) {
-    const isFooterTarget = Boolean(footerTarget && targetId === footerTarget.id);
-    const isPaginationTarget = Boolean(paginationTarget && targetId === paginationTarget.id);
-    if (targetId && !isFooterTarget && !isPaginationTarget) {
-      activeSectionTarget = targetId;
-    }
-    if (targetId) {
-      activeNavTarget = targetId;
-    }
-    const visibleTarget = activeNavTarget || activeSectionTarget;
-    let activeControl = null;
-    getAllNavControls().forEach((control) => {
-      const controlTarget = control.dataset.sectionTarget || control.dataset.paginationTarget || control.dataset.footerTarget || '';
-      const active = controlTarget === visibleTarget;
-      control.classList.toggle('is-active', active);
-      control.setAttribute('aria-current', active ? 'true' : 'false');
-      if (active) {
-        activeControl = control;
+  function getCatalogScrollStops() {
+    const stops = getCatalogSections().map((section) => ({
+      id: section.id,
+      element: section,
+      align: 'start',
+      role: 'content',
+      observe: true,
+      meta: {
+        type: section.dataset.catalogSection || 'section',
+        productIndex: Number.parseInt(section.dataset.productIndex || '', 10)
       }
-    });
-    const activeNumber = numberNav ? numberNav.querySelector(`[data-section-target="${visibleTarget}"]`) : null;
-    if (activeNumber) {
-      activeNumber.scrollIntoView({
-        behavior: reduceMotion.matches ? 'auto' : 'smooth',
-        block: 'nearest',
-        inline: 'center'
-      });
-    }
-    updateSectionNavIndicator(activeControl);
-    updatePaginationStatus(currentLocale);
-  }
-
-  function getFooterAdjacentSection() {
-    return sections.length > 0 ? sections[sections.length - 1] : null;
-  }
-
-  function updateFooterNav() {
-    if (!footerTarget) {
-      return;
-    }
-    const adjacentSection = getFooterAdjacentSection();
-    if (adjacentSection) {
-      activeSectionTarget = adjacentSection.id;
-    }
-    updateSectionNav(footerTarget.id);
-  }
-
-  function updatePaginationNav() {
-    if (!paginationTarget) {
-      return;
-    }
-    const adjacentSection = getFooterAdjacentSection();
-    if (adjacentSection) {
-      activeSectionTarget = adjacentSection.id;
-    }
-    updateSectionNav(paginationTarget.id);
-  }
-
-  function getDocumentBottomScrollTop() {
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-    const documentHeight = Math.max(
-      document.body.scrollHeight,
-      document.documentElement.scrollHeight
-    );
-    return Math.max(0, Math.round(documentHeight - viewportHeight));
-  }
-
-  function getPaginationScrollTop() {
-    if (!paginationTarget) {
-      return null;
-    }
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-    const rect = paginationTarget.getBoundingClientRect();
-    return Math.max(0, Math.round(rect.bottom + window.scrollY - viewportHeight));
-  }
-
-  function getSectionScrollTop(section) {
-    return Math.round(section.getBoundingClientRect().top + window.scrollY);
-  }
-
-  function readManagedStopTop(stop) {
-    if (!stop) {
-      return null;
-    }
-    if (stop.kind === 'pagination') {
-      return getPaginationScrollTop();
-    }
-    if (stop.kind === 'footer') {
-      return getDocumentBottomScrollTop();
-    }
-    return stop.element ? getSectionScrollTop(stop.element) : null;
-  }
-
-  function getManagedScrollStops() {
-    const stops = sections
-      .filter((section) => section && section.id)
-      .map((section) => ({
-        kind: 'section',
-        id: section.id,
-        element: section,
-        top: getSectionScrollTop(section)
-      }));
-    const paginationTop = getPaginationScrollTop();
-    if (paginationTarget && paginationTop !== null) {
+    }));
+    if (paginationTarget) {
       stops.push({
-        kind: 'pagination',
         id: paginationTarget.id,
         element: paginationTarget,
-        top: paginationTop
+        eventRegion: paginationTarget,
+        align: 'end',
+        role: 'auxiliary',
+        contentAnchor: 'previous',
+        observe: false,
+        meta: { type: 'pagination' }
       });
     }
     if (footerTarget) {
       stops.push({
-        kind: 'footer',
         id: footerTarget.id,
         element: footerTarget,
-        top: getDocumentBottomScrollTop()
+        eventRegion: footerTarget,
+        align: 'document-end',
+        role: 'auxiliary',
+        contentAnchor: 'previous',
+        observe: false,
+        meta: { type: 'footer' }
       });
     }
-    return stops
-      .filter((stop) => Number.isFinite(stop.top))
-      .sort((a, b) => a.top - b.top);
+    return stops;
   }
 
-  function eventIncludesElement(event, element) {
-    if (!event || !element) {
-      return false;
-    }
-    if (typeof event.composedPath === 'function') {
-      return event.composedPath().includes(element);
-    }
-    return event.target instanceof Node && element.contains(event.target);
-  }
-
-  function getEventSegmentKind(event) {
-    if (eventIncludesElement(event, footerTarget)) {
-      return 'footer';
-    }
-    if (eventIncludesElement(event, paginationTarget)) {
-      return 'pagination';
-    }
-    return '';
-  }
-
-  function updateManagedStopNav(stop) {
-    if (!stop) {
+  function updateCatalogNavigationHistory({ stop, options }) {
+    if (!window.history) {
       return;
     }
-    if (stop.kind === 'footer') {
-      updateFooterNav();
-      return;
-    }
-    if (stop.kind === 'pagination') {
-      updatePaginationNav();
-      return;
-    }
-    updateSectionNav(stop.id);
-  }
-
-  function enforceManagedStopAlignment(stop) {
-    enforceScrollAlignment(() => readManagedStopTop(stop));
-  }
-
-  function isSectionNavigationLocked() {
-    return Date.now() < sectionNavLockUntil;
-  }
-
-  function clearWheelAccumulation() {
-    wheelDeltaY = 0;
-    if (wheelResetTimer !== null) {
-      window.clearTimeout(wheelResetTimer);
-      wheelResetTimer = null;
-    }
-  }
-
-  function clearSectionSettleTimer() {
-    if (sectionSettleTimer !== null) {
-      window.clearTimeout(sectionSettleTimer);
-      sectionSettleTimer = null;
-    }
-  }
-
-  function cancelScrollAlignment() {
-    if (sectionAlignFrame !== null) {
-      window.cancelAnimationFrame(sectionAlignFrame);
-      sectionAlignFrame = null;
-    }
-  }
-
-  function enforceScrollAlignment(readTargetTop) {
-    cancelScrollAlignment();
-    let framesLeft = SECTION_ALIGN_ENFORCE_FRAMES;
-    const step = () => {
-      sectionAlignFrame = null;
-      const targetTop = readTargetTop();
-      if (targetTop === null) {
-        return;
+    if (stop.role === 'auxiliary') {
+      if (options.updateHistory !== false && window.history.pushState) {
+        window.history.pushState(null, '', '#' + stop.id);
       }
-      if (Math.abs(window.scrollY - targetTop) > 1) {
-        window.scrollTo({
-          top: targetTop,
-          behavior: 'auto'
-        });
-      }
-      framesLeft -= 1;
-      if (framesLeft > 0) {
-        sectionAlignFrame = window.requestAnimationFrame(step);
-      }
-    };
-    step();
-  }
-
-  function isViewportZoomed() {
-    return Boolean(window.visualViewport && window.visualViewport.scale > 1.02);
-  }
-
-  function scheduleRestAlignmentCheck(delay) {
-    if (restAlignTimer !== null) {
-      window.clearTimeout(restAlignTimer);
-    }
-    restAlignTimer = window.setTimeout(runRestAlignmentCheck, delay);
-  }
-
-  function runRestAlignmentCheck() {
-    restAlignTimer = null;
-    const touchRecentlyActive = touchPointsActive > 0 && (Date.now() - lastTouchEventAt) < TOUCH_ACTIVITY_STALE_MS;
-    if (touchRecentlyActive || isSectionNavigationLocked() || pendingCatalogSection || pendingPaginationScroll || pendingFooterScroll || sectionAlignFrame !== null) {
-      restSampleScrollY = null;
-      scheduleRestAlignmentCheck(320);
       return;
     }
-    touchPointsActive = 0;
-    if (isViewportZoomed() || sections.length === 0) {
-      return;
+    const auxiliaryHashes = ['#catalog-footer', '#catalog-pagination-section'];
+    if (auxiliaryHashes.includes(window.location.hash) && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
-    const current = window.scrollY;
-    if (restSampleScrollY === null || Math.abs(restSampleScrollY - current) > 2) {
-      restSampleScrollY = current;
-      scheduleRestAlignmentCheck(220);
-      return;
-    }
-    restSampleScrollY = null;
-    const stops = getManagedScrollStops();
-    if (stops.length === 0) {
-      return;
-    }
-    let nearestStop = null;
-    let nearestDistance = Infinity;
-    stops.forEach((stop) => {
-      const distance = Math.abs(stop.top - current);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestStop = stop;
-      }
-    });
-    if (!nearestStop) {
-      return;
-    }
-    const tolerance = Math.max(4, Math.round(window.innerHeight * 0.02));
-    if (nearestDistance > tolerance) {
-      sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : 480);
-      enforceManagedStopAlignment(nearestStop);
-    }
-    updateManagedStopNav(nearestStop);
-  }
-
-  function settleCatalogSection(section, delay = SECTION_SCROLL_SETTLE_MS) {
-    clearSectionSettleTimer();
-    sectionSettleTimer = window.setTimeout(() => {
-      sectionSettleTimer = null;
-      if (!section || pendingCatalogSection !== section) {
-        return;
-      }
-      enforceScrollAlignment(() => getSectionScrollTop(section));
-      updateSectionNav(section.id);
-      pendingCatalogSection = null;
-    }, reduceMotion.matches ? 80 : delay);
-  }
-
-  function settleFooterScroll(delay = SECTION_SCROLL_SETTLE_MS) {
-    clearSectionSettleTimer();
-    sectionSettleTimer = window.setTimeout(() => {
-      sectionSettleTimer = null;
-      if (!pendingFooterScroll) {
-        return;
-      }
-      pendingFooterScroll = false;
-      enforceScrollAlignment(() => getDocumentBottomScrollTop());
-      updateFooterNav();
-    }, reduceMotion.matches ? 80 : delay);
-  }
-
-  function settlePaginationScroll(delay = SECTION_SCROLL_SETTLE_MS) {
-    clearSectionSettleTimer();
-    sectionSettleTimer = window.setTimeout(() => {
-      sectionSettleTimer = null;
-      if (!pendingPaginationScroll) {
-        return;
-      }
-      pendingPaginationScroll = false;
-      enforceScrollAlignment(() => getPaginationScrollTop());
-      updatePaginationNav();
-    }, reduceMotion.matches ? 80 : delay);
-  }
-
-  function scrollToCatalogSection(section) {
-    if (!section) {
-      return;
-    }
-    cancelScrollAlignment();
-    sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : Math.max(SECTION_NAV_LOCK_MS, SECTION_SCROLL_SETTLE_MS + 140));
-    pendingCatalogSection = section;
-    pendingPaginationScroll = false;
-    pendingFooterScroll = false;
-    updateSectionNav(section.id);
-    if (window.history && window.history.replaceState && (window.location.hash === '#catalog-footer' || window.location.hash === '#catalog-pagination-section')) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-    }
-    window.scrollTo({
-      top: getSectionScrollTop(section),
-      behavior: reduceMotion.matches ? 'auto' : 'smooth'
-    });
-    settleCatalogSection(section);
-  }
-
-  function scrollToPagination(options = {}) {
-    if (!paginationTarget) {
-      return;
-    }
-    pendingCatalogSection = null;
-    pendingPaginationScroll = true;
-    pendingFooterScroll = false;
-    cancelScrollAlignment();
-    clearSectionSettleTimer();
-    sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : Math.max(SECTION_NAV_LOCK_MS, SECTION_SCROLL_SETTLE_MS + 140));
-    updatePaginationNav();
-    paginationTarget.scrollIntoView({
-      behavior: reduceMotion.matches ? 'auto' : 'smooth',
-      block: 'end'
-    });
-    if (options.updateHistory !== false && window.history && window.history.pushState) {
-      window.history.pushState(null, '', `#${paginationTarget.id}`);
-    }
-    settlePaginationScroll();
-  }
-
-  function scrollToFooter(options = {}) {
-    if (!footerTarget) {
-      return;
-    }
-    pendingCatalogSection = null;
-    pendingPaginationScroll = false;
-    pendingFooterScroll = true;
-    cancelScrollAlignment();
-    clearSectionSettleTimer();
-    sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : Math.max(SECTION_NAV_LOCK_MS, SECTION_SCROLL_SETTLE_MS + 140));
-    updateFooterNav();
-    footerTarget.scrollIntoView({
-      behavior: reduceMotion.matches ? 'auto' : 'smooth',
-      block: 'end'
-    });
-    if (options.updateHistory !== false && window.history && window.history.pushState) {
-      window.history.pushState(null, '', `#${footerTarget.id}`);
-    }
-    settleFooterScroll();
-  }
-
-  function isFooterNavPosition() {
-    if (!footerTarget) {
-      return false;
-    }
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-    const documentHeight = Math.max(
-      document.body.scrollHeight,
-      document.documentElement.scrollHeight
-    );
-    const distanceFromBottom = documentHeight - (window.scrollY + viewportHeight);
-    return distanceFromBottom <= Math.max(12, footerTarget.offsetHeight * 0.4);
-  }
-
-  function isPaginationNavPosition() {
-    if (!paginationTarget) {
-      return false;
-    }
-    const targetTop = getPaginationScrollTop();
-    if (targetTop === null) {
-      return false;
-    }
-    return Math.abs(window.scrollY - targetTop) <= Math.max(12, paginationTarget.offsetHeight * 0.4);
-  }
-
-  function syncFooterNavState() {
-    if (isSectionNavigationLocked()) {
-      return;
-    }
-    if (isFooterNavPosition()) {
-      updateFooterNav();
-      return;
-    }
-    if (isPaginationNavPosition()) {
-      updatePaginationNav();
-    }
-  }
-
-  function getDirectionalStop(direction, event, preferredSegmentKind = '') {
-    if (direction === 0) {
-      return null;
-    }
-    const stops = getManagedScrollStops();
-    if (stops.length === 0) {
-      return null;
-    }
-    const segmentKind = preferredSegmentKind || getEventSegmentKind(event);
-    if (segmentKind) {
-      const currentIndex = stops.findIndex((stop) => stop.kind === segmentKind);
-      if (currentIndex >= 0) {
-        return stops[currentIndex + direction] || null;
-      }
-    }
-    const current = window.scrollY;
-    const tolerance = 1;
-    if (direction > 0) {
-      return stops.find((stop) => stop.top > current + tolerance) || null;
-    }
-    for (let index = stops.length - 1; index >= 0; index -= 1) {
-      if (stops[index].top < current - tolerance) {
-        return stops[index];
-      }
-    }
-    return null;
-  }
-
-  function canNavigateInDirection(direction, event, preferredSegmentKind = '') {
-    return Boolean(getDirectionalStop(direction, event, preferredSegmentKind));
-  }
-
-  function scrollToManagedStop(stop) {
-    if (!stop) {
-      return;
-    }
-    if (stop.kind === 'footer') {
-      scrollToFooter({ updateHistory: false });
-      return;
-    }
-    if (stop.kind === 'pagination') {
-      scrollToPagination({ updateHistory: false });
-      return;
-    }
-    scrollToCatalogSection(stop.element);
-  }
-
-  function navigateSectionByDirection(direction, event, preferredSegmentKind = '') {
-    const target = getDirectionalStop(direction, event, preferredSegmentKind);
-    if (!target) {
-      clearWheelAccumulation();
-      return false;
-    }
-    if (event && event.cancelable) {
-      event.preventDefault();
-    }
-    if (isSectionNavigationLocked()) {
-      return true;
-    }
-    clearWheelAccumulation();
-    scrollToManagedStop(target);
-    return true;
-  }
-
-  function normalizeWheelDelta(event) {
-    if (event.deltaMode === 1) {
-      return event.deltaY * 16;
-    }
-    if (event.deltaMode === 2) {
-      return event.deltaY * window.innerHeight;
-    }
-    return event.deltaY;
   }
 
   function isNumberNavTarget(target) {
     return Boolean(numberNav && target instanceof Node && numberNav.contains(target));
   }
 
-  function handleSectionWheel(event) {
-    if (isNumberNavTarget(event.target) && (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY))) {
-      return;
-    }
-    const deltaY = normalizeWheelDelta(event);
-    if (Math.abs(deltaY) < 1) {
-      return;
-    }
-    const direction = deltaY > 0 ? 1 : -1;
-    if (!canNavigateInDirection(direction, event)) {
-      clearWheelAccumulation();
-      return;
-    }
-    if (event.cancelable) {
-      event.preventDefault();
-    }
-    if (isSectionNavigationLocked()) {
-      return;
-    }
-    if (wheelDeltaY !== 0 && Math.sign(wheelDeltaY) !== direction) {
-      wheelDeltaY = 0;
-    }
-    wheelDeltaY += deltaY;
-    if (wheelResetTimer !== null) {
-      window.clearTimeout(wheelResetTimer);
-    }
-    wheelResetTimer = window.setTimeout(clearWheelAccumulation, WHEEL_RESET_MS);
-    if (Math.abs(wheelDeltaY) >= WHEEL_SECTION_THRESHOLD) {
-      navigateSectionByDirection(direction, event);
-    }
+  function shouldYieldCatalogWheel(event, gesture) {
+    return isNumberNavTarget(event.target) && (gesture.shiftKey || gesture.horizontalDominant);
   }
 
-  function markTouchActivity(event) {
-    lastTouchEventAt = Date.now();
-    touchPointsActive = event.touches ? event.touches.length : 0;
+  function shouldYieldCatalogTouch(event, gesture) {
+    const intentThreshold = window.MDWSegmentedScroll.DEFAULT_TIMINGS.touchIntentThreshold;
+    return isNumberNavTarget(event.target)
+      && gesture.absDeltaX >= intentThreshold
+      && gesture.horizontalDominant;
   }
 
-  function handleSectionTouchStart(event) {
-    markTouchActivity(event);
-    scheduleRestAlignmentCheck(TOUCH_ACTIVITY_STALE_MS + 320);
-    if (event.touches.length !== 1) {
-      touchStartSegmentKind = '';
+  function revealCatalogControl(control) {
+    if (!numberNav || !numberNav.contains(control)) {
       return;
     }
-    touchStartX = event.touches[0].clientX;
-    touchStartY = event.touches[0].clientY;
-    touchSectionHandled = false;
-    touchStartSegmentKind = getEventSegmentKind(event);
+    control.scrollIntoView({
+      behavior: reduceMotion.matches ? 'auto' : 'smooth',
+      block: 'nearest',
+      inline: 'center'
+    });
   }
 
-  function handleSectionTouchMove(event) {
-    markTouchActivity(event);
-    if (event.touches.length !== 1) {
-      return;
-    }
-    const touch = event.touches[0];
-    const deltaX = touchStartX - touch.clientX;
-    const deltaY = touchStartY - touch.clientY;
-    const absDeltaX = Math.abs(deltaX);
-    const absDeltaY = Math.abs(deltaY);
-    if (isNumberNavTarget(event.target) && absDeltaX >= TOUCH_INTENT_THRESHOLD && absDeltaX > absDeltaY) {
-      return;
-    }
-    if (event.cancelable) {
-      event.preventDefault();
-    }
-    if (absDeltaY < TOUCH_INTENT_THRESHOLD || absDeltaY < absDeltaX * 1.25) {
-      return;
-    }
-    const direction = deltaY > 0 ? 1 : -1;
-    const preferredSegmentKind = touchStartSegmentKind || getEventSegmentKind(event);
-    if (!canNavigateInDirection(direction, event, preferredSegmentKind)) {
-      return;
-    }
-    if (touchSectionHandled || absDeltaY < TOUCH_SECTION_THRESHOLD) {
-      return;
-    }
-    touchSectionHandled = navigateSectionByDirection(direction, event, preferredSegmentKind);
+  function handleCatalogActiveChange() {
+    updatePaginationStatus(currentLocale);
   }
 
-  function handleSectionTouchEnd(event) {
-    if (event) {
-      markTouchActivity(event);
-    } else {
-      touchPointsActive = 0;
-    }
-    if (touchSectionHandled) {
-      if (pendingCatalogSection) {
-        sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);
-        settleCatalogSection(pendingCatalogSection, TOUCH_MOMENTUM_SETTLE_MS);
-      } else if (pendingPaginationScroll) {
-        sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);
-        settlePaginationScroll(TOUCH_MOMENTUM_SETTLE_MS);
-      } else if (pendingFooterScroll) {
-        sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);
-        settleFooterScroll(TOUCH_MOMENTUM_SETTLE_MS);
-      }
-    }
-    touchSectionHandled = false;
-    touchStartSegmentKind = '';
-    if (touchPointsActive === 0) {
-      scheduleRestAlignmentCheck(TOUCH_MOMENTUM_SETTLE_MS + 200);
-    }
+  function scrollToCatalogSection(section) {
+    return Boolean(sectionNavigation && section && sectionNavigation.goTo(section.id, {
+      source: 'section-control'
+    }));
   }
 
-  function handlePaginationClick() {
-    scrollToPagination();
+  function scrollToPagination(options = {}) {
+    return Boolean(sectionNavigation && paginationTarget && sectionNavigation.goTo(paginationTarget.id, {
+      ...options,
+      source: 'pagination-control'
+    }));
+  }
+
+  function scrollToFooter(options = {}) {
+    return Boolean(sectionNavigation && footerTarget && sectionNavigation.goTo(footerTarget.id, {
+      ...options,
+      source: 'footer-control'
+    }));
   }
 
   function refreshSectionObserver() {
-    collectSections();
-    if (sectionObserver) {
-      sectionObserver.disconnect();
-      sectionObserver = null;
+    if (sectionNavigation) {
+      sectionNavigation.refresh();
     }
-    if (!('IntersectionObserver' in window)) {
-      updateSectionNav(activeNavTarget || activeSectionTarget);
-      return;
-    }
-    sectionObserver = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-      entries.forEach((entry) => {
-        entry.target.classList.toggle('is-visible', entry.isIntersecting);
-      });
-      if (isSectionNavigationLocked() && activeNavTarget) {
-        updateSectionNav(activeNavTarget);
-        return;
-      }
-      if (isFooterNavPosition()) {
-        updateFooterNav();
-        return;
-      }
-      if (isPaginationNavPosition()) {
-        updatePaginationNav();
-        return;
-      }
-      if (visible && visible.target.id) {
-        updateSectionNav(visible.target.id);
-      }
-    }, { threshold: [0.42, 0.58, 0.72] });
-    sections.forEach((section) => sectionObserver.observe(section));
-    updateSectionNav(activeNavTarget || activeSectionTarget);
   }
 
   function setupSectionNavigation() {
-    collectSections();
-    if (sections.length > 0) {
-      document.documentElement.classList.add('catalog-scroll-managed');
-    }
+    const index = window.MDWSegmentedScroll.createStopIndex({
+      initialId: searchSection ? searchSection.id : ''
+    });
+    const segments = window.MDWSegmentedScroll.createSegmentController({
+      index,
+      track: sectionNav,
+      getControls: getCatalogNavControls,
+      getTargetId: getCatalogNavControlTarget,
+      revealControl: revealCatalogControl
+    });
+    sectionNavigation = window.MDWSegmentedScroll.createScrollController({
+      index,
+      segments,
+      getStops: getCatalogScrollStops,
+      reduceMotion,
+      managedClass: 'catalog-scroll-managed',
+      visibleClass: 'is-visible',
+      shouldYieldWheel: shouldYieldCatalogWheel,
+      shouldYieldTouch: shouldYieldCatalogTouch,
+      onActiveChange: handleCatalogActiveChange,
+      onNavigate: updateCatalogNavigationHistory
+    });
+
     if (searchNavButton) {
       searchNavButton.addEventListener('click', () => {
         scrollToCatalogSection(searchSection);
       });
     }
     if (paginationButton) {
-      paginationButton.addEventListener('click', handlePaginationClick);
+      paginationButton.addEventListener('click', () => {
+        scrollToPagination();
+      });
     }
     if (paginationPrev) {
       paginationPrev.addEventListener('click', () => {
-        const currentPage = Number.parseInt(paginationStatus ? paginationStatus.textContent : '1', 10) || 1;
+        const currentPage = getCurrentProductPage();
         scrollToProductPage(currentPage - 1);
       });
     }
     if (paginationNext) {
       paginationNext.addEventListener('click', () => {
-        const currentPage = Number.parseInt(paginationStatus ? paginationStatus.textContent : '1', 10) || 1;
+        const currentPage = getCurrentProductPage();
         scrollToProductPage(currentPage + 1);
       });
     }
@@ -1077,23 +539,12 @@
       numberNav.addEventListener('scroll', () => {
         const activeControl = numberNav.querySelector('.catalog-section-nav__number.is-active');
         if (activeControl) {
-          updateSectionNavIndicator(activeControl);
+          segments.updateIndicator(activeControl);
         }
       }, { passive: true });
     }
-    window.addEventListener('wheel', handleSectionWheel, { passive: false });
-    window.addEventListener('scroll', syncFooterNavState, { passive: true });
-    if ('ontouchstart' in window || window.matchMedia('(any-pointer: coarse)').matches) {
-      window.addEventListener('scroll', () => scheduleRestAlignmentCheck(260), { passive: true });
-    }
-    window.addEventListener('touchstart', handleSectionTouchStart, { passive: true });
-    window.addEventListener('touchmove', handleSectionTouchMove, { passive: false });
-    window.addEventListener('touchend', handleSectionTouchEnd, { passive: true });
-    window.addEventListener('touchcancel', handleSectionTouchEnd, { passive: true });
-    window.addEventListener('resize', () => {
-      updateSectionNav(activeNavTarget || activeSectionTarget);
-    });
-    refreshSectionObserver();
+
+    sectionNavigation.mount();
   }
 
   function renderNumberNav(entries, lang) {
@@ -1107,7 +558,7 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'catalog-section-nav__number';
-      button.dataset.sectionTarget = `catalog-product-${slugifyProduct(item, index)}-${index + 1}`;
+      button.dataset.sectionTarget = getProductSectionId(item, index);
       button.setAttribute('aria-label', localeConfig[lang].productNavLabel(index + 1, title));
       button.textContent = String(index + 1);
       button.addEventListener('click', () => {
@@ -1116,6 +567,21 @@
       });
       numberNav.appendChild(button);
     });
+  }
+
+  function getCurrentProductPage(total = getFilteredCatalog().length) {
+    if (total <= 0 || !sectionNavigation) {
+      return 1;
+    }
+    const state = sectionNavigation.getState();
+    const activeContent = sectionNavigation.index.getById(state.activeContentId);
+    const productIndex = activeContent && activeContent.meta
+      ? activeContent.meta.productIndex
+      : Number.NaN;
+    const current = Number.isFinite(productIndex) && productIndex >= 0
+      ? Math.min(productIndex + 1, total)
+      : 1;
+    return Math.max(1, Math.ceil(current / PRODUCT_NAV_PAGE_SIZE));
   }
 
   function updatePaginationStatus(lang = currentLocale) {
@@ -1136,14 +602,7 @@
       }
       return;
     }
-    const activeSection = document.getElementById(activeSectionTarget);
-    const activeProductIndex = activeSection && activeSection.dataset.productIndex
-      ? Number.parseInt(activeSection.dataset.productIndex, 10)
-      : 0;
-    const current = Number.isFinite(activeProductIndex) && activeProductIndex >= 0
-      ? Math.min(activeProductIndex + 1, total)
-      : 1;
-    const currentPage = Math.max(1, Math.ceil(current / PRODUCT_NAV_PAGE_SIZE));
+    const currentPage = getCurrentProductPage(total);
     paginationStatus.textContent = String(currentPage);
     paginationStatus.setAttribute('aria-label', config.paginationCurrentLabel(currentPage, pageCount));
     if (paginationPrev) {
@@ -1239,7 +698,7 @@
       const headerPath = buildAssetPath(item, item.header);
       const iconPath = buildAssetPath(item, item.image);
       const section = document.createElement('section');
-      section.id = `catalog-product-${slugifyProduct(item, index)}-${index + 1}`;
+      section.id = getProductSectionId(item, index);
       section.className = `catalog-section catalog-product-section ${design.className || ''}`.trim();
       section.dataset.catalogSection = 'product';
       section.dataset.productIndex = String(index);

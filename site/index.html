@@ -198,6 +198,7 @@
   <script vite-ignore src="vendor/embla-carousel.umd.js"></script>
   <script vite-ignore src="vendor/embla-carousel-auto-scroll.umd.js"></script>
   <script vite-ignore src="vendor/embla-carousel-wheel-gestures.umd.js"></script>
+  <script vite-ignore src="shared/segmented-scroll.js"></script>
   <script>
     (function () {
       const STORAGE_KEY = 'mdw-lang';
@@ -235,72 +236,28 @@
       const footerNavLink = document.querySelector('.home-section-nav__footer-link');
       const footerTarget = footerNavLink ? document.getElementById(footerNavLink.dataset.footerTarget) : null;
       const sections = Array.from(document.querySelectorAll('[data-home-section]'));
-      const sectionTargetIds = new Set(sectionButtons.map((button) => button.dataset.sectionTarget).filter(Boolean));
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const fineHoverPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
-      const SECTION_NAV_LOCK_MS = 720;
-      const SECTION_SCROLL_SETTLE_MS = 640;
-      const WHEEL_SECTION_THRESHOLD = 86;
-      const WHEEL_RESET_MS = 180;
-      const TOUCH_SECTION_THRESHOLD = 48;
-      const TOUCH_INTENT_THRESHOLD = 10;
-      const TOUCH_MOMENTUM_SETTLE_MS = 520;
-      const SECTION_ALIGN_ENFORCE_FRAMES = 36;
-      const TOUCH_ACTIVITY_STALE_MS = 1100;
       const PRODUCT_CAROUSEL_SPEED = 26;
       const PRODUCT_CAROUSEL_MAX_SETS = 8;
       const PRODUCT_CAROUSEL_RESUME_DELAY_MS = 900;
       let productCatalog = [];
-      let activeSectionTarget = sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : '';
-      let activeNavTarget = activeSectionTarget;
-      let sectionNavLockUntil = 0;
-      let pendingHomeSection = null;
-      let pendingFooterScroll = false;
-      let sectionSettleTimer = null;
-      let sectionAlignFrame = null;
-      let restAlignTimer = null;
-      let restSampleScrollY = null;
       let productCarouselEmbla = null;
       let productCarouselSetRefreshTimer = null;
       let productCarouselDragStartLocation = null;
       let productCarouselSuppressClickUntil = 0;
-      let touchPointsActive = 0;
-      let lastTouchEventAt = 0;
-      let wheelDeltaY = 0;
-      let wheelResetTimer = null;
-      let touchStartX = 0;
-      let touchStartY = 0;
-      let touchSectionHandled = false;
+      let sectionNavigation = null;
       let currentLang = resolveLocale(readStoredLanguage() || 'ja');
 
-      function syncSectionViewportSize() {
-        const viewport = window.visualViewport;
-        const width = Math.round(viewport && viewport.width ? viewport.width : window.innerWidth);
-        const height = Math.round(viewport && viewport.height ? viewport.height : window.innerHeight);
-        if (width > 0) {
-          document.documentElement.style.setProperty('--home-section-width', `${width}px`);
-        }
-        if (height > 0) {
-          document.documentElement.style.setProperty('--home-section-height', `${height}px`);
-        }
-      }
+      const sectionViewport = window.MDWSegmentedScroll.createViewportCssSync({
+        rootElement: document.documentElement,
+        widthProperty: '--home-section-width',
+        heightProperty: '--home-section-height',
+        onChange: scheduleProductCarouselSetRefresh
+      });
 
       function setupSectionViewportSizing() {
-        syncSectionViewportSize();
-        window.addEventListener('resize', () => {
-          syncSectionViewportSize();
-          scheduleProductCarouselSetRefresh();
-        });
-        window.addEventListener('orientationchange', () => {
-          syncSectionViewportSize();
-          scheduleProductCarouselSetRefresh();
-        });
-        if (window.visualViewport) {
-          window.visualViewport.addEventListener('resize', () => {
-            syncSectionViewportSize();
-            scheduleProductCarouselSetRefresh();
-          });
-        }
+        sectionViewport.mount();
       }
 
       function recordFallbacks() {
@@ -703,468 +660,103 @@
         });
       }
 
-      function updateSectionNav(targetId) {
-        if (sectionTargetIds.has(targetId)) {
-          activeSectionTarget = targetId;
+      function getHomeScrollStops() {
+        const stops = sections.map((section) => ({
+          id: section.id,
+          element: section,
+          align: 'start',
+          role: 'content',
+          observe: true
+        }));
+        if (footerTarget) {
+          stops.push({
+            id: footerTarget.id,
+            element: footerTarget,
+            align: 'document-end',
+            role: 'auxiliary',
+            contentAnchor: 'previous',
+            observe: false
+          });
         }
-        if (targetId) {
-          activeNavTarget = targetId;
-        }
-        const visibleTarget = activeNavTarget || activeSectionTarget;
-        let activeControl = null;
-        sectionButtons.forEach((button) => {
-          const active = button.dataset.sectionTarget === visibleTarget;
-          button.classList.toggle('is-active', active);
-          button.setAttribute('aria-current', active ? 'true' : 'false');
-          if (active) {
-            activeControl = button;
-          }
-        });
-        if (footerNavLink) {
-          const active = footerNavLink.dataset.footerTarget === visibleTarget;
-          footerNavLink.classList.toggle('is-active', active);
-          footerNavLink.setAttribute('aria-current', active ? 'true' : 'false');
-          if (active) {
-            activeControl = footerNavLink;
-          }
-        }
-        if (activeControl && sectionNav) {
-          sectionNav.style.setProperty('--segment-x', `${activeControl.offsetLeft}px`);
-          sectionNav.style.setProperty('--segment-width', `${activeControl.offsetWidth}px`);
-        }
+        return stops;
       }
 
-      function getSectionIndexById(sectionId) {
-        return sections.findIndex((section) => section.id === sectionId);
+      function getHomeNavControls() {
+        return [...sectionButtons, footerNavLink].filter(Boolean);
       }
 
-      function getFooterAdjacentSection() {
-        return sections.length > 0 ? sections[sections.length - 1] : null;
+      function getHomeNavControlTarget(control) {
+        return control.dataset.sectionTarget || control.dataset.footerTarget || '';
       }
 
-      function updateFooterNav() {
-        if (!footerTarget) {
+      function updateHomeNavigationHistory({ stop, options }) {
+        if (!window.history) {
           return;
         }
-        const adjacentSection = getFooterAdjacentSection();
-        if (adjacentSection) {
-          activeSectionTarget = adjacentSection.id;
+        if (stop.role === 'auxiliary') {
+          if (options.updateHistory !== false && window.history.pushState) {
+            window.history.pushState(null, '', '#' + stop.id);
+          }
+          return;
         }
-        updateSectionNav(footerTarget.id);
+        if (window.location.hash === '#home-footer' && window.history.replaceState) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
       }
 
-      function getDirectionalSection(direction) {
-        if (direction === 0 || sections.length === 0) {
-          return null;
-        }
-        if (isFooterNavPosition()) {
-          return direction > 0 ? null : getFooterAdjacentSection();
-        }
-        const tolerance = Math.max(4, Math.round(window.innerHeight * 0.06));
-        if (direction > 0) {
-          const nextVisible = sections.find((section) => section.getBoundingClientRect().top > tolerance);
-          if (nextVisible) {
-            return nextVisible;
-          }
-          const activeIndex = getSectionIndexById(activeSectionTarget);
-          return activeIndex >= 0 && activeIndex < sections.length - 1 ? sections[activeIndex + 1] : null;
-        }
-        for (let index = sections.length - 1; index >= 0; index -= 1) {
-          if (sections[index].getBoundingClientRect().top < -tolerance) {
-            return sections[index];
-          }
-        }
-        const activeIndex = getSectionIndexById(activeSectionTarget);
-        return activeIndex > 0 ? sections[activeIndex - 1] : null;
+      function shouldYieldHomeWheel(event, gesture) {
+        return isProductCarouselEvent(event) && (gesture.shiftKey || gesture.horizontalDominant);
       }
 
-      function canNavigateInDirection(direction) {
-        if (getDirectionalSection(direction)) {
+      function shouldYieldHomeTouch(event, gesture) {
+        if (!isProductCarouselEvent(event)) {
+          return false;
+        }
+        const intentThreshold = window.MDWSegmentedScroll.DEFAULT_TIMINGS.touchIntentThreshold;
+        if (gesture.absDeltaX >= intentThreshold && gesture.horizontalDominant) {
           return true;
         }
-        return direction > 0 && Boolean(footerTarget) && !isFooterNavPosition();
-      }
-
-      function getDocumentBottomScrollTop() {
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-        const documentHeight = Math.max(
-          document.body.scrollHeight,
-          document.documentElement.scrollHeight
-        );
-        return Math.max(0, Math.round(documentHeight - viewportHeight));
-      }
-
-      function clearWheelAccumulation() {
-        wheelDeltaY = 0;
-        if (wheelResetTimer !== null) {
-          window.clearTimeout(wheelResetTimer);
-          wheelResetTimer = null;
-        }
-      }
-
-      function isSectionNavigationLocked() {
-        return Date.now() < sectionNavLockUntil;
-      }
-
-      function getSectionScrollTop(section) {
-        return Math.round(section.getBoundingClientRect().top + window.scrollY);
-      }
-
-      function clearSectionSettleTimer() {
-        if (sectionSettleTimer !== null) {
-          window.clearTimeout(sectionSettleTimer);
-          sectionSettleTimer = null;
-        }
-      }
-
-      function cancelScrollAlignment() {
-        if (sectionAlignFrame !== null) {
-          window.cancelAnimationFrame(sectionAlignFrame);
-          sectionAlignFrame = null;
-        }
-      }
-
-      function enforceScrollAlignment(readTargetTop) {
-        // iOS Safari は慣性スクロール中のプログラムスクロールを無視することがあるため、
-        // 一発の scrollTo ではなく数フレームにわたり整合するまで再適用する。
-        cancelScrollAlignment();
-        let framesLeft = SECTION_ALIGN_ENFORCE_FRAMES;
-        const step = () => {
-          sectionAlignFrame = null;
-          const targetTop = readTargetTop();
-          if (targetTop === null) {
-            return;
-          }
-          if (Math.abs(window.scrollY - targetTop) > 1) {
-            window.scrollTo({
-              top: targetTop,
-              behavior: 'auto'
-            });
-          }
-          framesLeft -= 1;
-          if (framesLeft > 0) {
-            sectionAlignFrame = window.requestAnimationFrame(step);
-          }
-        };
-        step();
-      }
-
-      function isViewportZoomed() {
-        return Boolean(window.visualViewport && window.visualViewport.scale > 1.02);
-      }
-
-      function scheduleRestAlignmentCheck(delay) {
-        if (restAlignTimer !== null) {
-          window.clearTimeout(restAlignTimer);
-        }
-        restAlignTimer = window.setTimeout(runRestAlignmentCheck, delay);
-      }
-
-      function runRestAlignmentCheck() {
-        // マルチタッチやシステムジェスチャなど JS が関与しない経路でスクロールが
-        // 起きても、静止位置は必ずセクション境界かフッター末尾になるよう常時監視する。
-        restAlignTimer = null;
-        // 長押し等でシステムがジェスチャを奪うと touchend/touchcancel が届かないまま
-        // スクロールされることがある。タッチイベントが一定時間途絶えていたら
-        // 指の情報は無効とみなして補正を進める。
-        const touchRecentlyActive = touchPointsActive > 0 && (Date.now() - lastTouchEventAt) < TOUCH_ACTIVITY_STALE_MS;
-        if (touchRecentlyActive || isSectionNavigationLocked() || pendingHomeSection || pendingFooterScroll || sectionAlignFrame !== null) {
-          restSampleScrollY = null;
-          scheduleRestAlignmentCheck(320);
-          return;
-        }
-        touchPointsActive = 0;
-        if (isViewportZoomed() || sections.length === 0) {
-          return;
-        }
-        const current = window.scrollY;
-        // 進行中のアニメーションや遅いドラッグと争わないよう、同じ位置を
-        // 2回連続で観測してから(= 実際に静止してから)補正する。
-        if (restSampleScrollY === null || Math.abs(restSampleScrollY - current) > 2) {
-          restSampleScrollY = current;
-          scheduleRestAlignmentCheck(220);
-          return;
-        }
-        restSampleScrollY = null;
-        let nearestSection = null;
-        let nearestDistance = Infinity;
-        sections.forEach((section) => {
-          const distance = Math.abs(getSectionScrollTop(section) - current);
-          if (distance < nearestDistance) {
-            nearestDistance = distance;
-            nearestSection = section;
-          }
-        });
-        let alignToFooter = false;
-        if (footerTarget) {
-          const footerDistance = Math.abs(getDocumentBottomScrollTop() - current);
-          if (footerDistance < nearestDistance) {
-            nearestDistance = footerDistance;
-            alignToFooter = true;
-          }
-        }
-        const tolerance = Math.max(4, Math.round(window.innerHeight * 0.02));
-        if (nearestDistance > tolerance) {
-          sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : 480);
-          if (alignToFooter) {
-            enforceScrollAlignment(() => getDocumentBottomScrollTop());
-          } else {
-            const target = nearestSection;
-            enforceScrollAlignment(() => getSectionScrollTop(target));
-          }
-        }
-        if (alignToFooter) {
-          updateFooterNav();
-        } else {
-          updateSectionNav(nearestSection.id);
-        }
-      }
-
-      function settleHomeSection(section, delay = SECTION_SCROLL_SETTLE_MS) {
-        clearSectionSettleTimer();
-        sectionSettleTimer = window.setTimeout(() => {
-          sectionSettleTimer = null;
-          if (!section || pendingHomeSection !== section) {
-            return;
-          }
-          enforceScrollAlignment(() => getSectionScrollTop(section));
-          updateSectionNav(section.id);
-          pendingHomeSection = null;
-        }, reduceMotion.matches ? 80 : delay);
-      }
-
-      function settleFooterScroll(delay = SECTION_SCROLL_SETTLE_MS) {
-        clearSectionSettleTimer();
-        sectionSettleTimer = window.setTimeout(() => {
-          sectionSettleTimer = null;
-          if (!pendingFooterScroll) {
-            return;
-          }
-          pendingFooterScroll = false;
-          enforceScrollAlignment(() => getDocumentBottomScrollTop());
-          updateFooterNav();
-        }, reduceMotion.matches ? 80 : delay);
+        return gesture.absDeltaY < intentThreshold;
       }
 
       function scrollToHomeSection(section) {
-        if (!section) {
-          return;
-        }
-        cancelScrollAlignment();
-        sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : Math.max(SECTION_NAV_LOCK_MS, SECTION_SCROLL_SETTLE_MS + 140));
-        pendingHomeSection = section;
-        pendingFooterScroll = false;
-        updateSectionNav(section.id);
-        if (window.history && window.history.replaceState && window.location.hash === '#home-footer') {
-          window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-        }
-        window.scrollTo({
-          top: getSectionScrollTop(section),
-          behavior: reduceMotion.matches ? 'auto' : 'smooth',
-        });
-        settleHomeSection(section);
+        return Boolean(sectionNavigation && section && sectionNavigation.goTo(section.id, {
+          source: 'section-control'
+        }));
       }
 
       function scrollToFooter(options = {}) {
-        if (!footerTarget) {
-          return;
-        }
-        pendingHomeSection = null;
-        pendingFooterScroll = true;
-        cancelScrollAlignment();
-        clearSectionSettleTimer();
-        sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : Math.max(SECTION_NAV_LOCK_MS, SECTION_SCROLL_SETTLE_MS + 140));
-        updateFooterNav();
-        footerTarget.scrollIntoView({
-          behavior: reduceMotion.matches ? 'auto' : 'smooth',
-          block: 'end'
-        });
-        if (options.updateHistory !== false && window.history && window.history.pushState) {
-          window.history.pushState(null, '', `#${footerTarget.id}`);
-        }
-        settleFooterScroll();
-      }
-
-      function isFooterNavPosition() {
-        if (!footerTarget) {
-          return false;
-        }
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-        const documentHeight = Math.max(
-          document.body.scrollHeight,
-          document.documentElement.scrollHeight
-        );
-        const distanceFromBottom = documentHeight - (window.scrollY + viewportHeight);
-        return distanceFromBottom <= Math.max(12, footerTarget.offsetHeight * 0.4);
-      }
-
-      function syncFooterNavState() {
-        if (isSectionNavigationLocked()) {
-          return;
-        }
-        if (isFooterNavPosition()) {
-          updateFooterNav();
-        }
-      }
-
-      function navigateSectionByDirection(direction, event) {
-        const target = getDirectionalSection(direction);
-        if (!target) {
-          if (direction > 0 && footerTarget && !isFooterNavPosition()) {
-            if (event && event.cancelable) {
-              event.preventDefault();
-            }
-            if (isSectionNavigationLocked()) {
-              return true;
-            }
-            clearWheelAccumulation();
-            scrollToFooter({ updateHistory: false });
-            return true;
-          }
-          clearWheelAccumulation();
-          return false;
-        }
-        if (event && event.cancelable) {
-          event.preventDefault();
-        }
-        if (isSectionNavigationLocked()) {
-          return true;
-        }
-        clearWheelAccumulation();
-        scrollToHomeSection(target);
-        return true;
-      }
-
-      function normalizeWheelDelta(event) {
-        if (event.deltaMode === 1) {
-          return event.deltaY * 16;
-        }
-        if (event.deltaMode === 2) {
-          return event.deltaY * window.innerHeight;
-        }
-        return event.deltaY;
-      }
-
-      function handleSectionWheel(event) {
-        if (isProductCarouselEvent(event) && (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY))) {
-          // 横優勢のホイールは WheelGestures プラグインがカルーセルを動かす。
-          return;
-        }
-        const deltaY = normalizeWheelDelta(event);
-        if (Math.abs(deltaY) < 1) {
-          return;
-        }
-        const direction = deltaY > 0 ? 1 : -1;
-        if (!canNavigateInDirection(direction)) {
-          clearWheelAccumulation();
-          return;
-        }
-        if (event.cancelable) {
-          event.preventDefault();
-        }
-        if (isSectionNavigationLocked()) {
-          return;
-        }
-        if (wheelDeltaY !== 0 && Math.sign(wheelDeltaY) !== direction) {
-          wheelDeltaY = 0;
-        }
-        wheelDeltaY += deltaY;
-        if (wheelResetTimer !== null) {
-          window.clearTimeout(wheelResetTimer);
-        }
-        wheelResetTimer = window.setTimeout(clearWheelAccumulation, WHEEL_RESET_MS);
-        if (Math.abs(wheelDeltaY) >= WHEEL_SECTION_THRESHOLD) {
-          navigateSectionByDirection(direction, event);
-        }
-      }
-
-      function markTouchActivity(event) {
-        lastTouchEventAt = Date.now();
-        touchPointsActive = event.touches ? event.touches.length : 0;
-      }
-
-      function handleSectionTouchStart(event) {
-        markTouchActivity(event);
-        // システムに奪われたジェスチャは以降のイベントが一切届かないことがあるため、
-        // タッチ開始時点で stale 判定後の検査を予約しておく。
-        scheduleRestAlignmentCheck(TOUCH_ACTIVITY_STALE_MS + 320);
-        if (event.touches.length !== 1) {
-          return;
-        }
-        touchStartX = event.touches[0].clientX;
-        touchStartY = event.touches[0].clientY;
-        touchSectionHandled = false;
-      }
-
-      function handleSectionTouchMove(event) {
-        markTouchActivity(event);
-        if (event.touches.length !== 1) {
-          return;
-        }
-        const touch = event.touches[0];
-        const deltaX = touchStartX - touch.clientX;
-        const deltaY = touchStartY - touch.clientY;
-        const absDeltaX = Math.abs(deltaX);
-        const absDeltaY = Math.abs(deltaY);
-        if (isProductCarouselEvent(event)) {
-          if (absDeltaX >= TOUCH_INTENT_THRESHOLD && absDeltaX > absDeltaY) {
-            // 横方向のドラッグは Embla が制御する(preventDefault も Embla 側で行う)。
-            return;
-          }
-          if (absDeltaY < TOUCH_INTENT_THRESHOLD) {
-            return;
-          }
-        }
-        // 最初の touchmove から必ず preventDefault する。iOS Safari は一度ネイティブ
-        // スクロールが始まると以降の touchmove を cancelable:false にするため、
-        // 意図判定を待ってから preventDefault しても縦パンを止められない。
-        if (event.cancelable) {
-          event.preventDefault();
-        }
-        if (absDeltaY < TOUCH_INTENT_THRESHOLD || absDeltaY < absDeltaX * 1.25) {
-          return;
-        }
-        const direction = deltaY > 0 ? 1 : -1;
-        if (!canNavigateInDirection(direction)) {
-          return;
-        }
-        if (touchSectionHandled || absDeltaY < TOUCH_SECTION_THRESHOLD) {
-          return;
-        }
-        touchSectionHandled = navigateSectionByDirection(direction);
-      }
-
-      function handleSectionTouchEnd(event) {
-        if (event) {
-          markTouchActivity(event);
-        } else {
-          touchPointsActive = 0;
-        }
-        if (touchSectionHandled) {
-          if (pendingHomeSection) {
-            sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);
-            settleHomeSection(pendingHomeSection, TOUCH_MOMENTUM_SETTLE_MS);
-          } else if (pendingFooterScroll) {
-            sectionNavLockUntil = Date.now() + (reduceMotion.matches ? 160 : TOUCH_MOMENTUM_SETTLE_MS + 140);
-            settleFooterScroll(TOUCH_MOMENTUM_SETTLE_MS);
-          }
-        }
-        touchSectionHandled = false;
-        if (touchPointsActive === 0) {
-          scheduleRestAlignmentCheck(TOUCH_MOMENTUM_SETTLE_MS + 200);
-        }
+        return Boolean(sectionNavigation && footerTarget && sectionNavigation.goTo(footerTarget.id, {
+          ...options,
+          source: 'footer-control'
+        }));
       }
 
       function setupSectionNavigation() {
-        if (sections.length > 0) {
-          document.documentElement.classList.add('home-scroll-managed');
-        }
+        const index = window.MDWSegmentedScroll.createStopIndex({
+          initialId: sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : ''
+        });
+        const segments = window.MDWSegmentedScroll.createSegmentController({
+          index,
+          track: sectionNav,
+          getControls: getHomeNavControls,
+          getTargetId: getHomeNavControlTarget
+        });
+        sectionNavigation = window.MDWSegmentedScroll.createScrollController({
+          index,
+          segments,
+          getStops: getHomeScrollStops,
+          reduceMotion,
+          managedClass: 'home-scroll-managed',
+          visibleClass: 'is-visible',
+          shouldYieldWheel: shouldYieldHomeWheel,
+          shouldYieldTouch: shouldYieldHomeTouch,
+          onNavigate: updateHomeNavigationHistory
+        });
+
         sectionButtons.forEach((button) => {
           button.addEventListener('click', () => {
             const section = document.getElementById(button.dataset.sectionTarget);
-            if (!section) {
-              return;
-            }
             scrollToHomeSection(section);
           });
         });
@@ -1187,45 +779,7 @@
           });
         }
 
-        if ('IntersectionObserver' in window) {
-          const observer = new IntersectionObserver((entries) => {
-            const visible = entries
-              .filter((entry) => entry.isIntersecting)
-              .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-            entries.forEach((entry) => {
-              entry.target.classList.toggle('is-visible', entry.isIntersecting);
-            });
-            if (isSectionNavigationLocked() && activeNavTarget) {
-              updateSectionNav(activeNavTarget);
-              return;
-            }
-            if (isFooterNavPosition()) {
-              updateFooterNav();
-              return;
-            }
-            if (visible && visible.target.id) {
-              updateSectionNav(visible.target.id);
-            }
-          }, { threshold: [0.42, 0.58, 0.72] });
-          sections.forEach((section) => observer.observe(section));
-        }
-
-        window.addEventListener('wheel', handleSectionWheel, { passive: false });
-        window.addEventListener('scroll', syncFooterNavState, { passive: true });
-        if ('ontouchstart' in window || window.matchMedia('(any-pointer: coarse)').matches) {
-          window.addEventListener('scroll', () => scheduleRestAlignmentCheck(260), { passive: true });
-        }
-        window.addEventListener('touchstart', handleSectionTouchStart, { passive: true });
-        window.addEventListener('touchmove', handleSectionTouchMove, { passive: false });
-        window.addEventListener('touchend', handleSectionTouchEnd, { passive: true });
-        window.addEventListener('touchcancel', handleSectionTouchEnd, { passive: true });
-        updateSectionNav(sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : '');
-        window.addEventListener('resize', () => {
-          const active = sectionButtons.find((button) => button.classList.contains('is-active'));
-          if (active) {
-            updateSectionNav(active.dataset.sectionTarget);
-          }
-        });
+        sectionNavigation.mount();
       }
 
       function loadFeaturedProducts() {

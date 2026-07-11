@@ -7,7 +7,7 @@ const SITE_ROOT = resolve(ROOT, 'site');
 const OUT_DIR = resolve(ROOT, 'dist');
 const HTML_INPUTS = collectHtmlInputs(SITE_ROOT);
 const ROOT_STATIC_FILES = ['theme.css', 'theme.js', 'footer.js'];
-const STATIC_DIRS = ['partials', 'products', 'vendor'];
+const STATIC_DIRS = ['partials', 'products', 'vendor', 'shared'];
 
 export default defineConfig({
   root: SITE_ROOT,
