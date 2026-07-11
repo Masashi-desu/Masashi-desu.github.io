@@ -1,0 +1,230 @@
+name: Sync TypeFetch Sparkle appcast
+run-name: "TypeFetch appcast ${{ inputs.operation }} ${{ inputs.version }} (${{ inputs.build }}) @ ${{ inputs.source_sha }} #${{ inputs.request_id }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Validate access without mutation, or synchronize and deploy
+        required: true
+        type: choice
+        options:
+          - preflight
+          - sync
+      version:
+        description: TypeFetch MARKETING_VERSION in x.y.z format
+        required: true
+        type: string
+      build:
+        description: TypeFetch CURRENT_PROJECT_VERSION
+        required: true
+        type: string
+      release_url:
+        description: Published itch.io release URL
+        required: true
+        type: string
+      source_sha:
+        description: TypeFetch release commit SHA
+        required: true
+        type: string
+      request_id:
+        description: Unique TypeFetch workflow run and attempt identifier
+        required: true
+        type: string
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate the appcast request without mutation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout website main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate request and generate a temporary appcast
+        env:
+          TYPEFETCH_OPERATION: ${{ inputs.operation }}
+          TYPEFETCH_VERSION: ${{ inputs.version }}
+          TYPEFETCH_BUILD: ${{ inputs.build }}
+          TYPEFETCH_RELEASE_URL: ${{ inputs.release_url }}
+          TYPEFETCH_SOURCE_SHA: ${{ inputs.source_sha }}
+          TYPEFETCH_REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          case "${TYPEFETCH_OPERATION}" in
+            preflight|sync) ;;
+            *)
+              echo "::error::operation must be preflight or sync."
+              exit 1
+              ;;
+          esac
+          if [[ ! "${TYPEFETCH_REQUEST_ID}" =~ ^[0-9]+-[1-9][0-9]*$ ]]; then
+            echo "::error::request_id must use the <run_id>-<run_attempt> format."
+            exit 1
+          fi
+
+          temporary_appcast="${RUNNER_TEMP}/typefetch-appcast.xml"
+          cp site/products/TypeFetch/appcast.xml "${temporary_appcast}"
+          ruby tools/sync-typefetch-appcast.rb \
+            --version "${TYPEFETCH_VERSION}" \
+            --build "${TYPEFETCH_BUILD}" \
+            --release-url "${TYPEFETCH_RELEASE_URL}" \
+            --source-sha "${TYPEFETCH_SOURCE_SHA}" \
+            --appcast "${temporary_appcast}"
+
+      - name: Test appcast generator
+        run: ruby tests/typefetch-appcast-sync.rb
+
+      - name: Verify preflight left the checkout unchanged
+        run: git diff --exit-code
+
+  sync:
+    name: Generate and commit the appcast
+    needs: validate
+    if: ${{ inputs.operation == 'sync' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      commit_sha: ${{ steps.commit.outputs.commit_sha }}
+    steps:
+      - name: Checkout website main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Generate TypeFetch appcast
+        env:
+          TYPEFETCH_VERSION: ${{ inputs.version }}
+          TYPEFETCH_BUILD: ${{ inputs.build }}
+          TYPEFETCH_RELEASE_URL: ${{ inputs.release_url }}
+          TYPEFETCH_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          ruby tools/sync-typefetch-appcast.rb \
+            --version "${TYPEFETCH_VERSION}" \
+            --build "${TYPEFETCH_BUILD}" \
+            --release-url "${TYPEFETCH_RELEASE_URL}" \
+            --source-sha "${TYPEFETCH_SOURCE_SHA}"
+
+      - name: Test appcast generator
+        run: ruby tests/typefetch-appcast-sync.rb
+
+      - name: Commit synchronized appcast
+        id: commit
+        env:
+          TYPEFETCH_VERSION: ${{ inputs.version }}
+          TYPEFETCH_BUILD: ${{ inputs.build }}
+          TYPEFETCH_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if ! git diff --quiet -- site/products/TypeFetch/appcast.xml; then
+            git add site/products/TypeFetch/appcast.xml
+            git commit \
+              -m "Sync TypeFetch appcast ${TYPEFETCH_VERSION} (${TYPEFETCH_BUILD})" \
+              -m "TypeFetch source: ${TYPEFETCH_SOURCE_SHA}"
+            git push origin HEAD:main
+          fi
+
+          git fetch origin +refs/heads/main:refs/remotes/origin/main
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+            echo "::error::Website main advanced while the appcast was being prepared."
+            exit 1
+          fi
+
+          echo "commit_sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Build the committed website revision
+    needs: sync
+    if: ${{ inputs.operation == 'sync' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+    steps:
+      - name: Checkout synchronized website commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.sync.outputs.commit_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install website dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build website
+        run: npm run build
+
+      - name: Verify canonical and legacy appcast outputs
+        run: npm run test:typefetch-appcast-output
+
+      - name: Verify build used the synchronized commit
+        env:
+          EXPECTED_COMMIT: ${{ needs.sync.outputs.commit_sha }}
+        run: |
+          [[ "$(git rev-parse HEAD)" == "${EXPECTED_COMMIT}" ]]
+          git diff --exit-code
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy synchronized appcast to Pages
+    needs:
+      - sync
+      - build
+    if: ${{ inputs.operation == 'sync' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Record synchronized version
+        env:
+          TYPEFETCH_VERSION: ${{ inputs.version }}
+          TYPEFETCH_BUILD: ${{ inputs.build }}
+          TYPEFETCH_SOURCE_SHA: ${{ inputs.source_sha }}
+          TYPEFETCH_REQUEST_ID: ${{ inputs.request_id }}
+          WEBSITE_COMMIT: ${{ needs.sync.outputs.commit_sha }}
+        run: |
+          {
+            echo "### TypeFetch appcast synchronized"
+            echo "- Version: ${TYPEFETCH_VERSION} (${TYPEFETCH_BUILD})"
+            echo "- TypeFetch source: ${TYPEFETCH_SOURCE_SHA}"
+            echo "- Request: ${TYPEFETCH_REQUEST_ID}"
+            echo "- Website commit: ${WEBSITE_COMMIT}"
+            echo "- Canonical: https://masashi-desu.github.io/products/TypeFetch/appcast.xml"
+            echo "- Legacy: https://masashi-desu.github.io/works/products/TypeFetch/appcast.xml"
+          } >> "${GITHUB_STEP_SUMMARY}"

@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -27,7 +27,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci --ignore-scripts
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -36,6 +36,9 @@ jobs:
 
       - name: Build with Vite
         run: npm run build
+
+      - name: Verify canonical and legacy TypeFetch appcasts
+        run: npm run test:typefetch-appcast-output
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
