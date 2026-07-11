@@ -8,6 +8,8 @@ const OUT_DIR = resolve(ROOT, 'dist');
 const HTML_INPUTS = collectHtmlInputs(SITE_ROOT);
 const ROOT_STATIC_FILES = ['theme.css', 'theme.js', 'footer.js'];
 const STATIC_DIRS = ['partials', 'products', 'vendor'];
+const TYPEFETCH_APPCAST_SOURCE = resolve(SITE_ROOT, 'products', 'TypeFetch', 'appcast.xml');
+const TYPEFETCH_LEGACY_APPCAST = resolve(OUT_DIR, 'works', 'products', 'TypeFetch', 'appcast.xml');
 
 export default defineConfig({
   root: SITE_ROOT,
@@ -65,6 +67,9 @@ function copyStaticSiteAssets() {
           excludeHtml: dir === 'products',
         });
       }
+
+      // 旧 TypeFetch 1.1.0 が参照する URL を維持し、次回更新を発見できるようにします。
+      copyFileIfExists(TYPEFETCH_APPCAST_SOURCE, TYPEFETCH_LEGACY_APPCAST);
     },
   };
 }

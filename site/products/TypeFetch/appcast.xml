@@ -9,10 +9,12 @@
     <language>en</language>
     <item>
       <title>Version 1.1.0</title>
-      <sparkle:version>4</sparkle:version>
-      <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
       <link>https://masashi-desu.itch.io/typefetch</link>
-      <pubDate>Fri, 23 Jan 2026 00:00:00 +0000</pubDate>
+      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+      <sparkle:version>4</sparkle:version>
+      <sparkle:releaseNotesLink>https://masashi-desu.itch.io/typefetch</sparkle:releaseNotesLink>
+      <sparkle:informationalUpdate/>
+      <dc:identifier>TypeFetch@3dea7166af34defbeedbfa7f14a1048a99a49cf2</dc:identifier>
     </item>
   </channel>
 </rss>
