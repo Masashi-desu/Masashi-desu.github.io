@@ -1,12 +1,13 @@
 /**
  * テスト概要:
- *  - 目的: Surround1x0-AKDK の4段セグメント、Three.js描画、テーマ連動モデル、レスポンシブ配置を検証する。
+ *  - 目的: Surround1x0-AKDK の4つのコンテンツとフッタ設定の5停止位置、Three.js描画、テーマ連動モデル、レスポンシブ配置を検証する。
  *  - 期待値: 各セグメントが1 viewportに収まり、02/03で注目する片側ユニットが切り替わり、
  *    移動方式は二次ベジェ曲線とsmootherstep減速になり、スケールのオーバーシュートは発生しない。
  *    ダーク時はBlack GLBと赤いアクセント、ライト時はWhite GLBと
  *    グレーのアクセントが選択される。全セグメントの文字レイヤーは3D canvasより手前に置く。
  *    第1セグメントは中間幅で左右ユニットの距離を縮め、
- *    390px幅でも横スクロールや主要導線の欠けが発生しない。
+ *    390px幅でも横スクロールや主要導線の欠けが発生しない。歯車セグメントはフッタを文書末尾に表示し、
+ *    04の3Dシーンを維持して同一シーンのモーションを再発火させない。
  *  - 検証方法: 一時ポートでViteを起動し、Playwright Chromiumからページを開く。公開された3D状態、
  *    セグメント位置、テーマselect、DOMRect、scrollWidthをデスクトップとモバイルの両方で計測する。
  */
@@ -87,6 +88,14 @@ async function clickSegment(page, number) {
     document.body.dataset.surroundScene === String(expected.index) &&
     Math.abs(document.getElementById(expected.id).getBoundingClientRect().top) <= 1
   ), { id, index: number - 1 });
+}
+
+async function clickFooter(page) {
+  await page.locator('[data-surround-footer-target="surround-footer"]').click();
+  await page.waitForFunction(() => (
+    document.body.dataset.surroundStop === 'surround-footer' &&
+    Math.abs(document.documentElement.scrollHeight - window.innerHeight - window.scrollY) <= 1
+  ));
 }
 
 async function readLayout(page) {
@@ -263,6 +272,34 @@ async function main() {
       actionOrder
     );
 
+    await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
+    const posesBeforeFooter = await page.evaluate(() => window.__SURROUND_3D__.currentPoses);
+    await clickFooter(page);
+    await page.waitForTimeout(240);
+    const footerState = await page.evaluate(() => {
+      const control = document.querySelector('[data-surround-footer-target="surround-footer"]');
+      return {
+        active: control.classList.contains('is-active'),
+        ariaCurrent: control.getAttribute('aria-current'),
+        hash: window.location.hash,
+        scene: document.body.dataset.surroundScene,
+        stop: document.body.dataset.surroundStop,
+        motionActive: window.__SURROUND_3D__.motionActive,
+        poses: window.__SURROUND_3D__.currentPoses
+      };
+    });
+    assert(
+      footerState.active && footerState.ariaCurrent === 'true' && footerState.hash === '#surround-footer' &&
+      footerState.scene === '3' && footerState.stop === 'surround-footer',
+      'Footer settings segment did not activate at document end while preserving scene 04',
+      footerState
+    );
+    assert(
+      footerState.motionActive === false && JSON.stringify(footerState.poses) === JSON.stringify(posesBeforeFooter),
+      'Footer settings segment restarted motion for the unchanged scene 04',
+      { before: posesBeforeFooter, after: footerState }
+    );
+
     await page.locator('.theme-select').selectOption('light');
     await page.waitForFunction(() => document.documentElement.dataset.theme === 'light' && window.__SURROUND_3D__?.theme === 'light');
     await page.waitForFunction(() => (
@@ -300,6 +337,9 @@ async function main() {
       layout = await readLayout(page);
       assertHorizontalFit(layout, `Mobile segment 0${number}`);
     }
+    await clickFooter(page);
+    layout = await readLayout(page);
+    assertHorizontalFit(layout, 'Mobile footer settings');
     assert(layout.primaryAction.top >= 0 && layout.primaryAction.bottom <= layout.viewport.height, 'Mobile repository link is clipped', layout.primaryAction);
     assert(layout.footer.bottom <= layout.viewport.height + 1, 'Mobile footer is clipped', layout.footer);
     layout.selects.forEach((select, index) => {

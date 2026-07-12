@@ -130,12 +130,16 @@ async function start() {
 
   function setScene(index, immediate = false) {
     const normalized = Math.min(3, Math.max(0, Number(index) || 0));
+    if (!immediate && normalized === publicState.activeScene) {
+      return false;
+    }
     publicState.activeScene = normalized;
     publicState.foregroundSide = normalized === 1 ? 'right' : (normalized === 2 ? 'left' : null);
     const state = getLayoutState(normalized, compactLayout.matches, window.innerWidth);
     publicState.heroSpread = normalized === 0 ? Math.abs(state.left.x) : null;
     Object.values(models).forEach((model) => setModelTarget(model, state, immediate));
     publicState.motionActive = !immediate;
+    return true;
   }
 
   function resize() {

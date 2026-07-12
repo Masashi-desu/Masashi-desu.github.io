@@ -2,8 +2,10 @@
   const STORAGE_KEY = 'mdw-lang';
   const root = document.documentElement;
   const nav = document.querySelector('.surround-section-nav');
-  const controls = Array.from(document.querySelectorAll('[data-surround-target]'));
+  const controls = Array.from(document.querySelectorAll('[data-surround-target], [data-surround-footer-target]'));
   const sections = Array.from(document.querySelectorAll('[data-surround-segment]'));
+  const footerControl = document.querySelector('[data-surround-footer-target]');
+  const footerTarget = footerControl ? document.getElementById(footerControl.dataset.surroundFooterTarget) : null;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const translations = {
     en: {
@@ -21,6 +23,7 @@
       linksEyebrow: 'Open hardware prototype',
       linksBody: 'Explore the current design and its complete implementation.',
       repositoryLink: 'GitHub Repository',
+      settingsLabel: 'Footer settings',
       themeLabel: 'Theme',
       themeSystem: 'System',
       themeLight: 'Light',
@@ -76,6 +79,11 @@
         element.textContent = translated;
       }
     });
+    if (footerControl) {
+      const settingsLabel = lang === 'ja' ? 'フッタ設定' : translations[lang].settingsLabel;
+      footerControl.setAttribute('aria-label', settingsLabel);
+      footerControl.title = settingsLabel;
+    }
     syncLanguageSelects(lang);
     try {
       localStorage.setItem(STORAGE_KEY, lang);
@@ -116,20 +124,33 @@
   }
 
   function getScrollStops() {
-    return sections.map((section) => ({
+    const stops = sections.map((section) => ({
       id: section.id,
       element: section,
-      role: 'content'
+      align: 'start',
+      role: 'content',
+      observe: true
     }));
+    if (footerTarget) {
+      stops.push({
+        id: footerTarget.id,
+        element: footerTarget,
+        align: 'document-end',
+        role: 'auxiliary',
+        contentAnchor: 'previous',
+        observe: false
+      });
+    }
+    return stops;
   }
 
   function getControlTarget(control) {
-    return control.dataset.surroundTarget || '';
+    return control.dataset.surroundTarget || control.dataset.surroundFooterTarget || '';
   }
 
   function resolveInitialId() {
     const hashId = window.location.hash.replace(/^#/u, '');
-    return sections.some((section) => section.id === hashId)
+    return [...sections, footerTarget].filter(Boolean).some((element) => element.id === hashId)
       ? hashId
       : (sections[0] ? sections[0].id : '');
   }
@@ -138,11 +159,12 @@
     return Math.max(0, sections.findIndex((section) => section.id === id));
   }
 
-  function announceSegment(id, source) {
-    const index = getSegmentIndex(id);
+  function announceSegment(id, source, contentId = id) {
+    const index = getSegmentIndex(contentId);
+    document.body.dataset.surroundStop = id;
     document.body.dataset.surroundScene = String(index);
     window.dispatchEvent(new CustomEvent('surround:segment-change', {
-      detail: { id, index, source }
+      detail: { id, contentId, index, source }
     }));
   }
 
@@ -179,11 +201,9 @@
     const viewport = window.MDWSegmentedScroll.createViewportCssSync({
       rootElement: root,
       widthProperty: '--surround-section-width',
-      heightProperty: '--surround-section-height',
-      onChange: syncViewportOffset
+      heightProperty: '--surround-section-height'
     });
     viewport.mount();
-    syncViewportOffset();
 
     const index = window.MDWSegmentedScroll.createStopIndex({
       initialId: resolveInitialId()
@@ -201,14 +221,17 @@
       reduceMotion,
       managedClass: 'surround-scroll-managed',
       visibleClass: 'is-visible',
-      onActiveChange({ stop, source }) {
-        announceSegment(stop.id, source);
+      onActiveChange({ stop, source, activeContentId }) {
+        announceSegment(stop.id, source, activeContentId);
       }
     });
 
     controls.forEach((control) => {
-      control.addEventListener('click', () => {
-        goTo(control.dataset.surroundTarget, { source: 'section-control' });
+      control.addEventListener('click', (event) => {
+        event.preventDefault();
+        goTo(getControlTarget(control), {
+          source: control === footerControl ? 'footer-control' : 'section-control'
+        });
       });
     });
 
@@ -224,13 +247,8 @@
     });
 
     sectionNavigation.mount();
-    announceSegment(index.getState().activeId || resolveInitialId(), 'initial');
-  }
-
-  function syncViewportOffset() {
-    const visualHeight = window.visualViewport?.height || window.innerHeight;
-    const offset = Math.max(0, Math.round(visualHeight - window.innerHeight));
-    root.style.setProperty('--surround-viewport-offset', `${offset}px`);
+    const state = index.getState();
+    announceSegment(state.activeId || resolveInitialId(), 'initial', state.activeContentId);
   }
 
   recordFallbacks();
