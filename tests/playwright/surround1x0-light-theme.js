@@ -8,13 +8,14 @@
  *    第1セグメントは中間幅で左右ユニットの距離を縮め、
  *    390px幅でも横スクロールや主要導線の欠けが発生しない。歯車セグメントはフッタを文書末尾に表示し、
  *    04の3Dシーンを維持して同一シーンのモーションを再発火させない。
- *  - 検証方法: 一時ポートでViteを起動し、Playwright Chromiumからページを開く。公開された3D状態、
- *    セグメント位置、テーマselect、DOMRect、scrollWidthをデスクトップとモバイルの両方で計測する。
+ *  - 検証方法: Viteの本番ビルドをpreviewして製品アクセントを検証した後、開発サーバーを一時ポートで起動する。
+ *    Playwright Chromiumからページを開き、公開された3D状態、セグメント位置、テーマselect、DOMRect、
+ *    scrollWidthをデスクトップとモバイルの両方で計測する。
  */
 const http = require('http');
 const net = require('net');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { chromium } = require('playwright');
 
 const ROOT = path.resolve(__dirname, '../..');
@@ -154,7 +155,70 @@ function assertHorizontalFit(layout, label) {
   assert(layout.title.left >= -tolerance && layout.title.right <= layout.viewport.width + tolerance, `${label} title exceeded viewport`, layout.title);
 }
 
+async function verifyProductionAccent() {
+  const build = spawnSync('npm', ['run', 'build'], {
+    cwd: ROOT,
+    env: { ...process.env, BROWSER: 'none' },
+    encoding: 'utf8'
+  });
+  if (build.status !== 0) {
+    throw new Error(`Vite production build failed:\n${build.stdout}${build.stderr}`);
+  }
+
+  const port = await getAvailablePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const pageUrl = `${baseUrl}/products/Surround1x0-AKDK/index.html?from=home`;
+  const preview = spawn('npm', ['run', 'preview', '--', '--port', String(port), '--strictPort'], {
+    cwd: ROOT,
+    env: { ...process.env, BROWSER: 'none' },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let previewOutput = '';
+  preview.stdout.on('data', (chunk) => { previewOutput += chunk.toString(); });
+  preview.stderr.on('data', (chunk) => { previewOutput += chunk.toString(); });
+
+  let browser;
+  try {
+    await waitForServer(pageUrl);
+    browser = await chromium.launch();
+    const context = await browser.newContext({ colorScheme: 'dark' });
+    await context.addInitScript(() => {
+      localStorage.setItem('mdw-theme', 'dark');
+    });
+    const page = await context.newPage();
+    await page.goto(pageUrl, { waitUntil: 'load' });
+
+    let accentState = await readAccent(page);
+    assert(accentState.accent === '#ff344a', 'Production dark theme accent was overridden by the shared theme', accentState);
+    assert(accentState.indicator === 'rgb(255, 52, 74)', 'Production dark nav indicator did not use the product accent', accentState);
+
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = 'light';
+    });
+    await page.waitForFunction(() => (
+      getComputedStyle(document.querySelector('.surround-section-nav__indicator')).backgroundColor === 'rgb(104, 109, 117)'
+    ));
+    accentState = await readAccent(page);
+    assert(accentState.accent === '#686d75', 'Production light theme accent was overridden by the shared theme', accentState);
+    assert(accentState.indicator === 'rgb(104, 109, 117)', 'Production light nav indicator did not use the product accent', accentState);
+
+    await context.close();
+  } catch (error) {
+    if (preview.exitCode !== null) {
+      error.message += `\nVite preview output:\n${previewOutput}`;
+    }
+    throw error;
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+    await stopProcess(preview);
+  }
+}
+
 async function main() {
+  await verifyProductionAccent();
+
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const pageUrl = `${baseUrl}/products/Surround1x0-AKDK/index.html?from=home`;
@@ -220,7 +284,11 @@ async function main() {
     await page.evaluate(() => {
       window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 2, source: 'test' } }));
     });
-    await page.waitForTimeout(380);
+    await page.waitForFunction(() => {
+      const pose = window.__SURROUND_3D__?.currentPoses?.right;
+      return pose && pose.x > 0.105 && pose.y > 0.07 && pose.z > 0.11 &&
+        pose.scale > 1.86 && pose.cornerTwist > 0.4 && pose.foreground > 0.95;
+    }, null, { timeout: 1000 });
     const rightExitPose = await page.evaluate(() => window.__SURROUND_3D__.currentPoses.right);
     assert(
       rightExitPose.x > 0.105 && rightExitPose.y > 0.07 && rightExitPose.z > 0.11 &&
@@ -246,7 +314,11 @@ async function main() {
     await page.evaluate(() => {
       window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 1, source: 'test' } }));
     });
-    await page.waitForTimeout(380);
+    await page.waitForFunction(() => {
+      const pose = window.__SURROUND_3D__?.currentPoses?.left;
+      return pose && pose.x < -0.105 && pose.y > 0.07 && pose.z > 0.11 &&
+        pose.scale > 1.86 && pose.cornerTwist > 0.4 && pose.foreground > 0.95;
+    }, null, { timeout: 1000 });
     const leftExitPose = await page.evaluate(() => window.__SURROUND_3D__.currentPoses.left);
     assert(
       leftExitPose.x < -0.105 && leftExitPose.y > 0.07 && leftExitPose.z > 0.11 &&

@@ -11,7 +11,7 @@
   touch-action: pan-x pinch-zoom;
 }
 
-body.surround-page {
+body.page-product--surround.surround-page {
   --surround-topbar-height: 4.5rem;
   --surround-edge: clamp(1rem, 3vw, 2.5rem);
   --surround-copy-width: min(42rem, 48vw);
@@ -30,7 +30,7 @@ body.surround-page {
   background: var(--home-section-bg);
 }
 
-:root[data-theme="dark"] body.surround-page {
+:root[data-theme="dark"] body.page-product--surround.surround-page {
   --border-focus: #ff344a;
   --focus-ring-color: rgba(255, 52, 74, 0.28);
   --accent-color: #ff344a;
