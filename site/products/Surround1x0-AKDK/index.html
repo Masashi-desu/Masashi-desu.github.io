@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja" class="page-product-document">
+<html lang="ja" class="page-product-document page-surround-document">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +7,7 @@
   <!-- mdw:meta-config
   {
     "title": "Surround1x0-AKDK | Masahi Desu Works",
-    "description": "Experimental split keyboard prototype that integrates a trackball module for seamless pointing and typing.",
+    "description": "キーボード、マウスカーソル、テンキーを統合した実験的な分割入力デバイス。",
     "url": "https://masashi-desu.github.io/products/Surround1x0-AKDK/",
     "ogType": "product",
     "locale": "ja_JP",
@@ -19,7 +19,7 @@
       "@context": "https://schema.org",
       "@type": "Product",
       "name": "Surround1x0-AKDK",
-      "description": "Experimental split keyboard prototype that integrates a trackball module for seamless pointing and typing.",
+      "description": "キーボード、マウスカーソル、テンキーを統合した実験的な分割入力デバイス。",
       "image": [
         "https://masashi-desu.github.io/products/Surround1x0-AKDK/Surround1x0-AKDK.png"
       ],
@@ -33,13 +33,13 @@
   }
   -->
   <!-- mdw:meta:start -->
-  <meta name="description" content="Experimental split keyboard prototype that integrates a trackball module for seamless pointing and typing.">
+  <meta name="description" content="キーボード、マウスカーソル、テンキーを統合した実験的な分割入力デバイス。">
   <meta property="og:site_name" content="Masahi Desu Works">
   <meta property="og:type" content="product">
   <meta property="og:locale" content="ja_JP">
   <meta property="og:locale:alternate" content="en_US">
   <meta property="og:title" content="Surround1x0-AKDK | Masahi Desu Works">
-  <meta property="og:description" content="Experimental split keyboard prototype that integrates a trackball module for seamless pointing and typing.">
+  <meta property="og:description" content="キーボード、マウスカーソル、テンキーを統合した実験的な分割入力デバイス。">
   <meta property="og:url" content="https://masashi-desu.github.io/products/Surround1x0-AKDK/">
   <meta property="og:image" content="https://masashi-desu.github.io/products/Surround1x0-AKDK/Surround1x0-AKDK.png">
   <meta property="og:image:alt" content="Surround1x0-AKDK プロトタイプの写真">
@@ -47,7 +47,7 @@
   <meta name="twitter:image:alt" content="Surround1x0-AKDK プロトタイプの写真">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Surround1x0-AKDK | Masahi Desu Works">
-  <meta name="twitter:description" content="Experimental split keyboard prototype that integrates a trackball module for seamless pointing and typing.">
+  <meta name="twitter:description" content="キーボード、マウスカーソル、テンキーを統合した実験的な分割入力デバイス。">
   <link rel="canonical" href="https://masashi-desu.github.io/products/Surround1x0-AKDK/">
   <meta property="article:published_time" content="2025-08-01">
   <script type="application/ld+json">
@@ -55,7 +55,7 @@
     "@context": "https://schema.org",
     "@type": "Product",
     "name": "Surround1x0-AKDK",
-    "description": "Experimental split keyboard prototype that integrates a trackball module for seamless pointing and typing.",
+    "description": "キーボード、マウスカーソル、テンキーを統合した実験的な分割入力デバイス。",
     "image": [
       "https://masashi-desu.github.io/products/Surround1x0-AKDK/Surround1x0-AKDK.png"
     ],
@@ -73,6 +73,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css">
   <link rel="stylesheet" href="../../theme.css">
+  <link rel="stylesheet" href="./surround.css">
   <script>
     (function () {
       const root = document.documentElement;
@@ -93,195 +94,108 @@
     })();
   </script>
 </head>
-<body class="page-shell page-product page-product--surround">
-  <div class="page-background" data-transition-ignore>
-    <div class="page-orb page-orb--surround-glow"></div>
-    <div class="page-orb page-orb--surround-accent"></div>
-  </div>
-  <div class="page-backbar" data-transition-fade>
-    <div class="page-container page-backbar__inner">
-      <a href="../index.html" data-transition-direction="left" class="page-backlink" data-product-backlink>
-        <span data-i18n="back" data-product-backlink-label>← 一覧に戻る</span>
-      </a>
+<body class="page-shell page-product page-product--surround surround-page">
+  <header class="surround-topbar" data-transition-ignore>
+    <a
+      class="surround-backlink"
+      href="../index.html"
+      data-product-backlink
+      data-transition-direction="left"
+    >
+      <span data-product-backlink-label data-i18n="back">一覧に戻る</span>
+    </a>
+
+    <nav class="surround-section-nav" aria-label="Surround1x0-AKDK セクション">
+      <span class="surround-section-nav__indicator" aria-hidden="true"></span>
+      <button class="surround-section-nav__button is-active" type="button" data-surround-target="surround-01" aria-current="true">01</button>
+      <button class="surround-section-nav__button" type="button" data-surround-target="surround-02" aria-current="false">02</button>
+      <button class="surround-section-nav__button" type="button" data-surround-target="surround-03" aria-current="false">03</button>
+      <button class="surround-section-nav__button" type="button" data-surround-target="surround-04" aria-current="false">04</button>
+    </nav>
+
+    <a class="surround-wordmark" href="#surround-01" data-surround-link="surround-01" aria-label="Surround1x0-AKDK トップへ">
+      <span>SURROUND1×0</span>
+      <span>AKDK</span>
+    </a>
+  </header>
+
+  <div class="surround-visual" data-transition-ignore aria-label="Surround1x0-AKDK の3Dレンダリング" role="img">
+    <canvas id="surround-canvas" class="surround-visual__canvas"></canvas>
+    <div class="surround-visual__loading" role="status" aria-live="polite">
+      <span class="surround-visual__loading-label" data-i18n="loading3d">3Dモデルを読み込み中</span>
+      <span class="surround-visual__loading-line" aria-hidden="true"><i></i></span>
     </div>
+    <figure class="surround-visual__fallback" hidden>
+      <img src="./Surround1x0-AKDK.png" alt="Surround1x0-AKDK プロトタイプ">
+    </figure>
   </div>
-  <main class="page-container product-main" data-transition-fade>
-    <!-- プロトタイプ概要 -->
-    <article class="product-panel product-panel--glass product-panel--soft-surface product-panel--split">
-      <div class="product-stack">
-        <div class="product-header">
-          <p class="section-label" data-i18n="tag">Experimental Hardware</p>
-          <h1 class="product-title" data-i18n="title">Surround1x0-AKDK</h1>
-          <time class="product-date product-date--plain" datetime="2025-08-01" data-i18n="date">2025年8月1日</time>
+
+  <main class="surround-segments" data-transition-fade>
+    <section id="surround-01" class="surround-segment surround-segment--hero is-visible" data-surround-segment="0" aria-labelledby="surround-title">
+      <div class="surround-segment__frame surround-segment__frame--center">
+        <div class="surround-copy surround-copy--hero" data-surround-animate>
+          <p class="surround-eyebrow" data-i18n="heroEyebrow">Experimental input system</p>
+          <h1 id="surround-title" class="surround-display surround-display--hero whitespace-pre-line" data-i18n="heroTitle">HIDの到達点</h1>
+          <p class="surround-subcopy whitespace-pre-line" data-i18n="heroBody">指先から、カーソルの先まで。
+入力をひとつの身体にする。</p>
         </div>
-        <p class="product-copy product-copy--muted" data-i18n="body">
-          Surround1x0-AKDKは、分割レイアウトとトラックボールモジュールを組み合わせた実験的な入力デバイスです。
-          GUIの操作と入力の切り替えをスムーズに行い、現代のコンピュータに最適な入力インターフェースを提供します。
-        </p>
-        <div class="product-spec-grid">
-          <div class="product-spec-card">
-            <p class="product-spec-label" data-i18n="materialsTitle">Materials</p>
-            <p class="product-spec-value" data-i18n="materialsBody">3Dプリンタ出力 PLA</p>
-          </div>
-          <div class="product-spec-card">
-            <p class="product-spec-label" data-i18n="moduleTitle">Interface</p>
-            <p class="product-spec-value" data-i18n="moduleBody">トラックボール + 40%キーボード</p>
+        <a class="surround-scroll-cue" href="#surround-02" data-surround-link="surround-02" data-i18n="scrollCue">スクロールして思想を見る</a>
+      </div>
+    </section>
+
+    <section id="surround-02" class="surround-segment surround-segment--right" data-surround-segment="1" aria-labelledby="surround-integrated-title">
+      <div class="surround-segment__frame surround-segment__frame--left">
+        <div class="surround-copy surround-copy--left" data-surround-animate>
+          <p class="surround-index" aria-hidden="true">01 / INTEGRATED</p>
+          <h2 id="surround-integrated-title" class="surround-display whitespace-pre-line" data-i18n="integratedTitle">キーボード、
+マウスカーソル、
+テンキーを統合。</h2>
+          <p class="surround-body whitespace-pre-line" data-i18n="integratedBody">ホームポジションを離れずに、
+文字とポインタと数字へ触れる。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="surround-03" class="surround-segment surround-segment--left" data-surround-segment="2" aria-labelledby="surround-layer-title">
+      <div class="surround-segment__frame surround-segment__frame--right">
+        <div class="surround-copy surround-copy--right" data-surround-animate>
+          <p class="surround-index" aria-hidden="true">02 / LAYERS</p>
+          <h2 id="surround-layer-title" class="surround-display whitespace-pre-line" data-i18n="layerTitle">駆け抜ける入力。</h2>
+          <p class="surround-body surround-body--statement whitespace-pre-line" data-i18n="layerBody">レイヤー切り替えのための頭脳。</p>
+          <p class="surround-body whitespace-pre-line" data-i18n="layerDetail">小さな移動で、入力面そのものを切り替える。
+40%の輪郭に、必要な操作を重ねる。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="surround-04" class="surround-segment surround-segment--links" data-surround-segment="3" aria-labelledby="surround-links-title">
+      <div class="surround-segment__frame surround-segment__frame--center surround-segment__frame--links">
+        <div class="surround-copy surround-copy--links" data-surround-animate>
+          <p class="surround-eyebrow" data-i18n="linksEyebrow">Open hardware prototype</p>
+          <h2 id="surround-links-title" class="surround-display surround-display--links">Surround1x0-AKDK</h2>
+          <p class="surround-body whitespace-pre-line" data-i18n="linksBody">設計の現在地と、実装のすべてを公開しています。</p>
+          <div class="surround-actions">
+            <a class="surround-action surround-action--secondary" href="../index.html" data-product-backlink data-transition-direction="left">
+              <span data-product-backlink-label data-i18n="back">一覧に戻る</span>
+            </a>
+            <a class="surround-action surround-action--primary" href="https://github.com/Masashi-desu/Surround1x0-AKDK" target="_blank" rel="noopener noreferrer" data-i18n="repositoryLink">GitHub リポジトリ</a>
           </div>
         </div>
       </div>
-      <figure class="product-media-card" data-mdw-media>
-        <img src="Surround1x0-AKDK.png" alt="Surround1x0-AKDK hero image" class="product-media-image" loading="lazy">
-      </figure>
-      <div class="product-cta-row">
-        <a href="https://github.com/Masashi-desu/Surround1x0-AKDK" target="_blank" rel="noopener noreferrer" data-pressable="true" class="product-link-button">
-          <span data-i18n="repositoryLink">リポジトリを見る</span>
-          <span aria-hidden="true">↗</span>
-        </a>
-      </div>
-    </article>
+
+      <footer class="site-footer surround-footer">
+        <div class="site-footer__inner">
+          <div data-include="footer" data-footer-src="../../partials/footer.html"></div>
+        </div>
+      </footer>
+    </section>
   </main>
-  <div class="page-bottom-bar" data-transition-fade>
-    <div class="page-container page-bottom-bar__inner">
-      <a href="../index.html" data-transition-direction="left" class="page-backlink" data-product-backlink>
-        <span data-i18n="back" data-product-backlink-label>← 一覧に戻る</span>
-      </a>
-    </div>
-  </div>
-  <footer class="site-footer product-footer">
-    <div class="page-container site-footer__inner">
-      <div data-include="footer" data-footer-src="../../partials/footer.html"></div>
-    </div>
-  </footer>
+
   <script vite-ignore src="../../theme.js"></script>
   <script vite-ignore src="../../footer.js"></script>
+  <script vite-ignore src="../../shared/segmented-scroll.js"></script>
   <script vite-ignore src="../product-backlink.js"></script>
-  <script>
-    (function () {
-      const STORAGE_KEY = 'mdw-lang';
-      const translations = {
-        en: {
-          tag: 'Experimental Hardware',
-          title: 'Surround1x0-AKDK',
-          date: 'August 1, 2025',
-          body: 'Surround1x0-AKDK is an experimental input device that combines a split layout with a trackball module.\nIt lets you switch smoothly between pointing and typing, providing an interface that fits modern computers.',
-          materialsTitle: 'Materials',
-          materialsBody: '3D-printed PLA',
-          moduleTitle: 'Module',
-          moduleBody: 'Trackball + 40% keyboard',
-          repositoryLink: 'View Repository',
-          back: '← Back to List',
-          themeLabel: 'Theme',
-          themeSystem: 'System',
-          themeLight: 'Light',
-          themeDark: 'Dark'
-        }
-      };
-      const fallbackCopy = {};
-      let currentLocale = resolveLocale(readStoredLanguage() || 'ja');
-
-      function recordFallbacks() {
-        document.querySelectorAll('[data-i18n]').forEach((el) => {
-          const key = el.getAttribute('data-i18n');
-          if (!key || Object.prototype.hasOwnProperty.call(fallbackCopy, key)) {
-            return;
-          }
-          fallbackCopy[key] = el.textContent.replace(/\s+$/u, '');
-        });
-      }
-
-      function resolveLocale(locale) {
-        return Object.prototype.hasOwnProperty.call(translations, locale) ? locale : 'ja';
-      }
-
-      function syncLanguageSelects(lang) {
-        document.querySelectorAll('.lang-select').forEach((select) => {
-          if (select.value !== lang) {
-            select.value = lang;
-          }
-        });
-      }
-
-      function updateLanguage(locale) {
-        recordFallbacks();
-        const lang = resolveLocale(locale);
-        currentLocale = lang;
-        document.documentElement.lang = lang;
-        document.querySelectorAll('[data-i18n]').forEach((el) => {
-          const key = el.getAttribute('data-i18n');
-          if (!key) {
-            return;
-          }
-          if (lang === 'ja') {
-            const fallback = fallbackCopy[key];
-            if (typeof fallback === 'string') {
-              el.textContent = fallback;
-            }
-            return;
-          }
-          const text = translations[lang][key];
-          if (typeof text === 'string') {
-            el.textContent = text;
-            return;
-          }
-          const fallback = fallbackCopy[key];
-          if (typeof fallback === 'string') {
-            el.textContent = fallback;
-          }
-        });
-        syncLanguageSelects(lang);
-        try {
-          localStorage.setItem(STORAGE_KEY, lang);
-        } catch (error) {
-          /* ignore */
-        }
-        if (window.MDWProductBacklink) {
-          window.MDWProductBacklink.sync(lang);
-        }
-        return lang;
-      }
-
-      function readStoredLanguage() {
-        try {
-          return localStorage.getItem(STORAGE_KEY);
-        } catch (error) {
-          return null;
-        }
-      }
-
-      const controller = window.MDWLanguageTransition
-        ? window.MDWLanguageTransition.create((lang) => updateLanguage(lang), { duration: 320 })
-        : null;
-
-      function applyLanguage(locale, options = {}) {
-        const target = resolveLocale(locale);
-        if (controller) {
-          controller.apply(target, options);
-        } else {
-          updateLanguage(target);
-        }
-      }
-
-      function setupLanguageSelector() {
-        document.querySelectorAll('.lang-select').forEach((select) => {
-          if (select.dataset.bound === 'true') {
-            select.value = currentLocale;
-            return;
-          }
-          select.dataset.bound = 'true';
-          select.addEventListener('change', (event) => {
-            applyLanguage(event.target.value, { animate: true });
-          });
-          select.value = currentLocale;
-        });
-      }
-
-      applyLanguage(currentLocale);
-      setupLanguageSelector();
-      window.addEventListener('mdw:footer-loaded', () => {
-        setupLanguageSelector();
-        applyLanguage(currentLocale);
-      });
-    })();
-  </script>
+  <script vite-ignore src="./surround-page.js"></script>
+  <script type="module" src="./surround-3d.js"></script>
 </body>
 </html>

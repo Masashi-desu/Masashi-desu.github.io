@@ -12,7 +12,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "build:meta": "node tools/apply-meta-template.js",
     "build:social": "node tools/generate-social-image.js",
-    "test": "npm run test:typefetch-appcast && npm run test:segmented-scroll-core && npm run test:page-transitions && npm run test:product-backlink-source && npm run test:home-mobile-swipe && npm run test:home-ios-safari-swipe && npm run test:catalog-mobile-overflow && npm run test:catalog-mobile-scroll && npm run test:footer-mobile-order && npm run test:liquidgl-segment-mobile && npm run test:home-reload-liquidgl && npm run test:home-products-responsive && npm run test:home-product-carousel",
+    "test": "npm run test:typefetch-appcast && npm run test:segmented-scroll-core && npm run test:page-transitions && npm run test:product-backlink-source && npm run test:home-mobile-swipe && npm run test:home-ios-safari-swipe && npm run test:catalog-mobile-overflow && npm run test:catalog-mobile-scroll && npm run test:footer-mobile-order && npm run test:liquidgl-segment-mobile && npm run test:home-reload-liquidgl && npm run test:home-products-responsive && npm run test:home-product-carousel && npm run test:surround-segments",
     "test:typefetch-appcast-unit": "ruby tests/typefetch-appcast-sync.rb",
     "test:typefetch-appcast-output": "node tests/typefetch-appcast-build-output.mjs",
     "test:typefetch-appcast": "npm run test:typefetch-appcast-unit && npm run build && npm run test:typefetch-appcast-output",
@@ -27,7 +27,8 @@
     "test:liquidgl-segment-mobile": "node tests/playwright/liquidgl-segment-mobile-before-load.js",
     "test:home-reload-liquidgl": "node tests/playwright/home-reload-scroll-top-liquidgl.js",
     "test:home-products-responsive": "node tests/playwright/home-products-responsive-fit.js",
-    "test:home-product-carousel": "node tests/playwright/home-product-carousel-mobile-loop.js"
+    "test:home-product-carousel": "node tests/playwright/home-product-carousel-mobile-loop.js",
+    "test:surround-segments": "node tests/playwright/surround1x0-light-theme.js"
   },
   "repository": {
     "type": "git",
@@ -47,5 +48,8 @@
     "embla-carousel-wheel-gestures": "^8.1.0",
     "playwright": "^1.59.1",
     "vite": "^8.0.11"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
   }
 }
