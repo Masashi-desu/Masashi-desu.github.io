@@ -122,6 +122,7 @@ async function readLayout(page) {
       canvas: rect('#surround-canvas'),
       nav: rect('.surround-section-nav'),
       title: rect('.surround-segment.is-visible .surround-display'),
+      activeCopy: rect('.surround-segment.is-visible .surround-copy'),
       primaryAction: rect('.surround-action--primary'),
       footer: rect('.surround-footer'),
       selects: Array.from(document.querySelectorAll('.surround-footer select')).map((element) => {
@@ -408,6 +409,32 @@ async function main() {
       await clickSegment(page, number);
       layout = await readLayout(page);
       assertHorizontalFit(layout, `Mobile segment 0${number}`);
+      if (number === 1) {
+        const heroState = await page.evaluate(() => ({
+          copy: document.querySelector('.surround-copy--hero').getBoundingClientRect().toJSON(),
+          viewportHeight: window.innerHeight,
+          poses: window.__SURROUND_3D__.currentPoses
+        }));
+        assert(
+          heroState.copy.top >= 120 && heroState.copy.bottom < heroState.viewportHeight * 0.62,
+          'Mobile hero copy was not placed near the vertical center',
+          heroState
+        );
+        assert(
+          heroState.poses.left.y < 0 && heroState.poses.right.y < 0,
+          'Mobile hero models were not moved below the copy',
+          heroState
+        );
+      }
+      if (number === 2 || number === 3) {
+        await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
+        const featuredPose = await page.evaluate((side) => window.__SURROUND_3D__.currentPoses[side], number === 2 ? 'right' : 'left');
+        assert(
+          featuredPose.scale >= 2.15 && Math.abs(featuredPose.x) <= 0.02,
+          `Mobile segment 0${number} model was not centered at nearly full viewport width`,
+          featuredPose
+        );
+      }
     }
     await clickFooter(page);
     layout = await readLayout(page);
@@ -417,6 +444,68 @@ async function main() {
     layout.selects.forEach((select, index) => {
       assert(select.left >= 0 && select.right <= layout.viewport.width && select.top >= 0 && select.bottom <= layout.viewport.height, `Mobile footer select ${index + 1} is clipped`, select);
     });
+
+    await page.setViewportSize({ width: 446, height: 619 });
+    await page.reload({ waitUntil: 'load' });
+    await waitFor3d(page);
+    for (let number = 1; number <= 3; number += 1) {
+      await clickSegment(page, number);
+      if (number > 1) {
+        await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
+      }
+      layout = await readLayout(page);
+      assertHorizontalFit(layout, `Mobile 446x619 segment 0${number}`);
+      assert(
+        layout.activeCopy.top >= 0 && layout.activeCopy.bottom <= layout.viewport.height,
+        `Mobile 446x619 segment 0${number} copy is clipped`,
+        layout.activeCopy
+      );
+      if (number === 2 || number === 3) {
+        const featuredPose = await page.evaluate((side) => window.__SURROUND_3D__.currentPoses[side], number === 2 ? 'right' : 'left');
+        assert(
+          featuredPose.scale >= 2.15 && Math.abs(featuredPose.x) <= 0.02,
+          `Mobile 446x619 segment 0${number} model was not centered at nearly full viewport width`,
+          featuredPose
+        );
+      }
+    }
+    await clickSegment(page, 1);
+    await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
+    const compactHeroState = await page.evaluate(() => {
+      const copy = document.querySelector('.surround-copy--hero').getBoundingClientRect();
+      return {
+        copy: { top: copy.top, bottom: copy.bottom },
+        viewportHeight: window.innerHeight,
+        poses: window.__SURROUND_3D__.currentPoses
+      };
+    });
+    assert(
+      compactHeroState.copy.top >= 120 && compactHeroState.copy.bottom < compactHeroState.viewportHeight * 0.62 &&
+      compactHeroState.poses.left.y < 0 && compactHeroState.poses.right.y < 0,
+      'Mobile 446x619 hero did not bring the copy and models toward the center',
+      compactHeroState
+    );
+
+    await page.setViewportSize({ width: 338, height: 619 });
+    await page.reload({ waitUntil: 'load' });
+    await waitFor3d(page);
+    await clickSegment(page, 1);
+    layout = await readLayout(page);
+    assertHorizontalFit(layout, 'Mobile 338x619 segment 01');
+    const narrowHeroState = await page.evaluate(() => {
+      const copy = document.querySelector('.surround-copy--hero').getBoundingClientRect();
+      return {
+        copy: { top: copy.top, bottom: copy.bottom },
+        viewportHeight: window.innerHeight,
+        poses: window.__SURROUND_3D__.currentPoses
+      };
+    });
+    assert(
+      narrowHeroState.copy.top >= 150 && narrowHeroState.copy.bottom < narrowHeroState.viewportHeight * 0.6 &&
+      narrowHeroState.poses.left.y >= -0.07 && narrowHeroState.poses.right.y >= -0.07,
+      'Mobile 338x619 hero did not close the copy-to-model gap around the viewport center',
+      narrowHeroState
+    );
 
     await context.close();
     console.log('Surround1x0-AKDK segmented Three.js experience passed desktop, mobile, and theme checks.');

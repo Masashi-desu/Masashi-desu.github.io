@@ -617,9 +617,14 @@ body.page-product--surround.surround-page {
     text-align: center;
   }
 
+  .surround-segment--hero .surround-segment__frame--center {
+    align-items: start;
+    padding-top: clamp(9.5rem, 27vh, 12rem);
+  }
+
   .surround-copy--hero {
     justify-items: center;
-    padding-top: 18vh;
+    padding-top: 0;
     padding-bottom: 0;
   }
 

@@ -339,15 +339,15 @@ function getLayoutState(index, compact, viewportWidth = window.innerWidth) {
   ];
   const mobile = [
     {
-      left: createPose({ x: -0.105, y: 0.16, z: 0.02, scale: 0.82, rotationX: 0.24 }),
-      right: createPose({ x: 0.105, y: 0.16, z: 0.02, scale: 0.82, rotationX: 0.24 })
+      left: createPose({ x: -0.105, y: -0.06, z: 0.02, scale: 0.82, rotationX: 0.24 }),
+      right: createPose({ x: 0.105, y: -0.06, z: 0.02, scale: 0.82, rotationX: 0.24 })
     },
     {
       left: createPose(EXIT_TARGETS.mobile.left),
-      right: createPose({ x: 0.052, y: 0.105, z: 0.035, scale: 1.14, rotationX: -0.05, rotationY: -0.26, rotationZ: -0.08 })
+      right: createPose({ x: 0.014, y: 0.105, z: 0.035, scale: 2.2, rotationX: -0.05, rotationY: -0.26, rotationZ: -0.08 })
     },
     {
-      left: createPose({ x: -0.052, y: 0.105, z: 0.035, scale: 1.14, rotationX: -0.05, rotationY: 0.26, rotationZ: 0.08 }),
+      left: createPose({ x: -0.014, y: 0.105, z: 0.035, scale: 2.2, rotationX: -0.05, rotationY: 0.26, rotationZ: 0.08 }),
       right: createPose(EXIT_TARGETS.mobile.right)
     },
     {
