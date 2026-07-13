@@ -897,6 +897,7 @@ body.page-product--surround .page-background {
 
 .home-section {
   box-sizing: border-box;
+  position: relative;
   height: var(--home-section-height, 100dvh);
   min-height: var(--home-section-height, 100dvh);
   scroll-snap-align: start;
@@ -907,6 +908,29 @@ body.page-product--surround .page-background {
   padding: clamp(4.75rem, 10vh, 7rem) var(--page-gutter) clamp(2.5rem, 6vh, 5rem);
   border-bottom: 1px solid var(--home-line);
   background: var(--home-section-bg);
+}
+
+.home-section--catch {
+  --philosophy-tile-idle-opacity: 0.0015;
+  isolation: isolate;
+}
+
+:root[data-theme="dark"] .home-section--catch {
+  --philosophy-tile-idle-opacity: 0.001;
+}
+
+.home-philosophy-tiles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.home-section--catch .home-section__inner {
+  position: relative;
+  z-index: 1;
 }
 
 .home-section--products {
