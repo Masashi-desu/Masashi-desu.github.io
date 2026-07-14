@@ -64,3 +64,5 @@ Playwright などで追加する自動テストスクリプトには、以下を
 - **検証方法**: ページの開き方やステップ、値の取得方法など。
 
 テスト名も内容が判別できるように命名し、後から見た人が意図を理解しやすいようにします。既存例: `tests/playwright/footer-accent-focus.js`, `tests/playwright/surround1x0-light-theme.js`。
+
+X 内蔵ブラウザなどの `WKWebView` で履歴復帰時に `visualViewport` の古い offset が残る条件は、`npm run test:liquidgl-return-position` で再現し、LiquidGL の描画矩形が固定ナビの DOM 矩形と一致することを検証します。

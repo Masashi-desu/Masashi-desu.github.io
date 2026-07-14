@@ -698,20 +698,24 @@
       if (!rect) return;
 
       const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const canvasRect = this.canvas.getBoundingClientRect();
+      const scaleX = canvasRect.width > 0
+        ? this.canvas.width / canvasRect.width
+        : dpr;
+      const scaleY = canvasRect.height > 0
+        ? this.canvas.height / canvasRect.height
+        : dpr;
+      const relativeLeft = rect.left - canvasRect.left;
+      const relativeTop = rect.top - canvasRect.top;
 
-      let overscrollY = 0;
-      let overscrollX = 0;
-
-      if (window.visualViewport) {
-        overscrollX = window.visualViewport.offsetLeft;
-        overscrollY = window.visualViewport.offsetTop;
-      }
-
-      const x = (rect.left + overscrollX) * dpr;
+      // Both rectangles use the same viewport coordinate space. Adding
+      // visualViewport offsets again can displace the lens after a WKWebView
+      // restores a stale offset from its back-forward cache.
+      const x = relativeLeft * scaleX;
       const y =
-        this.canvas.height - (rect.top + overscrollY + rect.height) * dpr;
-      const w = rect.width * dpr;
-      const h = rect.height * dpr;
+        this.canvas.height - (relativeTop + rect.height) * scaleY;
+      const w = rect.width * scaleX;
+      const h = rect.height * scaleY;
 
       gl.viewport(x, y, w, h);
       gl.uniform2f(this.u.res, w, h);
