@@ -20,6 +20,16 @@ const EXIT_TARGETS = {
     right: createExitPose('right', true)
   }
 };
+const STAGING_TARGETS = {
+  desktop: {
+    left: createStagingPose('left'),
+    right: createStagingPose('right')
+  },
+  mobile: {
+    left: createStagingPose('left', true),
+    right: createStagingPose('right', true)
+  }
+};
 
 const publicState = {
   ready: false,
@@ -29,8 +39,11 @@ const publicState = {
   foregroundSide: null,
   heroSpread: null,
   motionActive: false,
-  motionKind: 'quadratic-bezier',
+  motionKind: 'cubic-swing-arc',
   motionEasing: 'smootherstep',
+  transitSwing: 'travel-scaled-banking',
+  transitTwist: 'transient-corner-bell',
+  transitStagger: 'lead-follow',
   scaleOvershoot: false,
   settling: 'zero-velocity',
   exitMotion: 'cubic-diagonal-forward-twist',
@@ -38,9 +51,11 @@ const publicState = {
   exitCorner: 'outer-back',
   twistSpace: 'mirrored-local-diagonal',
   exitFade: 'final-third',
+  reentryStaging: 'near-frustum',
   materialFade: true,
   foregroundRendering: 'single-canvas',
   exitTargets: EXIT_TARGETS,
+  stagingTargets: STAGING_TARGETS,
   currentPoses: null,
   modelUrls: { ...MODEL_URLS }
 };
@@ -377,78 +392,146 @@ function createPose(overrides = {}) {
 function createExitPose(side, compact = false) {
   const direction = side === 'left' ? -1 : 1;
   return createPose({
-    x: direction * (compact ? 0.46 : 0.7),
-    y: compact ? 0.28 : 0.4,
-    z: compact ? 0.11 : 0.17,
-    scale: compact ? 1.2 : 2.06,
+    x: direction * (compact ? 0.3 : 0.58),
+    y: compact ? 0.62 : 0.55,
+    z: compact ? 0.34 : 0.26,
+    scale: compact ? 2.35 : 2.15,
     opacity: 0,
-    rotationX: compact ? -0.1 : -0.18,
-    rotationY: direction * (compact ? -0.32 : -0.52),
-    rotationZ: direction * (compact ? -0.1 : -0.16),
-    cornerTwist: compact ? 0.52 : 0.64
+    rotationX: compact ? -0.5 : -0.55,
+    rotationY: direction * (compact ? -1 : -1.25),
+    rotationZ: direction * (compact ? -0.12 : -0.16),
+    cornerTwist: compact ? 0.78 : 0.9
+  });
+}
+
+function createStagingPose(side, compact = false) {
+  const direction = side === 'left' ? -1 : 1;
+  return createPose({
+    x: direction * (compact ? 0.12 : 0.3),
+    y: compact ? 0.5 : 0.3,
+    z: compact ? 0.28 : 0.18,
+    scale: compact ? 2.25 : 2,
+    opacity: 0,
+    rotationX: compact ? -0.4 : -0.34,
+    rotationY: direction * (compact ? -0.66 : -0.72),
+    rotationZ: direction * -0.1,
+    cornerTwist: compact ? 0.52 : 0.5
   });
 }
 
 function setModelTarget(model, state, immediate) {
+  if (immediate) {
+    Object.entries(model.halves).forEach(([side, half]) => {
+      Object.assign(half.target, state[side]);
+      Object.assign(half.current, half.target);
+      half.motion = null;
+      applyHalfState(half);
+    });
+    return;
+  }
+  const delays = planMotionDelays(model, state);
+  const now = performance.now();
   Object.entries(model.halves).forEach(([side, half]) => {
     Object.assign(half.target, state[side]);
-    if (!immediate) {
-      half.motion = createCurvedMotion(half, half.target);
-      return;
-    }
-    Object.assign(half.current, half.target);
-    half.motion = null;
-    applyHalfState(half);
+    half.motion = createCurvedMotion(half, half.target, now + delays[side]);
   });
 }
 
-function createCurvedMotion(half, target) {
+function planMotionDelays(model, state) {
+  if (reduceMotion.matches) {
+    return { left: 0, right: 0 };
+  }
+  const followDelay = compactLayout.matches ? 70 : 110;
+  const roles = Object.fromEntries(Object.entries(model.halves).map(([side, half]) => [side, {
+    exiting: half.current.opacity > 0.5 && state[side].opacity < 0.5,
+    energy: motionEnergy(half.current, state[side])
+  }]));
+  const delays = { left: 0, right: 0 };
+  if (roles.left.exiting !== roles.right.exiting) {
+    delays[roles.left.exiting ? 'right' : 'left'] = followDelay;
+  } else if (Math.abs(roles.left.energy - roles.right.energy) > 0.02) {
+    delays[roles.left.energy > roles.right.energy ? 'right' : 'left'] = followDelay;
+  }
+  return delays;
+}
+
+function motionEnergy(from, to) {
+  return Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) +
+    Math.abs(to.scale - from.scale) * 0.12;
+}
+
+function createCurvedMotion(half, target, start = performance.now()) {
   const from = { ...half.current };
   const to = { ...target };
-  const direction = Math.sign(to.x - from.x) || (half.side === 'left' ? -1 : 1);
-  const featured = to.foreground > 0.5;
-  const exiting = from.opacity > 0.5 && to.opacity < 0.5;
   const compact = compactLayout.matches;
-  const control = {
-    x: (from.x + to.x) / 2 + direction * (featured ? 0.045 : 0.1),
-    y: Math.max(from.y, to.y) + (compact ? 0.055 : 0.105),
-    z: Math.max(from.z, to.z) + (compact ? 0.06 : 0.13),
-    scale: (from.scale + to.scale) / 2,
-    rotationX: (from.rotationX + to.rotationX) / 2 - 0.12,
-    rotationY: (from.rotationY + to.rotationY) / 2 + direction * 0.18,
-    rotationZ: (from.rotationZ + to.rotationZ) / 2 + direction * 0.12,
-    cornerTwist: (from.cornerTwist + to.cornerTwist) / 2
-  };
-  const control2 = exiting ? {
-    x: to.x - direction * (compact ? 0.12 : 0.18),
-    y: to.y - (compact ? 0.018 : 0.025),
-    z: to.z - (compact ? 0.01 : 0.015),
-    scale: THREE.MathUtils.lerp(from.scale, to.scale, 0.86),
-    rotationX: to.rotationX,
-    rotationY: to.rotationY,
-    rotationZ: to.rotationZ,
-    cornerTwist: THREE.MathUtils.lerp(from.cornerTwist, to.cornerTwist, 0.92)
-  } : null;
-  if (exiting) {
-    Object.assign(control, {
-      x: from.x + direction * (compact ? 0.018 : 0.025),
-      y: from.y + (compact ? 0.14 : 0.2),
-      z: from.z + (compact ? 0.03 : 0.04),
-      scale: THREE.MathUtils.lerp(from.scale, to.scale, 0.35),
-      rotationX: THREE.MathUtils.lerp(from.rotationX, to.rotationX, 0.78),
-      rotationY: THREE.MathUtils.lerp(from.rotationY, to.rotationY, 0.78),
-      rotationZ: THREE.MathUtils.lerp(from.rotationZ, to.rotationZ, 0.78),
-      cornerTwist: THREE.MathUtils.lerp(from.cornerTwist, to.cornerTwist, 0.72)
-    });
+  const exiting = from.opacity > 0.5 && to.opacity < 0.5;
+  const entering = !exiting && from.opacity < 0.2 && to.opacity > 0.5;
+  if (entering) {
+    Object.assign(from, (compact ? STAGING_TARGETS.mobile : STAGING_TARGETS.desktop)[half.side]);
   }
+  const direction = Math.sign(to.x - from.x) || (half.side === 'left' ? -1 : 1);
+  const baseDuration = compact ? 1080 : 1380;
+
+  if (exiting) {
+    const control = {
+      x: from.x + direction * (compact ? 0.02 : 0.05),
+      y: from.y + (compact ? 0.16 : 0.17),
+      z: from.z + (compact ? 0.09 : 0.1),
+      scale: THREE.MathUtils.lerp(from.scale, to.scale, 0.35)
+    };
+    const control2 = {
+      x: to.x - direction * (compact ? 0.09 : 0.12),
+      y: to.y - (compact ? 0.05 : 0.06),
+      z: to.z - (compact ? 0.04 : 0.05),
+      scale: THREE.MathUtils.lerp(from.scale, to.scale, 0.86)
+    };
+    return {
+      start,
+      duration: reduceMotion.matches ? 1 : baseDuration,
+      from,
+      to,
+      control,
+      control2,
+      exiting: true
+    };
+  }
+
+  const travelX = to.x - from.x;
+  const energy = motionEnergy(from, to);
+  const swing = THREE.MathUtils.clamp(energy / (compact ? 0.36 : 0.55), 0, 1);
+  const liftY = (compact ? 0.05 : 0.085) + energy * 0.14;
+  const liftZ = (compact ? 0.045 : 0.075) + energy * 0.1;
+  const bankSettle = (axis) => 1 - THREE.MathUtils.clamp(Math.abs(to[axis] - from[axis]) / 0.4, 0, 0.8);
   return {
-    start: performance.now(),
-    duration: reduceMotion.matches ? 1 : (compact ? 1080 : 1380),
+    start,
+    duration: reduceMotion.matches ? 1 : Math.round(baseDuration * (0.86 + 0.34 * swing)),
     from,
     to,
-    control,
-    control2,
-    exiting
+    control: entering ? {
+      x: from.x + travelX * 0.3,
+      y: THREE.MathUtils.lerp(from.y, to.y, 0.3),
+      z: THREE.MathUtils.lerp(from.z, to.z, 0.25) + liftZ * 0.3,
+      scale: THREE.MathUtils.lerp(from.scale, to.scale, 0.3)
+    } : {
+      x: from.x + travelX * 0.22,
+      y: Math.max(from.y, to.y) + liftY,
+      z: Math.max(from.z, to.z) + liftZ * 0.8,
+      scale: THREE.MathUtils.lerp(from.scale, to.scale, 0.3)
+    },
+    control2: {
+      x: to.x - travelX * 0.18,
+      y: to.y + liftY * 0.35,
+      z: to.z + liftZ * 0.45,
+      scale: THREE.MathUtils.lerp(from.scale, to.scale, 0.9)
+    },
+    exiting: false,
+    bank: {
+      rotationX: -(0.06 + 0.2 * swing) * bankSettle('rotationX'),
+      rotationY: -direction * (0.12 + 0.3 * swing) * bankSettle('rotationY'),
+      rotationZ: -direction * (0.08 + 0.2 * swing) * bankSettle('rotationZ')
+    },
+    twistAmp: Math.min(0.34, 0.1 + 0.32 * swing) *
+      (1 - THREE.MathUtils.clamp(Math.abs(to.cornerTwist - from.cornerTwist) / 0.5, 0, 0.8))
   };
 }
 
@@ -466,39 +549,53 @@ function updateHalfMotion(half, time) {
   }
   const rawProgress = Math.min(1, Math.max(0, (time - motion.start) / motion.duration));
   const progress = smootherStep(rawProgress);
-  ['x', 'y', 'z', 'scale', 'rotationX', 'rotationY', 'rotationZ'].forEach((key) => {
-    half.current[key] = motion.exiting
-      ? cubicBezier(motion.from[key], motion.control[key], motion.control2[key], motion.to[key], progress)
-      : quadraticBezier(motion.from[key], motion.control[key], motion.to[key], progress);
-  });
-  const twistProgress = motion.exiting
-    ? smootherStep(THREE.MathUtils.clamp(rawProgress / 0.42, 0, 1))
-    : progress;
-  half.current.cornerTwist = motion.exiting
-    ? THREE.MathUtils.lerp(motion.from.cornerTwist, motion.to.cornerTwist, twistProgress)
-    : quadraticBezier(
-      motion.from.cornerTwist,
-      motion.control.cornerTwist,
-      motion.to.cornerTwist,
-      twistProgress
-    );
-  const opacityProgress = motion.exiting
-    ? smootherStep(THREE.MathUtils.clamp((rawProgress - 0.68) / 0.32, 0, 1))
-    : progress;
-  const foregroundProgress = motion.exiting
-    ? smootherStep(THREE.MathUtils.clamp((rawProgress - 0.72) / 0.28, 0, 1))
-    : progress;
-  half.current.opacity = THREE.MathUtils.lerp(motion.from.opacity, motion.to.opacity, opacityProgress);
-  half.current.foreground = THREE.MathUtils.lerp(motion.from.foreground, motion.to.foreground, foregroundProgress);
+  if (motion.exiting) {
+    ['x', 'y', 'z', 'scale'].forEach((key) => {
+      half.current[key] = cubicBezier(motion.from[key], motion.control[key], motion.control2[key], motion.to[key], progress);
+    });
+    const attitudeProgress = smootherStep(THREE.MathUtils.clamp(rawProgress / 0.45, 0, 1));
+    ['rotationX', 'rotationY', 'rotationZ'].forEach((key) => {
+      half.current[key] = THREE.MathUtils.lerp(motion.from[key], motion.to[key], attitudeProgress);
+    });
+    const twistProgress = smootherStep(THREE.MathUtils.clamp(rawProgress / 0.42, 0, 1));
+    half.current.cornerTwist = THREE.MathUtils.lerp(motion.from.cornerTwist, motion.to.cornerTwist, twistProgress);
+    const opacityProgress = smootherStep(THREE.MathUtils.clamp((rawProgress - 0.68) / 0.32, 0, 1));
+    const foregroundProgress = smootherStep(THREE.MathUtils.clamp((rawProgress - 0.72) / 0.28, 0, 1));
+    half.current.opacity = THREE.MathUtils.lerp(motion.from.opacity, motion.to.opacity, opacityProgress);
+    half.current.foreground = THREE.MathUtils.lerp(motion.from.foreground, motion.to.foreground, foregroundProgress);
+  } else {
+    ['x', 'y', 'z', 'scale'].forEach((key) => {
+      half.current[key] = cubicBezier(motion.from[key], motion.control[key], motion.control2[key], motion.to[key], progress);
+    });
+    const poseProgress = smootherStep(Math.min(1, rawProgress / 0.9));
+    const bankImpulse = bellImpulse(rawProgress, 0.34);
+    const overshootImpulse = bellImpulse(rawProgress, 0.6) * 0.08;
+    ['rotationX', 'rotationY', 'rotationZ'].forEach((key) => {
+      const span = motion.to[key] - motion.from[key];
+      half.current[key] = motion.from[key] + span * (poseProgress + overshootImpulse) +
+        motion.bank[key] * bankImpulse;
+    });
+    half.current.cornerTwist = THREE.MathUtils.lerp(motion.from.cornerTwist, motion.to.cornerTwist, poseProgress) +
+      motion.twistAmp * bellImpulse(rawProgress, 0.42);
+    const fadeProgress = motion.to.opacity > motion.from.opacity
+      ? smootherStep(Math.min(1, rawProgress / 0.3))
+      : progress;
+    half.current.opacity = THREE.MathUtils.lerp(motion.from.opacity, motion.to.opacity, fadeProgress);
+    half.current.foreground = THREE.MathUtils.lerp(motion.from.foreground, motion.to.foreground, progress);
+  }
   if (rawProgress >= 1) {
     Object.assign(half.current, motion.to);
     half.motion = null;
   }
 }
 
-function quadraticBezier(start, control, end, progress) {
-  const inverse = 1 - progress;
-  return inverse * inverse * start + 2 * inverse * progress * control + progress * progress * end;
+function bellImpulse(progress, peak) {
+  if (progress <= 0 || progress >= 1) {
+    return 0;
+  }
+  return progress < peak
+    ? smootherStep(progress / peak)
+    : 1 - smootherStep((progress - peak) / (1 - peak));
 }
 
 function cubicBezier(start, control1, control2, end, progress) {

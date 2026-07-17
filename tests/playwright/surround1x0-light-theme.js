@@ -2,7 +2,10 @@
  * テスト概要:
  *  - 目的: Surround1x0-AKDK の4つのコンテンツとフッタ設定の5停止位置、Three.js描画、テーマ連動モデル、レスポンシブ配置を検証する。
  *  - 期待値: 各セグメントが1 viewportに収まり、02/03で注目する片側ユニットが切り替わり、
- *    移動方式は二次ベジェ曲線とsmootherstep減速になり、スケールのオーバーシュートは発生しない。
+ *    通常移動は三次ベジェの弧にバンクと一過性の対角twistを重ね、退場側または移動量の大きい側が
+ *    先行するlead-followとsmootherstep減速になり、スケールのオーバーシュートは発生しない。
+ *    透明で駐機中のユニットは画面端付近のステージング姿勢からフェードインしながら再入場し、
+ *    退場側が消える前に画面内へ入るため移動中に両ユニットが同時に画面から消えない。
  *    ダーク時はBlack GLBと赤いアクセント、ライト時はWhite GLBと
  *    グレーのアクセントが選択される。全セグメントの文字レイヤーは3D canvasより手前に置く。
  *    第1セグメントは中間幅で左右ユニットの距離を縮め、
@@ -255,29 +258,68 @@ async function main() {
     assert(rendererState.exitCurve === 'cubic-bezier', 'Exit motion did not use its dedicated cubic curve', rendererState);
     assert(rendererState.exitCorner === 'outer-back', 'Exit twist was not anchored to the outer-back corner direction', rendererState);
     assert(rendererState.twistSpace === 'mirrored-local-diagonal', 'Exit twist did not use mirrored local diagonal axes', rendererState);
+    assert(rendererState.motionKind === 'cubic-swing-arc', 'Transit motion did not use the cubic swing arc', rendererState);
+    assert(rendererState.transitSwing === 'travel-scaled-banking', 'Transit motion did not expose travel-scaled banking', rendererState);
+    assert(rendererState.transitTwist === 'transient-corner-bell', 'Transit motion did not expose the transient corner twist', rendererState);
+    assert(rendererState.transitStagger === 'lead-follow', 'Transit motion did not expose lead-follow staggering', rendererState);
     assert(rendererState.exitFade === 'final-third', 'Exit motion did not preserve the model until the final third', rendererState);
     assert(rendererState.materialFade === true, 'Pose opacity was not connected to cloned Three.js materials', rendererState);
     assert(rendererState.foregroundRendering === 'single-canvas', '3D rendering was not consolidated behind the copy', rendererState);
     const desktopExit = rendererState.exitTargets.desktop;
     assert(
-      desktopExit.right.x >= 0.7 && desktopExit.right.y >= 0.4 && desktopExit.right.z >= 0.17 && desktopExit.right.scale > 2 &&
-      desktopExit.right.cornerTwist >= 0.64 &&
+      desktopExit.right.x >= 0.5 && desktopExit.right.y >= 0.5 && desktopExit.right.y >= desktopExit.right.x * 0.9 &&
+      desktopExit.right.z >= 0.24 && desktopExit.right.scale > 2 &&
+      desktopExit.right.rotationX <= -0.5 && desktopExit.right.rotationY <= -1 &&
+      desktopExit.right.cornerTwist >= 0.85 &&
       desktopExit.left.x === -desktopExit.right.x &&
       desktopExit.left.y === desktopExit.right.y && desktopExit.left.z === desktopExit.right.z &&
       desktopExit.left.rotationY === -desktopExit.right.rotationY &&
       desktopExit.left.rotationZ === -desktopExit.right.rotationZ,
-      'Left and right exit targets were not mirrored toward the upper camera-side corners',
+      'Left and right exit targets did not loom toward the camera and leave through the upper screen corners',
       desktopExit
+    );
+    assert(rendererState.reentryStaging === 'near-frustum', 'Re-entry did not expose near-frustum staging', rendererState);
+    const desktopStaging = rendererState.stagingTargets.desktop;
+    const mobileStaging = rendererState.stagingTargets.mobile;
+    assert(
+      desktopStaging.right.x > 0 && desktopStaging.right.x < desktopExit.right.x &&
+      desktopStaging.right.y < desktopExit.right.y && desktopStaging.right.z < desktopExit.right.z &&
+      desktopStaging.right.opacity === 0 &&
+      desktopStaging.left.x === -desktopStaging.right.x &&
+      desktopStaging.left.y === desktopStaging.right.y &&
+      mobileStaging.right.x > 0 && mobileStaging.right.x < rendererState.exitTargets.mobile.right.x &&
+      mobileStaging.left.x === -mobileStaging.right.x,
+      'Staging poses were not placed near the frame edge inside the exit trajectories',
+      { desktopStaging, mobileStaging }
     );
     let accentState = await readAccent(page);
     assert(accentState.accent === '#ff344a', 'Dark theme accent did not match the red sphere direction', accentState);
     assert(accentState.indicator === 'rgb(255, 52, 74)', 'Dark nav indicator did not use the red accent', accentState);
 
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 1, source: 'test-transit' } }));
+    });
+    await page.waitForFunction(() => {
+      const pose = window.__SURROUND_3D__?.currentPoses?.right;
+      return pose && pose.cornerTwist > 0.1;
+    }, null, { timeout: 2500 });
+    await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
+    const settledFeatured = await page.evaluate(() => window.__SURROUND_3D__.currentPoses.right);
+    assert(
+      Math.abs(settledFeatured.cornerTwist) < 0.02 && settledFeatured.rotationY < -0.4,
+      'Featured right unit did not settle back from its transient transit twist',
+      settledFeatured
+    );
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 0, source: 'test-transit-reset' } }));
+    });
+    await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
+
     await clickSegment(page, 2);
     let motionState = await page.evaluate(() => window.__SURROUND_3D__);
     assert(motionState.activeScene === 1, 'Segment 02 did not activate right-unit scene', motionState);
     assert(motionState.foregroundSide === 'right', 'Segment 02 did not feature the right unit', motionState);
-    assert(motionState.motionKind === 'quadratic-bezier', 'Segment 02 did not use curved motion', motionState);
+    assert(motionState.motionKind === 'cubic-swing-arc', 'Segment 02 did not use the cubic swing arc', motionState);
     assert(motionState.motionEasing === 'smootherstep', 'Segment 02 did not use zero-velocity easing', motionState);
     assert(motionState.scaleOvershoot === false, 'Segment 02 still used scale overshoot', motionState);
     assert(motionState.settling === 'zero-velocity', 'Segment 02 did not expose seamless settling', motionState);
@@ -287,17 +329,21 @@ async function main() {
     });
     await page.waitForFunction(() => {
       const pose = window.__SURROUND_3D__?.currentPoses?.right;
-      return pose && pose.x > 0.105 && pose.y > 0.07 && pose.z > 0.11 &&
+      return pose && pose.x > 0.105 && pose.y > 0.1 && pose.z > 0.14 &&
         pose.scale > 1.86 && pose.cornerTwist > 0.4 && pose.foreground > 0.95;
     }, null, { timeout: 1000 });
     const rightExitPose = await page.evaluate(() => window.__SURROUND_3D__.currentPoses.right);
     assert(
-      rightExitPose.x > 0.105 && rightExitPose.y > 0.07 && rightExitPose.z > 0.11 &&
+      rightExitPose.x > 0.105 && rightExitPose.y > 0.1 && rightExitPose.z > 0.14 &&
       rightExitPose.scale > 1.86 && rightExitPose.cornerTwist > 0.4 &&
       rightExitPose.foreground > 0.95,
       'Right unit did not visibly rise, advance, enlarge, and twist while exiting',
       rightExitPose
     );
+    await page.waitForFunction(() => {
+      const poses = window.__SURROUND_3D__?.currentPoses;
+      return poses && poses.left.x >= -0.36 && poses.left.opacity > 0.4 && poses.right.opacity > 0.9;
+    }, null, { timeout: 1500 });
     const stackingState = await page.evaluate(() => ({
       content: Number.parseInt(getComputedStyle(document.querySelector('.surround-segments')).zIndex, 10),
       canvas: Number.parseInt(getComputedStyle(document.querySelector('.surround-visual')).zIndex, 10)
@@ -317,17 +363,21 @@ async function main() {
     });
     await page.waitForFunction(() => {
       const pose = window.__SURROUND_3D__?.currentPoses?.left;
-      return pose && pose.x < -0.105 && pose.y > 0.07 && pose.z > 0.11 &&
+      return pose && pose.x < -0.105 && pose.y > 0.1 && pose.z > 0.14 &&
         pose.scale > 1.86 && pose.cornerTwist > 0.4 && pose.foreground > 0.95;
     }, null, { timeout: 1000 });
     const leftExitPose = await page.evaluate(() => window.__SURROUND_3D__.currentPoses.left);
     assert(
-      leftExitPose.x < -0.105 && leftExitPose.y > 0.07 && leftExitPose.z > 0.11 &&
+      leftExitPose.x < -0.105 && leftExitPose.y > 0.1 && leftExitPose.z > 0.14 &&
       leftExitPose.scale > 1.86 && leftExitPose.cornerTwist > 0.4 &&
       leftExitPose.foreground > 0.95,
       'Left unit exit did not mirror the right unit toward the upper-left camera side',
       leftExitPose
     );
+    await page.waitForFunction(() => {
+      const poses = window.__SURROUND_3D__?.currentPoses;
+      return poses && poses.right.x <= 0.36 && poses.right.opacity > 0.4 && poses.left.opacity > 0.9;
+    }, null, { timeout: 1500 });
     await page.evaluate(() => {
       window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 2, source: 'test-restore' } }));
     });
