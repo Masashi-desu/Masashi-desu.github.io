@@ -108,7 +108,7 @@ body.retreat-landing,
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
-.retreat-screen__glass {
+.retreat-screen__glass.liquidGL {
   position: absolute;
   inset: 0;
   z-index: 1;

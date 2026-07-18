@@ -22,6 +22,22 @@
   let activeTheme = '';
   let resumeTime = 0;
 
+  function protectHeroLensLayout() {
+    const heroLens = document.getElementById('retreat-screen-glass');
+    if (!heroLens) {
+      return;
+    }
+
+    Object.assign(heroLens.style, {
+      position: 'absolute',
+      zIndex: '1',
+      inset: '0',
+      display: 'block',
+      minWidth: '0',
+      pointerEvents: 'none'
+    });
+  }
+
   function protectCardLayout(card, layer) {
     if (window.getComputedStyle(card).position === 'static') {
       card.style.position = 'relative';
@@ -161,6 +177,7 @@
     }
   }
 
+  protectHeroLensLayout();
   decorateLiquidCards();
 
   if (document.readyState === 'loading') {
