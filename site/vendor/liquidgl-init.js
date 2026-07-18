@@ -59,6 +59,22 @@
     return Array.isArray(result) ? result.filter(Boolean) : [result];
   }
 
+  function readNumberOption(target, name, fallback) {
+    const value = Number(target && target.dataset ? target.dataset[name] : NaN);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function readBooleanOption(target, name, fallback) {
+    const value = target && target.dataset ? target.dataset[name] : undefined;
+    if (value === 'true') {
+      return true;
+    }
+    if (value === 'false') {
+      return false;
+    }
+    return fallback;
+  }
+
   function revealPendingLenses() {
     const renderer = getRenderer();
     if (!renderer || renderer.texture || !Array.isArray(renderer.lenses)) {
@@ -143,18 +159,19 @@
     initialized = true;
     let result;
     try {
+      const targetOptions = targets[0];
       result = window.liquidGL({
         target: TARGET_SELECTOR,
         snapshot: 'body',
         resolution: 1.25,
         snapshotImageTimeout: 600,
         snapshotCaptureTimeout: getSnapshotCaptureTimeout(),
-        refraction: 0,
-        bevelDepth: 0.052,
-        bevelWidth: 0.211,
-        frost: 2,
+        refraction: readNumberOption(targetOptions, 'liquidRefraction', 0),
+        bevelDepth: readNumberOption(targetOptions, 'liquidBevelDepth', 0.052),
+        bevelWidth: readNumberOption(targetOptions, 'liquidBevelWidth', 0.211),
+        frost: readNumberOption(targetOptions, 'liquidFrost', 2),
         shadow: false,
-        specular: true,
+        specular: readBooleanOption(targetOptions, 'liquidSpecular', true),
         reveal: 'fade',
         revealDuration: 420,
         tilt: false,

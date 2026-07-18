@@ -107,11 +107,36 @@
   </script>
 </head>
 <body class="page-shell retreat-landing">
+  <div class="retreat-page-background" aria-hidden="true">
+    <video
+      id="retreat-background-video"
+      class="retreat-page-background__video"
+      muted
+      loop
+      autoplay
+      playsinline
+      preload="metadata"
+      disablepictureinpicture
+      data-dark-src="./assets/retreat-background-dark.mp4"
+      data-light-src="./assets/retreat-background-light.mp4"
+      data-dark-poster="./assets/retreat-background-dark.webp"
+      data-light-poster="./assets/retreat-background-light.webp"
+      tabindex="-1"
+    ></video>
+  </div>
   <div class="retreat-home" data-transition-fade>
     <section id="launcher" class="retreat-viewport" aria-labelledby="retreat-title">
       <div class="retreat-screen">
-        <div class="retreat-screen__wallpaper" aria-hidden="true"></div>
-        <div id="retreat-screen-glass" class="retreat-screen__glass liquidGL" aria-hidden="true"></div>
+        <div
+          id="retreat-screen-glass"
+          class="retreat-screen__glass liquidGL"
+          data-liquid-refraction="0.012"
+          data-liquid-bevel-depth="0.048"
+          data-liquid-bevel-width="0.18"
+          data-liquid-frost="0"
+          data-liquid-specular="false"
+          aria-hidden="true"
+        ></div>
       </div>
       <div class="retreat-screen__content" data-liquid-ignore>
 

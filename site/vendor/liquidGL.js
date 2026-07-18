@@ -201,6 +201,8 @@
       this._videoNodes = this._videoNodes.filter((v) => !this._isIgnored(v));
       this._tmpCanvas = document.createElement("canvas");
       this._tmpCtx = this._tmpCanvas.getContext("2d");
+      this._videoClipCanvas = document.createElement("canvas");
+      this._videoClipCtx = this._videoClipCanvas.getContext("2d");
 
       this.canvas.style.opacity = "0";
 
@@ -773,6 +775,60 @@
     }
 
     /* ----------------------------- */
+    _drawVideoFrame(ctx, video, style, width, height) {
+      const sourceWidth = video.videoWidth;
+      const sourceHeight = video.videoHeight;
+      if (
+        style.objectFit !== "cover" ||
+        !sourceWidth ||
+        !sourceHeight ||
+        width <= 0 ||
+        height <= 0
+      ) {
+        ctx.drawImage(video, 0, 0, width, height);
+        return;
+      }
+
+      const sourceRatio = sourceWidth / sourceHeight;
+      const targetRatio = width / height;
+      let cropWidth = sourceWidth;
+      let cropHeight = sourceHeight;
+
+      if (sourceRatio > targetRatio) {
+        cropWidth = sourceHeight * targetRatio;
+      } else {
+        cropHeight = sourceWidth / targetRatio;
+      }
+
+      const position = (style.objectPosition || "50% 50%").trim().split(/\s+/);
+      const parsePosition = (value, startKeyword, endKeyword) => {
+        if (value === startKeyword) return 0;
+        if (value === endKeyword) return 1;
+        if (value === "center") return 0.5;
+        if (value && value.endsWith("%")) {
+          return Math.max(0, Math.min(1, parseFloat(value) / 100));
+        }
+        return 0.5;
+      };
+      const positionX = parsePosition(position[0], "left", "right");
+      const positionY = parsePosition(position[1] || position[0], "top", "bottom");
+      const sourceX = (sourceWidth - cropWidth) * positionX;
+      const sourceY = (sourceHeight - cropHeight) * positionY;
+
+      ctx.drawImage(
+        video,
+        sourceX,
+        sourceY,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        width,
+        height
+      );
+    }
+
+    /* ----------------------------- */
     _updateDynamicVideos() {
       if (this._isScrolling && this._scrollUpdateCounter % 2 !== 0) return;
       if (
@@ -847,7 +903,7 @@
             drawH
           );
 
-          this._tmpCtx.drawImage(vid, 0, 0, drawW, drawH);
+          this._drawVideoFrame(this._tmpCtx, vid, style, drawW, drawH);
           this._tmpCtx.restore();
         } catch (e) {
           console.warn("liquidGL: Error drawing video frame", e);
@@ -888,6 +944,30 @@
 
         if (updW <= 0 || updH <= 0) return;
 
+        let uploadSource = this._tmpCanvas;
+        if (srcX !== 0 || srcY !== 0 || updW !== drawW || updH !== drawH) {
+          if (
+            this._videoClipCanvas.width !== updW ||
+            this._videoClipCanvas.height !== updH
+          ) {
+            this._videoClipCanvas.width = updW;
+            this._videoClipCanvas.height = updH;
+          }
+          this._videoClipCtx.clearRect(0, 0, updW, updH);
+          this._videoClipCtx.drawImage(
+            this._tmpCanvas,
+            srcX,
+            srcY,
+            updW,
+            updH,
+            0,
+            0,
+            updW,
+            updH
+          );
+          uploadSource = this._videoClipCanvas;
+        }
+
         gl.bindTexture(gl.TEXTURE_2D, this.texture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
         gl.texSubImage2D(
@@ -897,7 +977,7 @@
           dstY,
           gl.RGBA,
           gl.UNSIGNED_BYTE,
-          this._tmpCanvas
+          uploadSource
         );
       });
     }

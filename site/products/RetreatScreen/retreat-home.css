@@ -40,10 +40,41 @@ body.retreat-landing,
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }
 
+.retreat-page-background {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  background-color: #171326;
+  background-image: url("./assets/retreat-background-dark.webp");
+  background-position: center;
+  background-size: cover;
+  pointer-events: none;
+}
+
+:root[data-theme="light"] .retreat-page-background {
+  background-color: #d9d5f7;
+  background-image: url("./assets/retreat-background-light.webp");
+}
+
+.retreat-page-background__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.retreat-page-background__video.is-ready {
+  opacity: 1;
+}
+
 .retreat-home {
   position: relative;
+  z-index: 1;
   min-height: 100vh;
-  background: var(--retreat-black);
+  background: transparent;
 }
 
 .visually-hidden {
@@ -63,26 +94,18 @@ body.retreat-landing,
   position: relative;
   min-height: 100svh;
   padding: var(--retreat-viewport-pad);
-  background: #000000;
+  background: transparent;
 }
 
 .retreat-screen {
   position: relative;
+  z-index: 1;
   min-height: max(43.75rem, calc(100svh - 1rem));
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: clamp(2.25rem, 4.1vw, 4rem);
-  background: rgba(7, 7, 7, 0.965);
+  background: rgba(8, 7, 16, 0.06);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
-}
-
-.retreat-screen__wallpaper {
-  position: absolute;
-  inset: -4rem;
-  z-index: 0;
-  pointer-events: none;
-  background: #09131d;
-  opacity: 1;
 }
 
 .retreat-screen__glass {
@@ -91,6 +114,20 @@ body.retreat-landing,
   z-index: 1;
   border-radius: inherit;
   --home-nav-bg: rgba(10, 20, 31, 0.72);
+}
+
+.retreat-screen__glass::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(7, 5, 18, 0.12), rgba(6, 5, 14, 0.2));
+  content: "";
+  pointer-events: none;
+}
+
+:root[data-theme="light"] .retreat-screen__glass::after {
+  background: linear-gradient(180deg, rgba(22, 16, 40, 0.08), rgba(17, 13, 32, 0.16));
 }
 
 .retreat-screen__glass.is-liquidgl-fallback {
@@ -161,6 +198,7 @@ body.retreat-landing,
   font-weight: 680;
   line-height: 1;
   letter-spacing: -0.045em;
+  text-shadow: 0 0.18rem 1.6rem rgba(12, 8, 28, 0.34);
 }
 
 .retreat-title-input {
@@ -303,6 +341,7 @@ body.retreat-landing,
   font-size: clamp(0.85rem, 1.15vw, 1.15rem);
   font-weight: 590;
   line-height: 1.2;
+  text-shadow: 0 0.1rem 0.75rem rgba(10, 7, 24, 0.5);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -435,7 +474,7 @@ body.is-retreat-dragging {
   flex-direction: column;
   gap: clamp(5rem, 9vw, 9rem);
   padding: clamp(6rem, 10vw, 10rem) clamp(1rem, 3vw, 3rem) clamp(5rem, 8vw, 8rem);
-  background: #050505;
+  background: transparent;
 }
 
 .retreat-section {
@@ -707,9 +746,86 @@ body.is-retreat-dragging {
   margin: 1rem 0 0;
 }
 
+.retreat-liquid-card {
+  position: relative;
+  background: transparent;
+}
+
+.retreat-liquid-card > :not(.retreat-card-liquid) {
+  position: relative;
+  z-index: 3;
+}
+
+.retreat-card-liquid {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  border: 1px solid var(--retreat-line-soft);
+  border-radius: inherit;
+  --home-nav-bg: rgba(10, 9, 16, 0.82);
+}
+
+.retreat-card-liquid::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(8, 7, 13, 0.7);
+  content: "";
+  pointer-events: none;
+}
+
+.retreat-section-window > .retreat-card-liquid {
+  border-color: var(--retreat-line);
+}
+
+.retreat-info-card > .retreat-card-liquid::after,
+.retreat-spec-list > .retreat-card-liquid::after,
+.retreat-care-card > .retreat-card-liquid::after {
+  background: rgba(16, 15, 22, 0.58);
+}
+
+.retreat-flow-list > li > .retreat-card-liquid::after {
+  background: rgba(12, 11, 18, 0.4);
+}
+
+:root[data-theme="light"] .retreat-liquid-card {
+  --retreat-white: #211b2d;
+  --retreat-muted: rgba(33, 27, 45, 0.7);
+  --retreat-faint: rgba(33, 27, 45, 0.46);
+  --retreat-line: rgba(255, 255, 255, 0.82);
+  --retreat-line-soft: rgba(63, 48, 92, 0.16);
+}
+
+:root[data-theme="light"] .retreat-section-window.retreat-liquid-card {
+  box-shadow: 0 2.25rem 6rem rgba(73, 55, 112, 0.18);
+}
+
+:root[data-theme="light"] .retreat-card-liquid {
+  border-color: rgba(255, 255, 255, 0.68);
+  --home-nav-bg: rgba(247, 245, 255, 0.84);
+}
+
+:root[data-theme="light"] .retreat-section-window > .retreat-card-liquid {
+  border-color: rgba(255, 255, 255, 0.88);
+}
+
+:root[data-theme="light"] .retreat-card-liquid::after {
+  background: rgba(248, 247, 255, 0.52);
+}
+
+:root[data-theme="light"] .retreat-info-card > .retreat-card-liquid::after,
+:root[data-theme="light"] .retreat-spec-list > .retreat-card-liquid::after,
+:root[data-theme="light"] .retreat-care-card > .retreat-card-liquid::after {
+  background: rgba(255, 255, 255, 0.42);
+}
+
+:root[data-theme="light"] .retreat-flow-list > li > .retreat-card-liquid::after {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .retreat-footer {
   padding: 0 clamp(1rem, 3vw, 3rem) 3rem;
-  background: #050505;
+  background: transparent;
 }
 
 .retreat-footer__inner {
