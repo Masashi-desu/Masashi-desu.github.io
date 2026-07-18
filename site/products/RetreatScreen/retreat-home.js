@@ -693,7 +693,9 @@
   });
 
   window.addEventListener('pageshow', () => {
-    window.scrollTo(0, 0);
+    if (!window.location.hash) {
+      window.scrollTo(0, 0);
+    }
   }, { once: true });
 
   items.forEach(bindItem);

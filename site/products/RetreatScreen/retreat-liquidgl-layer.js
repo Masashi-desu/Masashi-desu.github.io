@@ -22,6 +22,21 @@
   let activeTheme = '';
   let resumeTime = 0;
 
+  function protectCardLayout(card, layer) {
+    if (window.getComputedStyle(card).position === 'static') {
+      card.style.position = 'relative';
+    }
+
+    Object.assign(layer.style, {
+      position: 'absolute',
+      zIndex: '2',
+      inset: '0',
+      display: 'block',
+      minWidth: '0',
+      pointerEvents: 'none'
+    });
+  }
+
   function decorateLiquidCards() {
     document.querySelectorAll(CARD_SELECTOR).forEach((card) => {
       if (card.classList.contains('retreat-liquid-card')) {
@@ -36,6 +51,7 @@
       layer.dataset.liquidFrost = String(CARD_LIQUID_OPTIONS.frost);
       layer.dataset.liquidSpecular = String(CARD_LIQUID_OPTIONS.specular);
       layer.setAttribute('aria-hidden', 'true');
+      protectCardLayout(card, layer);
 
       card.classList.add('retreat-liquid-card');
       card.setAttribute('data-liquid-ignore', '');

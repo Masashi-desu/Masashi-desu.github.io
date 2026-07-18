@@ -757,7 +757,7 @@ body.is-retreat-dragging {
   min-width: 0;
 }
 
-.retreat-card-liquid {
+.retreat-card-liquid.liquidGL {
   position: absolute;
   z-index: 2;
   inset: 0;
