@@ -8,6 +8,9 @@
 - リリースは、ローカルの `main` ブランチからリモートの `main` ブランチへ fast-forward で push し、GitHub Pages にデプロイする運用とすること。
 - 開発は原則としてローカルの `main` ブランチで行い、リモートの `main` ブランチへの push をもってリリースを開始すること。
 - 必要に応じて push 前にリモートの更新を取り込み、ローカルとリモートの `main` ブランチを同期すること。
+- リリース前に `.agents/skills/release-quality-gate/SKILL.md` を読み、その手順を省略せず実行すること。
+- `npm test`、PCブラウザ確認、Playwright WebKitテスト、`xcrun simctl boot` で起動したiPhone SimulatorのMobile Safari確認、本番ビルドをすべて成功させること。失敗、未実施、確認不能の項目がある場合は `main` へpushしないこと。
+- 品質ゲート完了後に追跡対象ファイルを変更した場合は、全ゲートを最初から再実行すること。
 
 ## ディレクトリ責務
 
@@ -54,4 +57,5 @@ flowchart LR
 ## 規約とSkillの同期
 
 - `README.md` の一時成果物規約を変更した場合は、同じタスク内で `AGENTS.md` と `.agents/skills/use-repo-temp-artifacts/SKILL.md` も同期すること。
+- `README.md` のリリース品質ゲートを変更した場合は、同じタスク内で `AGENTS.md`、`.agents/skills/release-quality-gate/SKILL.md`、`package.json`、GitHub Pagesを公開するすべてのworkflowを同期すること。
 - 規約とSkillが矛盾する場合は `README.md` を優先し、Skill側を修正すること。

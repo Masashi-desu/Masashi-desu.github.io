@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Quality Gate"
+  short_description: "Run all browser and iPhone checks before release"
+  default_prompt: "Use $release-quality-gate to verify every required check before releasing main."

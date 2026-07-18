@@ -91,16 +91,22 @@ body.retreat-landing,
 
 .retreat-viewport {
   --retreat-viewport-pad: 0.5rem;
+  --retreat-launcher-header-top: clamp(5.75rem, 8.35svh, 8.9rem);
+  /* Native panel frame: 796 × 850 pt, including its title-bar area. */
+  --retreat-original-panel-max-height: 106.78392vw;
   position: relative;
-  min-height: 100svh;
+  height: min(100svh, var(--retreat-original-panel-max-height));
+  min-height: 0;
   padding: var(--retreat-viewport-pad);
   background: transparent;
+  container: retreat-launcher / size;
 }
 
 .retreat-screen {
   position: relative;
   z-index: 1;
-  min-height: max(43.75rem, calc(100svh - 1rem));
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: clamp(2.25rem, 4.1vw, 4rem);
@@ -177,7 +183,7 @@ body.retreat-landing,
 .retreat-launcher-header {
   position: absolute;
   z-index: 6;
-  top: clamp(5.75rem, 8.35svh, 8.9rem);
+  top: var(--retreat-launcher-header-top);
   right: clamp(3rem, 9.7vw, 9.7rem);
   left: clamp(3rem, 7.9vw, 7.9rem);
   display: flex;
@@ -244,19 +250,18 @@ body.retreat-landing,
 }
 
 .retreat-launcher-panel__content {
-  --retreat-grid-panel-height: clamp(15.5rem, 22svh, 19rem);
+  --retreat-grid-panel-height: 0rem;
   --retreat-grid-height: 8rem;
   position: absolute;
   z-index: 5;
-  top: clamp(15.5rem, 16svh, 17rem);
+  top: calc(var(--retreat-launcher-header-top) + 6.5rem);
   right: clamp(2.5rem, 6.4vw, 6.5rem);
   bottom: clamp(5.5rem, 8.7svh, 9rem);
   left: clamp(2.5rem, 6.4vw, 6.5rem);
   display: flex;
-  min-height: var(--retreat-grid-panel-height);
+  min-height: 0;
   align-items: flex-start;
-  padding: calc((var(--retreat-grid-panel-height) - var(--retreat-grid-height)) / 2)
-    clamp(1rem, 2.5vw, 2.5rem) 0;
+  padding: 1rem clamp(1rem, 2.5vw, 2.5rem) 0;
   overscroll-behavior-x: contain;
   pointer-events: auto;
   touch-action: pan-y;
@@ -981,13 +986,171 @@ body.is-retreat-dragging {
   }
 }
 
-@media (max-width: 48rem) {
+/*
+ * Native launcher composition.
+ *
+ * The Mac app renders a 796 × 850 pt panel. When the browser panel can keep
+ * that aspect ratio, every launcher metric uses the same limiting-axis scale
+ * instead of growing independently. The values below map directly to the
+ * SwiftUI source: 22 pt close glyph, 28 pt page title, 72 pt icon slots,
+ * 96 × 120 pt cells, 20 pt columns, and the 60/40 pt content insets. The
+ * visible web tile uses the reference artwork's 56 pt optical bounds inside
+ * that 72 pt slot.
+ */
+@media (min-width: 48.01rem) and (max-aspect-ratio: 796 / 850) {
   .retreat-viewport {
-    --retreat-viewport-pad: 0.35rem;
+    --retreat-native-6: min(0.753769cqw, 0.705882cqh);
+    --retreat-native-8: min(1.005025cqw, 0.941176cqh);
+    --retreat-native-10: min(1.256281cqw, 1.176471cqh);
+    --retreat-native-12: min(1.507538cqw, 1.411765cqh);
+    --retreat-native-13: min(1.633166cqw, 1.529412cqh);
+    --retreat-native-14: min(1.758794cqw, 1.647059cqh);
+    --retreat-native-16: min(2.01005cqw, 1.882353cqh);
+    --retreat-native-20: min(2.512563cqw, 2.352941cqh);
+    --retreat-native-22: min(2.763819cqw, 2.588235cqh);
+    --retreat-native-26: min(3.266332cqw, 3.058824cqh);
+    --retreat-native-28: min(3.517588cqw, 3.294118cqh);
+    --retreat-native-36: min(4.522613cqw, 4.235294cqh);
+    --retreat-native-56: min(7.035176cqw, 6.588235cqh);
+    --retreat-native-60: min(7.537688cqw, 7.058824cqh);
+    --retreat-native-64: min(8.040201cqw, 7.529412cqh);
+    --retreat-native-72: min(9.045226cqw, 8.470588cqh);
+    --retreat-native-82: min(10.301508cqw, 9.647059cqh);
+    --retreat-native-96: min(12.060302cqw, 11.294118cqh);
+    --retreat-native-120: min(15.075377cqw, 14.117647cqh);
+    --retreat-native-142: min(17.839196cqw, 16.705882cqh);
+    --retreat-native-220: min(27.638191cqw, 25.882353cqh);
+    --retreat-native-558: min(70.100503cqw, 65.647059cqh);
+    --retreat-native-590: min(74.120603cqw, 69.411765cqh);
+    --retreat-native-676: min(84.924623cqw, 79.529412cqh);
+    --retreat-native-755: min(94.849246cqw, 88.823529cqh);
   }
 
   .retreat-screen {
-    min-height: max(50.75rem, calc(100svh - 0.7rem));
+    border-radius: var(--retreat-native-36);
+  }
+
+  .retreat-close {
+    top: var(--retreat-native-22);
+    left: var(--retreat-native-22);
+    width: var(--retreat-native-22);
+    height: var(--retreat-native-22);
+    font-size: var(--retreat-native-14);
+    box-shadow: none;
+  }
+
+  .retreat-launcher-header {
+    top: var(--retreat-native-72);
+    right: var(--retreat-native-60);
+    left: var(--retreat-native-60);
+    gap: var(--retreat-native-16);
+  }
+
+  .retreat-title,
+  .retreat-title-input {
+    min-width: var(--retreat-native-220);
+    padding: var(--retreat-native-6) var(--retreat-native-10);
+    font-size: var(--retreat-native-28);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+  }
+
+  .retreat-title-input {
+    width: var(--retreat-native-220);
+  }
+
+  .retreat-edit-toggle {
+    min-width: var(--retreat-native-82);
+    min-height: 0;
+    gap: var(--retreat-native-6);
+    padding: var(--retreat-native-8) var(--retreat-native-14);
+    border: 0;
+    font-size: var(--retreat-native-13);
+    font-weight: 500;
+    line-height: 1.3;
+    box-shadow: none;
+  }
+
+  .retreat-edit-toggle i {
+    font-size: 1.2em;
+  }
+
+  .retreat-launcher-panel__content {
+    --retreat-grid-height: var(--retreat-native-558);
+    top: var(--retreat-native-142);
+    right: auto;
+    bottom: auto;
+    left: var(--retreat-native-60);
+    width: var(--retreat-native-676);
+    height: var(--retreat-native-590);
+    padding: var(--retreat-native-16) 0;
+  }
+
+  .retreat-app-grid-viewport {
+    width: var(--retreat-native-676);
+    height: var(--retreat-native-558);
+    min-height: var(--retreat-native-558);
+    margin: 0;
+  }
+
+  .retreat-app-page {
+    grid-template-columns: repeat(6, var(--retreat-native-96));
+    column-gap: var(--retreat-native-20);
+    row-gap: var(--retreat-native-26);
+  }
+
+  .retreat-app-item,
+  .retreat-app-placeholder {
+    min-height: var(--retreat-native-120);
+  }
+
+  .retreat-app-link {
+    height: var(--retreat-native-120);
+    gap: var(--retreat-native-12);
+    padding-top: var(--retreat-native-16);
+  }
+
+  .retreat-app-icon {
+    width: var(--retreat-native-56);
+    height: var(--retreat-native-56);
+    margin: var(--retreat-native-8) 0;
+    border-radius: var(--retreat-native-14);
+    font-size: var(--retreat-native-28);
+  }
+
+  .retreat-app-label {
+    max-width: var(--retreat-native-96);
+    font-size: var(--retreat-native-12);
+    font-weight: 400;
+  }
+
+  .retreat-page-dots {
+    top: var(--retreat-native-755);
+    right: var(--retreat-native-64);
+    bottom: auto;
+    gap: var(--retreat-native-8);
+  }
+
+  .retreat-page-dot {
+    width: var(--retreat-native-8);
+    height: var(--retreat-native-6);
+  }
+
+  .retreat-page-dot.is-active {
+    width: var(--retreat-native-16);
+  }
+}
+
+@media (max-width: 48rem) {
+  .retreat-viewport {
+    --retreat-viewport-pad: 0.35rem;
+    /* Ordinary phone viewports follow the available screen height. */
+    height: 100svh;
+  }
+
+  .retreat-screen {
+    min-height: 0;
     border-radius: 2.25rem;
   }
 
@@ -1000,7 +1163,7 @@ body.is-retreat-dragging {
   }
 
   .retreat-launcher-header {
-    top: 6.1rem;
+    top: 4.15rem;
     right: 1.5rem;
     left: 1.5rem;
     gap: 1rem;
@@ -1023,19 +1186,20 @@ body.is-retreat-dragging {
   }
 
   .retreat-launcher-panel__content {
-    --retreat-grid-panel-height: 28.2rem;
-    --retreat-grid-height: 19.95rem;
-    top: 10.75rem;
+    --retreat-grid-panel-height: 0rem;
+    --retreat-grid-height: 14rem;
+    /* Follow the native launcher's top-down rhythm below the title row. */
+    top: 9.4rem;
     right: 1.1rem;
-    bottom: 4.65rem;
+    bottom: 2.2rem;
     left: 1.1rem;
-    padding-right: 0.8rem;
-    padding-left: 0.8rem;
+    min-height: 0;
+    padding: 0.45rem 0.8rem 0;
   }
 
   .retreat-app-page {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1.75rem 0.45rem;
+    gap: 0.5rem 0.45rem;
   }
 
   .retreat-app-grid-viewport {
@@ -1043,7 +1207,7 @@ body.is-retreat-dragging {
   }
 
   .retreat-app-item {
-    min-height: 9.1rem;
+    min-height: 6.75rem;
   }
 
   .retreat-app-link {
@@ -1072,14 +1236,14 @@ body.is-retreat-dragging {
 
   .retreat-edit-hint {
     right: 6rem;
-    bottom: 4.5rem;
+    bottom: 1rem;
     left: 1.6rem;
     font-size: 0.72rem;
   }
 
   .retreat-page-dots {
     right: 2rem;
-    bottom: 4.65rem;
+    bottom: 1.25rem;
   }
 
   .retreat-content {
@@ -1185,6 +1349,79 @@ body.is-retreat-dragging {
   }
 }
 
+/*
+ * A phone-like viewport can grow with the device. Browser windows at 20:9 or
+ * taller fall back to the Mac app's 796 × 850 frame ratio.
+ */
+@media (max-width: 48rem) and (max-aspect-ratio: 9 / 20) {
+  .retreat-viewport {
+    height: min(100svh, var(--retreat-original-panel-max-height));
+  }
+
+  .retreat-launcher-panel__content {
+    top: min(9.4rem, calc(100cqh - 16.075rem));
+  }
+}
+
+@media (min-width: 36rem) and (max-width: 48rem) {
+  .retreat-launcher-header {
+    top: 5rem;
+  }
+
+  .retreat-launcher-panel__content {
+    --retreat-grid-height: 8rem;
+    top: 10.75rem;
+    bottom: clamp(3rem, 8svh, 5.5rem);
+    padding-top: 1rem;
+  }
+
+  .retreat-app-page {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .retreat-app-item {
+    min-height: 8rem;
+  }
+
+  .retreat-page-dots {
+    bottom: clamp(3rem, 8svh, 5.5rem);
+  }
+}
+
+@media (min-width: 36rem) and (max-width: 48rem) and (max-height: 31rem) {
+  .retreat-launcher-header {
+    top: 4.3rem;
+  }
+
+  .retreat-launcher-panel__content {
+    --retreat-grid-height: 6.25rem;
+    top: 7rem;
+    bottom: 2.75rem;
+    padding-top: 0.5rem;
+  }
+
+  .retreat-app-page {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .retreat-app-item {
+    min-height: 6.25rem;
+  }
+
+  .retreat-app-icon {
+    width: clamp(3.5rem, 10vw, 4.25rem);
+    height: clamp(3.5rem, 10vw, 4.25rem);
+    border-radius: 1rem;
+    font-size: clamp(1.8rem, 6vw, 2.35rem);
+  }
+
+  .retreat-app-label {
+    font-size: 0.68rem;
+  }
+}
+
 @media (max-width: 23rem) {
   .retreat-launcher-header {
     right: 1.1rem;
@@ -1206,7 +1443,7 @@ body.is-retreat-dragging {
   }
 
   .retreat-app-page {
-    gap: 1.85rem 0.2rem;
+    gap: 0.4rem 0.2rem;
   }
 
   .retreat-app-grid-viewport {
@@ -1214,12 +1451,28 @@ body.is-retreat-dragging {
   }
 
   .retreat-launcher-panel__content {
-    --retreat-grid-height: 20.05rem;
+    --retreat-grid-height: 11.9rem;
+    bottom: 1.6rem;
+    padding-top: 0.3rem;
+  }
+
+  .retreat-app-item {
+    min-height: 5.75rem;
   }
 
   .retreat-app-icon {
     width: 4rem;
     height: 4rem;
+  }
+
+  .retreat-page-dots {
+    bottom: 0.85rem;
+  }
+}
+
+@media (max-width: 23rem) and (max-aspect-ratio: 9 / 20) {
+  .retreat-launcher-panel__content {
+    top: max(6.45rem, calc((100cqh - 6.725rem) / 2));
   }
 }
 

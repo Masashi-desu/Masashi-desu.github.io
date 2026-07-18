@@ -91,7 +91,7 @@ jobs:
     needs: validate
     if: ${{ inputs.operation == 'sync' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       contents: write
     outputs:
@@ -118,6 +118,20 @@ jobs:
 
       - name: Test appcast generator
         run: ruby tests/typefetch-appcast-sync.rb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install website dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run all automated tests before commit
+        run: npm test
 
       - name: Commit synchronized appcast
         id: commit
