@@ -124,6 +124,10 @@
       this.scaleFactor = 1;
       this.snapshotImageTimeout = snapshotImageTimeout;
       this.snapshotCaptureTimeout = snapshotCaptureTimeout;
+      this._snapshotResolution = Math.max(
+        0.1,
+        Math.min(3.0, snapshotResolution)
+      );
       this.startTime = Date.now();
       this._scrollUpdateCounter = 0;
 
@@ -205,11 +209,6 @@
       this._videoClipCtx = this._videoClipCanvas.getContext("2d");
 
       this.canvas.style.opacity = "0";
-
-      this._snapshotResolution = Math.max(
-        0.1,
-        Math.min(3.0, snapshotResolution)
-      );
 
       this.useExternalTicker = false;
 

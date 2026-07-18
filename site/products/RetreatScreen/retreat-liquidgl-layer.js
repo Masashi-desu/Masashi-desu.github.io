@@ -9,6 +9,13 @@
   ].join(', ');
   const VIDEO_ID = 'retreat-background-video';
   const MAX_ATTEMPTS = 120;
+  const CARD_LIQUID_OPTIONS = {
+    refraction: 0.02,
+    bevelDepth: 0.06,
+    bevelWidth: 0.2,
+    frost: 0,
+    specular: true
+  };
   const root = document.documentElement;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let attempts = 0;
@@ -23,11 +30,11 @@
 
       const layer = document.createElement('div');
       layer.className = 'retreat-card-liquid liquidGL';
-      layer.dataset.liquidRefraction = '0.012';
-      layer.dataset.liquidBevelDepth = '0.048';
-      layer.dataset.liquidBevelWidth = '0.18';
-      layer.dataset.liquidFrost = '0';
-      layer.dataset.liquidSpecular = 'false';
+      layer.dataset.liquidRefraction = String(CARD_LIQUID_OPTIONS.refraction);
+      layer.dataset.liquidBevelDepth = String(CARD_LIQUID_OPTIONS.bevelDepth);
+      layer.dataset.liquidBevelWidth = String(CARD_LIQUID_OPTIONS.bevelWidth);
+      layer.dataset.liquidFrost = String(CARD_LIQUID_OPTIONS.frost);
+      layer.dataset.liquidSpecular = String(CARD_LIQUID_OPTIONS.specular);
       layer.setAttribute('aria-hidden', 'true');
 
       card.classList.add('retreat-liquid-card');
@@ -126,6 +133,16 @@
     }
     canvas.style.zIndex = '1';
     canvas.style.pointerEvents = 'none';
+
+    renderer.lenses.forEach((lens) => {
+      if (!lens || !lens.el || !lens.el.matches('.retreat-card-liquid')) {
+        return;
+      }
+      lens.options = { ...lens.options, ...CARD_LIQUID_OPTIONS };
+    });
+    if (renderer.texture && typeof renderer.render === 'function') {
+      renderer.render();
+    }
   }
 
   decorateLiquidCards();

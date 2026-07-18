@@ -12,7 +12,9 @@
  *    カーソル移動直後は旧位置のタイルが点灯状態を保ち、時間を置くと通常 alpha へ戻る。
  *    通常モーション環境では同時点灯タイル間に 0.12 以上の強度差があり、同じタイルも時間変化する。
  *  - 検証方法: reduced motion の Chromium でランダム点滅を停止し、canvas のタイル中心画素を
- *    getImageData で読み取る。カーソル移動前後と複数距離の alpha を比較する。
+ *    getImageData で読み取る。Playwright の仮想時計で描画時間を進めながら、カーソル移動前後と
+ *    複数距離の alpha を比較し、通常モーションではポインタ中心に近い安定サンプル群の
+ *    同一タイルを時系列で比較する。
  */
 const http = require('http');
 const fs = require('fs');
@@ -162,11 +164,14 @@ async function main() {
     });
 
     const page = await context.newPage();
+    await page.clock.install();
     await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => {
       const canvas = document.querySelector('[data-philosophy-tiles]');
       return canvas && canvas.width > 0 && canvas.dataset.reducedMotion === 'true';
     });
+    const pageTime = await page.evaluate(() => Date.now());
+    await page.clock.pauseAt(pageTime + 1000);
 
     const idle = await readTileSamples(page);
     assert(
@@ -176,7 +181,7 @@ async function main() {
     );
 
     await page.mouse.move(idle.pointer.x, idle.pointer.y);
-    await page.waitForTimeout(80);
+    await page.clock.runFor(80);
     const enteringGlow = await readTileSamples(page);
     assert(
       enteringGlow.alpha.center >= 0.003 && enteringGlow.alpha.center < 0.45 &&
@@ -184,7 +189,7 @@ async function main() {
       'Pointer glow appeared immediately instead of fading in',
       enteringGlow
     );
-    await page.waitForTimeout(320);
+    await page.clock.runFor(320);
     const glow = await readTileSamples(page);
     const [topExtent, , bottomExtent] = parseNumericList(glow.pointerShapeExtents);
     assert(glow.pointerGlowRadius === 72, 'Pointer glow radius changed unexpectedly', glow);
@@ -202,14 +207,14 @@ async function main() {
     );
 
     await page.mouse.move(idle.pointer.x + 180, idle.pointer.y);
-    await page.waitForTimeout(40);
+    await page.clock.runFor(80);
     const movementFading = await readTileSamples(page);
     assert(
       movementFading.alpha.center > 0.05 && movementFading.alpha.center < glow.alpha.center,
       'Tiles at the previous pointer position did not fade after pointer movement',
       { glow, movementFading }
     );
-    await page.waitForTimeout(650);
+    await page.clock.runFor(650);
     const movementCleared = await readTileSamples(page);
     assert(
       movementCleared.alpha.center <= 0.02,
@@ -218,18 +223,18 @@ async function main() {
     );
 
     await page.mouse.move(idle.pointer.x, idle.pointer.y);
-    await page.waitForTimeout(400);
+    await page.clock.runFor(400);
     const restoredGlow = await readTileSamples(page);
 
     await page.mouse.move(idle.pointer.x, page.viewportSize().height + 20);
-    await page.waitForTimeout(120);
+    await page.clock.runFor(120);
     const fading = await readTileSamples(page);
     assert(
       fading.pointerGlowOpacity > 0 && fading.pointerGlowOpacity < restoredGlow.pointerGlowOpacity,
       'Pointer glow did not begin fading after leaving the browser',
       { restoredGlow, fading }
     );
-    await page.waitForTimeout(280);
+    await page.clock.runFor(280);
     const cleared = await readTileSamples(page);
     assert(
       cleared.pointerGlowOpacity === 0 && cleared.alpha.center <= 0.008 && cleared.hoveredTile === -1,
@@ -238,7 +243,7 @@ async function main() {
     );
 
     await page.mouse.move(idle.pointer.x + TILE_GAP + TILE_SIZE, idle.pointer.y);
-    await page.waitForTimeout(80);
+    await page.clock.runFor(80);
     const reenteredGlow = await readTileSamples(page);
     assert(
       reenteredGlow.pointerTileCount > 0 &&
@@ -268,16 +273,19 @@ async function main() {
       localStorage.setItem('mdw-lang', 'ja');
     });
     const motionPage = await motionContext.newPage();
+    await motionPage.clock.install();
     await motionPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
     await motionPage.waitForFunction(() => {
       const canvas = document.querySelector('[data-philosophy-tiles]');
       return canvas && canvas.width > 0 && canvas.dataset.reducedMotion === 'false';
     });
+    const motionPageTime = await motionPage.evaluate(() => Date.now());
+    await motionPage.clock.pauseAt(motionPageTime + 1000);
     const motionIdle = await readTileSamples(motionPage);
     await motionPage.mouse.move(motionIdle.pointer.x, motionIdle.pointer.y);
-    await motionPage.waitForTimeout(220);
+    await motionPage.clock.runFor(220);
     const firstIntensityState = await readTileSamples(motionPage);
-    await motionPage.waitForTimeout(700);
+    await motionPage.clock.runFor(700);
     const secondIntensityState = await readTileSamples(motionPage);
     const firstShapeSignature = parseNumericList(firstIntensityState.pointerShapeSignature);
     const secondShapeSignature = parseNumericList(secondIntensityState.pointerShapeSignature);

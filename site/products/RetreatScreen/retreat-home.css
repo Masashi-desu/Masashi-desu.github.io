@@ -704,8 +704,8 @@ body.is-retreat-dragging {
   border-bottom: 1px solid var(--retreat-line-soft);
 }
 
-.retreat-spec-list > div:first-child { padding-top: 0; }
-.retreat-spec-list > div:last-child { padding-bottom: 0; border-bottom: 0; }
+.retreat-spec-list > div:first-of-type { padding-top: 0; }
+.retreat-spec-list > div:last-of-type { padding-bottom: 0; border-bottom: 0; }
 
 .retreat-spec-list dt {
   color: var(--retreat-faint);
@@ -754,6 +754,7 @@ body.is-retreat-dragging {
 .retreat-liquid-card > :not(.retreat-card-liquid) {
   position: relative;
   z-index: 3;
+  min-width: 0;
 }
 
 .retreat-card-liquid {
@@ -769,7 +770,7 @@ body.is-retreat-dragging {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: rgba(8, 7, 13, 0.7);
+  background: rgba(8, 7, 13, 0.36);
   content: "";
   pointer-events: none;
 }
@@ -781,11 +782,11 @@ body.is-retreat-dragging {
 .retreat-info-card > .retreat-card-liquid::after,
 .retreat-spec-list > .retreat-card-liquid::after,
 .retreat-care-card > .retreat-card-liquid::after {
-  background: rgba(16, 15, 22, 0.58);
+  background: rgba(16, 15, 22, 0.28);
 }
 
 .retreat-flow-list > li > .retreat-card-liquid::after {
-  background: rgba(12, 11, 18, 0.4);
+  background: rgba(12, 11, 18, 0.2);
 }
 
 :root[data-theme="light"] .retreat-liquid-card {
@@ -810,17 +811,17 @@ body.is-retreat-dragging {
 }
 
 :root[data-theme="light"] .retreat-card-liquid::after {
-  background: rgba(248, 247, 255, 0.52);
+  background: rgba(248, 247, 255, 0.22);
 }
 
 :root[data-theme="light"] .retreat-info-card > .retreat-card-liquid::after,
 :root[data-theme="light"] .retreat-spec-list > .retreat-card-liquid::after,
 :root[data-theme="light"] .retreat-care-card > .retreat-card-liquid::after {
-  background: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 :root[data-theme="light"] .retreat-flow-list > li > .retreat-card-liquid::after {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .retreat-footer {
@@ -1050,7 +1051,7 @@ body.is-retreat-dragging {
   }
 
   .retreat-section-window {
-    padding: 1.5rem;
+    padding: clamp(1.25rem, 5vw, 1.5rem);
     border-radius: 2rem;
   }
 
@@ -1061,11 +1062,50 @@ body.is-retreat-dragging {
   }
 
   .retreat-section-heading {
-    align-items: flex-start;
+    display: grid;
+    width: 100%;
+    align-items: center;
+    grid-template-columns: 3.5rem minmax(0, 1fr);
+    gap: 0.75rem 1rem;
+  }
+
+  .retreat-section-heading > div {
+    display: contents;
+  }
+
+  .retreat-section-heading .retreat-section-app-icon {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .retreat-section-heading .retreat-section-label {
+    margin: 0;
+    grid-column: 2;
+    grid-row: 1;
   }
 
   .retreat-section-title {
-    font-size: clamp(1.7rem, 8vw, 2.4rem);
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: clamp(1.45rem, 6vw, 1.9rem);
+    line-height: 1.12;
+  }
+
+  .retreat-feature-grid {
+    gap: 0.75rem;
+  }
+
+  .retreat-info-card {
+    min-height: 0;
+    padding: 1.35rem;
+  }
+
+  .retreat-info-card__number {
+    margin-bottom: 1.75rem;
+  }
+
+  .retreat-info-card__icon {
+    margin-bottom: 1rem;
   }
 
   .retreat-preview-frame {

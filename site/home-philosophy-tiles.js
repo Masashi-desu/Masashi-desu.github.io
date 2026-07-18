@@ -25,6 +25,7 @@
   const POINTER_FADE_OUT_DURATION = 320;
   const POINTER_TILE_FADE_IN_TAU = 120;
   const POINTER_TILE_FADE_OUT_TAU = 150;
+  const POINTER_INTENSITY_SAMPLE_LIMIT = 12;
   const FRAME_INTERVAL = 1000 / 30;
   const PULSE_INTERVAL = 110;
   const MAX_DEVICE_PIXEL_RATIO = 2;
@@ -255,7 +256,7 @@
       });
     });
 
-    const intensitySamples = [];
+    const intensitySampleCandidates = [];
     let intensityTotal = 0;
     let intensityMin = 1;
     let intensityMax = 0;
@@ -289,10 +290,22 @@
       intensityTotal += tile.intensity;
       intensityMin = Math.min(intensityMin, tile.intensity);
       intensityMax = Math.max(intensityMax, tile.intensity);
-      if (intensitySamples.length < 6) {
-        intensitySamples.push(`${index}:${tile.intensity.toFixed(3)}`);
+      if (tile.targetEnvelope > 0) {
+        intensitySampleCandidates.push({
+          index,
+          intensity: tile.intensity,
+          envelope: tile.targetEnvelope
+        });
       }
     });
+
+    const intensitySamples = intensitySampleCandidates
+      .sort((first, second) => (
+        second.envelope - first.envelope || first.index - second.index
+      ))
+      .slice(0, POINTER_INTENSITY_SAMPLE_LIMIT)
+      .sort((first, second) => first.index - second.index)
+      .map(({ index, intensity }) => `${index}:${intensity.toFixed(3)}`);
 
     const tileCount = pointerTiles.size;
     canvas.dataset.pointerTileCount = String(tileCount);
