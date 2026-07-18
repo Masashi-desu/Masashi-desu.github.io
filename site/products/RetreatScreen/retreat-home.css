@@ -244,25 +244,58 @@ body.retreat-landing,
 }
 
 .retreat-launcher-panel__content {
+  --retreat-grid-panel-height: clamp(15.5rem, 22svh, 19rem);
+  --retreat-grid-height: 8rem;
   position: absolute;
   z-index: 5;
   top: clamp(15.5rem, 16svh, 17rem);
   right: clamp(2.5rem, 6.4vw, 6.5rem);
+  bottom: clamp(5.5rem, 8.7svh, 9rem);
   left: clamp(2.5rem, 6.4vw, 6.5rem);
   display: flex;
-  min-height: clamp(15.5rem, 22svh, 19rem);
-  align-items: center;
-  padding: clamp(2rem, 3vw, 3rem) clamp(1rem, 2.5vw, 2.5rem);
+  min-height: var(--retreat-grid-panel-height);
+  align-items: flex-start;
+  padding: calc((var(--retreat-grid-panel-height) - var(--retreat-grid-height)) / 2)
+    clamp(1rem, 2.5vw, 2.5rem) 0;
+  overscroll-behavior-x: contain;
   pointer-events: auto;
+  touch-action: pan-y;
+}
+
+.retreat-app-grid-viewport {
+  position: relative;
+  width: min(100%, 76rem);
+  min-height: 8rem;
+  margin: 0 auto;
+  overflow: hidden;
+  contain: layout paint;
+  isolation: isolate;
 }
 
 .retreat-app-grid {
+  display: flex;
+  width: 100%;
+  margin: 0;
+  transform: translate3d(var(--retreat-page-offset, 0%), 0, 0);
+  will-change: transform;
+}
+
+.retreat-app-grid.is-page-transitioning {
+  transition: transform 320ms ease-in-out;
+}
+
+.retreat-app-page {
   display: grid;
-  width: min(100%, 76rem);
-  margin: 0 auto;
+  width: 100%;
+  min-width: 100%;
+  flex: 0 0 100%;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1.25rem;
   align-items: start;
+}
+
+.retreat-app-page[aria-hidden="true"] {
+  pointer-events: none;
 }
 
 .retreat-app-item[hidden] {
@@ -900,7 +933,7 @@ body.is-retreat-dragging {
     padding-left: 2.5rem;
   }
 
-  .retreat-app-grid {
+  .retreat-app-page {
     max-width: none;
     grid-template-columns: repeat(6, 7rem);
     justify-content: space-between;
@@ -919,7 +952,7 @@ body.is-retreat-dragging {
     left: 2rem;
   }
 
-  .retreat-app-grid {
+  .retreat-app-page {
     gap: 0.8rem;
   }
 
@@ -990,19 +1023,23 @@ body.is-retreat-dragging {
   }
 
   .retreat-launcher-panel__content {
+    --retreat-grid-panel-height: 28.2rem;
+    --retreat-grid-height: 19.95rem;
     top: 10.75rem;
     right: 1.1rem;
+    bottom: 4.65rem;
     left: 1.1rem;
-    min-height: 28.2rem;
+    padding-right: 0.8rem;
+    padding-left: 0.8rem;
   }
 
-  .retreat-launcher-panel__content {
-    padding: 2rem 0.8rem;
-  }
-
-  .retreat-app-grid {
+  .retreat-app-page {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1.75rem 0.45rem;
+  }
+
+  .retreat-app-grid-viewport {
+    min-height: var(--retreat-grid-height);
   }
 
   .retreat-app-item {
@@ -1168,8 +1205,16 @@ body.is-retreat-dragging {
     padding: 0;
   }
 
-  .retreat-app-grid {
+  .retreat-app-page {
     gap: 1.85rem 0.2rem;
+  }
+
+  .retreat-app-grid-viewport {
+    min-height: var(--retreat-grid-height);
+  }
+
+  .retreat-launcher-panel__content {
+    --retreat-grid-height: 20.05rem;
   }
 
   .retreat-app-icon {

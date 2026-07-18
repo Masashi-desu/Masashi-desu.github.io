@@ -3,8 +3,13 @@
   const LONG_PRESS_MS = 600;
   const DRAG_THRESHOLD_PX = 2;
   const SWIPE_THRESHOLD_PX = 40;
+  const PAGE_SCROLL_THRESHOLD_PX = 36;
+  const PAGE_SCROLL_IDLE_MS = 350;
+  const PAGE_TRANSITION_MS = 320;
 
   const grid = document.getElementById('retreat-app-grid');
+  const gridViewport = document.querySelector('.retreat-app-grid-viewport');
+  const pagePanels = Array.from(document.querySelectorAll('[data-launcher-page]'));
   const glassPanel = document.getElementById('retreat-screen-glass');
   const interactionSurface = document.querySelector('.retreat-launcher-panel__content');
   const screen = document.querySelector('.retreat-screen');
@@ -16,7 +21,7 @@
   const titleInput = document.getElementById('retreat-title-input');
   const pageDots = Array.from(document.querySelectorAll('[data-page-target]'));
 
-  if (!grid || !glassPanel || !interactionSurface || !screen || !editButton || !editButtonLabel || !title || !titleInput) {
+  if (!grid || !gridViewport || pagePanels.length === 0 || !glassPanel || !interactionSurface || !screen || !editButton || !editButtonLabel || !title || !titleInput) {
     return;
   }
 
@@ -30,6 +35,10 @@
   let suppressedClickItem = null;
   let suppressClickTimer = 0;
   let refreshTimer = 0;
+  let pageTransitionTimer = 0;
+  let pageScrollDistance = 0;
+  let pageScrollLocked = false;
+  let pageScrollTimer = 0;
   const shiftTimers = new WeakMap();
 
   function t(key, variables) {
@@ -64,13 +73,39 @@
     items.forEach((item, index) => {
       item.dataset.page = String(Math.floor(index / PAGE_SIZE) + 1);
     });
+    pagePanels.forEach((panel, index) => {
+      items.slice(index * PAGE_SIZE, (index + 1) * PAGE_SIZE).forEach((item) => {
+        panel.append(item);
+      });
+    });
+  }
+
+  function clearPageTransition() {
+    window.clearTimeout(pageTransitionTimer);
+    grid.classList.remove('is-page-transitioning');
+  }
+
+  function movePageTrack(shouldAnimate) {
+    window.clearTimeout(pageTransitionTimer);
+    grid.classList.toggle(
+      'is-page-transitioning',
+      shouldAnimate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
+    grid.style.setProperty('--retreat-page-offset', `${(currentPage - 1) * -100}%`);
+    pageTransitionTimer = window.setTimeout(() => {
+      clearPageTransition();
+    }, PAGE_TRANSITION_MS);
   }
 
   function renderPage(options = {}) {
-    const { announcePage = false } = options;
-    items.forEach((item) => {
-      item.hidden = Number(item.dataset.page) !== currentPage;
+    const { announcePage = false, direction = null } = options;
+    pagePanels.forEach((panel) => {
+      const isCurrent = Number(panel.dataset.launcherPage) === currentPage;
+      panel.inert = !isCurrent;
+      panel.setAttribute('aria-hidden', String(!isCurrent));
     });
+
+    movePageTrack(direction === 'next' || direction === 'previous');
 
     pageDots.forEach((dot) => {
       const isCurrent = Number(dot.dataset.pageTarget) === currentPage;
@@ -85,16 +120,68 @@
     if (announcePage) {
       announce('pageStatus', { page: currentPage });
     }
-    requestLiquidRefresh();
+    // 本家と同様、常設したページトラックの位置だけを変える。
+    // DOMの複製・追加・削除やLiquidGLの再生成はページ送りでは行わない。
   }
 
   function setPage(nextPage, options = {}) {
     const normalizedPage = Math.min(totalPages, Math.max(1, Number(nextPage) || 1));
     if (normalizedPage === currentPage) {
+      return false;
+    }
+    const direction = normalizedPage > currentPage ? 'next' : 'previous';
+    currentPage = normalizedPage;
+    renderPage({ ...options, direction });
+    return true;
+  }
+
+  function wheelDeltaInPixels(event, value) {
+    if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+      return value * 16;
+    }
+    if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+      return value * Math.max(1, interactionSurface.clientWidth);
+    }
+    return value;
+  }
+
+  function resetPageScrollGesture() {
+    pageScrollDistance = 0;
+    pageScrollLocked = false;
+  }
+
+  function handlePageScroll(event) {
+    if (isEditing || event.ctrlKey) {
       return;
     }
-    currentPage = normalizedPage;
-    renderPage(options);
+
+    const pageDelta = event.deltaX;
+    if (Math.abs(pageDelta) <= 0.01) {
+      return;
+    }
+
+    // 本家同様、トラックパッド等の通常の横スクロールだけをページ送りに使う。
+    event.preventDefault();
+    window.clearTimeout(pageScrollTimer);
+    pageScrollTimer = window.setTimeout(
+      resetPageScrollGesture,
+      PAGE_SCROLL_IDLE_MS
+    );
+
+    if (pageScrollLocked) {
+      return;
+    }
+
+    pageScrollDistance += wheelDeltaInPixels(event, pageDelta);
+    if (Math.abs(pageScrollDistance) < PAGE_SCROLL_THRESHOLD_PX) {
+      return;
+    }
+
+    setPage(currentPage + (pageScrollDistance > 0 ? 1 : -1), {
+      announcePage: true
+    });
+    pageScrollDistance = 0;
+    pageScrollLocked = true;
   }
 
   function getLabel(item) {
@@ -318,7 +405,7 @@
   function captureGridPositions() {
     const positions = new Map();
     items.forEach((item) => {
-      if (item.hidden || item === dragState?.item) {
+      if (Number(item.dataset.page) !== currentPage || item === dragState?.item) {
         return;
       }
       positions.set(item, item.getBoundingClientRect());
@@ -332,7 +419,7 @@
   function animateGridShift(positions) {
     const shiftedItems = [];
     positions.forEach((previousRect, item) => {
-      if (item.hidden) {
+      if (Number(item.dataset.page) !== currentPage) {
         return;
       }
       const nextRect = item.getBoundingClientRect();
@@ -405,13 +492,17 @@
 
   function movePlaceholder(target) {
     const { item, placeholder } = dragState;
-    if (!placeholder || !target || target === item || target.hidden) {
+    if (!placeholder || !target || target === item || Number(target.dataset.page) !== currentPage) {
       return;
     }
 
-    const visibleSlots = Array.from(grid.children).filter((element) => (
+    const activePanel = pagePanels[currentPage - 1];
+    if (!activePanel) {
+      return;
+    }
+    const visibleSlots = Array.from(activePanel.children).filter((element) => (
       element === placeholder
-      || (element.matches('[data-launcher-item]') && element !== item && !element.hidden)
+      || (element.matches('[data-launcher-item]') && element !== item)
     ));
     const placeholderIndex = visibleSlots.indexOf(placeholder);
     const targetIndex = visibleSlots.indexOf(target);
@@ -492,12 +583,17 @@
     const dot = pointedElement && pointedElement.closest('[data-page-target]');
     if (dot) {
       clearDropTargets();
-      setPage(Number(dot.dataset.pageTarget));
+      if (setPage(Number(dot.dataset.pageTarget))) {
+        const activePanel = pagePanels[currentPage - 1];
+        if (activePanel && dragState.placeholder) {
+          activePanel.append(dragState.placeholder);
+        }
+      }
       return;
     }
 
     const target = pointedElement && pointedElement.closest('[data-launcher-item]');
-    if (!target || target === dragState.item || target.hidden) {
+    if (!target || target === dragState.item || Number(target.dataset.page) !== currentPage) {
       dragState.lastTarget = null;
       return;
     }
@@ -662,6 +758,8 @@
     }
     setPage(currentPage + (deltaX < 0 ? 1 : -1), { announcePage: true });
   });
+
+  interactionSurface.addEventListener('wheel', handlePageScroll, { passive: false });
 
   window.addEventListener('pointermove', handlePointerMove, { passive: false });
   window.addEventListener('pointerup', handlePointerEnd);
