@@ -6,6 +6,10 @@
   const PAGE_SCROLL_THRESHOLD_PX = 36;
   const PAGE_SCROLL_IDLE_MS = 350;
   const PAGE_TRANSITION_MS = 320;
+  const ICON_OUTPUT_SIZE = 384;
+  const EDITS_STORAGE_KEY = 'retreatscreen-launcher-item-edits-v1';
+  const SUPPORTED_ICON_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg'];
+  const SUPPORTED_ICON_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml'];
 
   const grid = document.getElementById('retreat-app-grid');
   const gridViewport = document.querySelector('.retreat-app-grid-viewport');
@@ -20,10 +24,29 @@
   const title = document.getElementById('retreat-title');
   const titleInput = document.getElementById('retreat-title-input');
   const pageDots = Array.from(document.querySelectorAll('[data-page-target]'));
-  const launcherActionAttributes = ['href', 'data-pressable', 'data-transition-direction', 'role', 'tabindex'];
+  const screenContent = document.querySelector('.retreat-screen__content');
+  const iconEditorOverlay = document.getElementById('retreat-icon-editor-overlay');
+  const iconEditorDialog = document.getElementById('retreat-icon-editor');
+  const iconEditorClose = document.getElementById('retreat-icon-editor-close');
+  const iconEditorName = document.getElementById('retreat-icon-editor-name');
+  const iconEditorPreview = document.getElementById('retreat-icon-editor-preview');
+  const iconEditorSelected = document.getElementById('retreat-icon-editor-selected');
+  const iconEditorError = document.getElementById('retreat-icon-editor-error');
+  const iconEditorFile = document.getElementById('retreat-icon-editor-file');
+  const iconEditorChoose = document.getElementById('retreat-icon-editor-choose');
+  const iconEditorRevert = document.getElementById('retreat-icon-editor-revert');
+  const iconEditorCancel = document.getElementById('retreat-icon-editor-cancel');
+  const iconEditorSave = document.getElementById('retreat-icon-editor-save');
+  const launcherActionAttributes = ['href', 'data-pressable', 'data-transition-direction', 'role', 'tabindex', 'aria-label'];
   const launcherActionState = new WeakMap();
 
-  if (!grid || !gridViewport || pagePanels.length === 0 || !glassPanel || !interactionSurface || !screen || !editButton || !editButtonLabel || !title || !titleInput) {
+  if (
+    !grid || !gridViewport || pagePanels.length === 0 || !glassPanel || !interactionSurface
+    || !screen || !screenContent || !editButton || !editButtonLabel || !title || !titleInput
+    || !iconEditorOverlay || !iconEditorDialog || !iconEditorClose || !iconEditorName
+    || !iconEditorPreview || !iconEditorSelected || !iconEditorError || !iconEditorFile
+    || !iconEditorChoose || !iconEditorRevert || !iconEditorCancel || !iconEditorSave
+  ) {
     return;
   }
 
@@ -41,7 +64,13 @@
   let pageScrollDistance = 0;
   let pageScrollLocked = false;
   let pageScrollTimer = 0;
+  let iconEditorState = null;
+  let iconEditorReturnFocus = null;
   const shiftTimers = new WeakMap();
+  const originalIconState = new Map();
+  const customIconState = new Map();
+  const savedNameState = new Map();
+  const contentInertState = new Map();
 
   function t(key, variables) {
     if (window.RetreatI18n && typeof window.RetreatI18n.get === 'function') {
@@ -190,67 +219,356 @@
     return item.querySelector('.retreat-app-label');
   }
 
-  function getRenameInput(item) {
-    return item.querySelector('.retreat-app-rename');
+  function getIcon(item) {
+    return item.querySelector('.retreat-app-icon');
   }
 
-  function updateRenameAccessibility(item) {
-    const label = getLabel(item);
-    const input = getRenameInput(item);
-    if (!label || !input) {
-      return;
-    }
-    input.setAttribute('aria-label', t('renameLabel', { name: label.textContent.trim() }));
-    input.setAttribute('aria-describedby', 'retreat-edit-hint');
+  function getItemKey(item) {
+    return item.dataset.launcherItem || '';
   }
 
-  function syncRenameInputs(options = {}) {
-    const { preserveFocused = true } = options;
+  function snapshotOriginalIcons() {
     items.forEach((item) => {
-      const label = getLabel(item);
-      const input = getRenameInput(item);
-      if (!label || !input) {
+      const key = getItemKey(item);
+      const icon = getIcon(item);
+      if (!key || !icon) {
         return;
       }
-      if (!preserveFocused || document.activeElement !== input) {
-        input.value = label.textContent.trim();
-        delete input.dataset.dirty;
-      }
-      updateRenameAccessibility(item);
+      originalIconState.set(key, {
+        className: icon.className,
+        html: icon.innerHTML
+      });
     });
+  }
+
+  function readStoredEdits() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(EDITS_STORAGE_KEY) || 'null');
+      return parsed && parsed.version === 1 && parsed.items && typeof parsed.items === 'object'
+        ? parsed.items
+        : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function isSupportedStoredIcon(icon) {
+    return Boolean(
+      icon
+      && typeof icon.dataUrl === 'string'
+      && /^data:image\/(?:png|gif);base64,/iu.test(icon.dataUrl)
+    );
+  }
+
+  function createIconElement(item, customIcon) {
+    const key = getItemKey(item);
+    const original = originalIconState.get(key);
+    const icon = document.createElement('span');
+    if (!original) {
+      icon.className = 'retreat-app-icon';
+      return icon;
+    }
+
+    icon.className = original.className;
+    if (!customIcon) {
+      icon.innerHTML = original.html;
+      return icon;
+    }
+
+    icon.classList.add('retreat-app-icon--custom');
+    const image = document.createElement('img');
+    image.src = customIcon.dataUrl;
+    image.alt = '';
+    image.width = 384;
+    image.height = 384;
+    icon.replaceChildren(image);
+    return icon;
+  }
+
+  function applyIconToItem(item, customIcon) {
+    const currentIcon = getIcon(item);
+    if (!currentIcon) {
+      return;
+    }
+    currentIcon.replaceWith(createIconElement(item, customIcon));
+  }
+
+  function applyStoredEdits() {
+    const stored = readStoredEdits();
+    items.forEach((item) => {
+      const key = getItemKey(item);
+      const edit = stored[key];
+      const label = getLabel(item);
+      if (!edit || !label) {
+        return;
+      }
+      if (typeof edit.name === 'string' && edit.name.trim()) {
+        const savedName = edit.name.trim().slice(0, 28);
+        savedNameState.set(key, savedName);
+        label.textContent = savedName;
+        label.dataset.userLabel = 'true';
+      }
+      if (isSupportedStoredIcon(edit.icon)) {
+        const savedIcon = {
+          dataUrl: edit.icon.dataUrl,
+          contentType: edit.icon.contentType === 'image/gif' ? 'image/gif' : 'image/png'
+        };
+        customIconState.set(key, savedIcon);
+        applyIconToItem(item, savedIcon);
+      }
+    });
+  }
+
+  function persistProposedEdit(key, name, customIcon) {
+    const storedItems = {};
+    const proposedNames = new Map(savedNameState);
+    const proposedIcons = new Map(customIconState);
+    proposedNames.set(key, name);
+    if (customIcon) {
+      proposedIcons.set(key, customIcon);
+    } else {
+      proposedIcons.delete(key);
+    }
+
+    items.forEach((item) => {
+      const itemKey = getItemKey(item);
+      const savedName = proposedNames.get(itemKey);
+      const savedIcon = proposedIcons.get(itemKey);
+      if (!savedName && !savedIcon) {
+        return;
+      }
+      storedItems[itemKey] = {};
+      if (savedName) {
+        storedItems[itemKey].name = savedName;
+      }
+      if (savedIcon) {
+        storedItems[itemKey].icon = savedIcon;
+      }
+    });
+
+    try {
+      localStorage.setItem(EDITS_STORAGE_KEY, JSON.stringify({ version: 1, items: storedItems }));
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function syncLauncherAccessibility() {
     titleInput.setAttribute('aria-label', t('titleRenameLabel'));
     pageDots.forEach((dot, index) => {
       dot.setAttribute('aria-label', t(index === 0 ? 'pageOneLabel' : 'pageTwoLabel'));
     });
+    if (iconEditorState) {
+      renderIconEditorMessages();
+    }
   }
 
-  function commitRename(item, options = {}) {
-    const { announceChange = true } = options;
+  function setUnderlyingContentInert(shouldBeInert) {
+    const targets = [
+      ...Array.from(screenContent.children).filter((child) => child !== iconEditorOverlay),
+      document.getElementById('retreat-content'),
+      document.querySelector('.retreat-footer')
+    ].filter(Boolean);
+    targets.forEach((child) => {
+      if (child === iconEditorOverlay) {
+        return;
+      }
+      if (shouldBeInert) {
+        contentInertState.set(child, child.hasAttribute('inert'));
+        child.inert = true;
+        return;
+      }
+      if (contentInertState.get(child)) {
+        child.inert = true;
+      } else {
+        child.inert = false;
+      }
+      contentInertState.delete(child);
+    });
+  }
+
+  function renderIconEditorMessages() {
+    if (!iconEditorState) {
+      iconEditorSelected.hidden = true;
+      iconEditorError.hidden = true;
+      return;
+    }
+    const selectedName = iconEditorState.selectedFileName;
+    iconEditorSelected.hidden = !selectedName;
+    iconEditorSelected.textContent = selectedName
+      ? t('iconEditorCurrentCustomIcon', { name: selectedName })
+      : '';
+    iconEditorError.hidden = !iconEditorState.errorKey;
+    iconEditorError.textContent = iconEditorState.errorKey ? t(iconEditorState.errorKey) : '';
+  }
+
+  function renderIconEditorPreview() {
+    if (!iconEditorState) {
+      return;
+    }
+    iconEditorPreview.replaceChildren(
+      createIconElement(iconEditorState.item, iconEditorState.draftIcon)
+    );
+    renderIconEditorMessages();
+  }
+
+  function syncIconEditorControls() {
+    if (!iconEditorState) {
+      return;
+    }
+    const isProcessing = iconEditorState.isProcessing;
+    iconEditorDialog.setAttribute('aria-busy', String(isProcessing));
+    iconEditorChoose.disabled = isProcessing;
+    iconEditorRevert.disabled = isProcessing;
+    iconEditorCancel.disabled = isProcessing;
+    iconEditorSave.disabled = isProcessing || !iconEditorName.value.trim();
+  }
+
+  function openIconEditor(item) {
+    if (!isEditing || iconEditorState) {
+      return;
+    }
     const label = getLabel(item);
-    const input = getRenameInput(item);
-    if (!label || !input) {
+    const link = item.querySelector('.retreat-app-link');
+    if (!label || !link) {
       return;
     }
+    const key = getItemKey(item);
+    iconEditorState = {
+      item,
+      draftIcon: customIconState.get(key) || null,
+      selectedFileName: null,
+      errorKey: null,
+      isProcessing: false
+    };
+    iconEditorReturnFocus = link;
+    iconEditorName.value = label.textContent.trim();
+    iconEditorFile.value = '';
+    setUnderlyingContentInert(true);
+    iconEditorOverlay.hidden = false;
+    document.body.classList.add('is-retreat-icon-editor-open');
+    renderIconEditorPreview();
+    syncIconEditorControls();
+    window.requestAnimationFrame(() => {
+      iconEditorName.focus();
+      iconEditorName.select();
+    });
+  }
 
-    const previousName = label.textContent.trim();
-    const nextName = input.value.trim();
+  function closeIconEditor(options = {}) {
+    const { restoreFocus = true } = options;
+    if (!iconEditorState) {
+      return;
+    }
+    iconEditorState = null;
+    iconEditorOverlay.hidden = true;
+    iconEditorDialog.removeAttribute('aria-busy');
+    document.body.classList.remove('is-retreat-icon-editor-open');
+    setUnderlyingContentInert(false);
+    const focusTarget = iconEditorReturnFocus;
+    iconEditorReturnFocus = null;
+    iconEditorFile.value = '';
+    requestLiquidRefresh(60);
+    if (restoreFocus && focusTarget && focusTarget.isConnected) {
+      window.requestAnimationFrame(() => focusTarget.focus());
+    }
+  }
+
+  function saveIconEditor() {
+    if (!iconEditorState || iconEditorState.isProcessing) {
+      return;
+    }
+    const nextName = iconEditorName.value.trim();
     if (!nextName) {
-      input.value = previousName;
-      delete input.dataset.dirty;
+      iconEditorState.errorKey = 'iconEditorMissingName';
+      renderIconEditorMessages();
+      syncIconEditorControls();
+      return;
+    }
+    const key = getItemKey(iconEditorState.item);
+    if (!persistProposedEdit(key, nextName, iconEditorState.draftIcon)) {
+      iconEditorState.errorKey = 'iconEditorPersistFailed';
+      renderIconEditorMessages();
       return;
     }
 
-    if (input.dataset.dirty === 'true' && nextName !== previousName) {
+    const label = getLabel(iconEditorState.item);
+    if (label) {
       label.textContent = nextName;
       label.dataset.userLabel = 'true';
-      if (announceChange) {
-        announce('renamedStatus', { name: nextName });
-      }
     }
-    input.value = label.textContent.trim();
-    delete input.dataset.dirty;
-    updateRenameAccessibility(item);
-    requestLiquidRefresh();
+    savedNameState.set(key, nextName);
+    if (iconEditorState.draftIcon) {
+      customIconState.set(key, iconEditorState.draftIcon);
+    } else {
+      customIconState.delete(key);
+    }
+    applyIconToItem(iconEditorState.item, iconEditorState.draftIcon);
+    syncLauncherActions();
+    announce('iconEditorSavedStatus', { name: nextName });
+    closeIconEditor();
+  }
+
+  function fileExtension(file) {
+    const match = file.name.toLowerCase().match(/\.([a-z0-9]+)$/u);
+    return match ? match[1] : '';
+  }
+
+  function isSupportedIconFile(file) {
+    return SUPPORTED_ICON_TYPES.includes(file.type) || SUPPORTED_ICON_EXTENSIONS.includes(fileExtension(file));
+  }
+
+  function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener('load', () => resolve(String(reader.result || '')), { once: true });
+      reader.addEventListener('error', reject, { once: true });
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadImage(source) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.addEventListener('load', () => resolve(image), { once: true });
+      image.addEventListener('error', reject, { once: true });
+      image.src = source;
+    });
+  }
+
+  async function importIconFile(file) {
+    const source = await readFileAsDataURL(file);
+    if (file.type === 'image/gif' || fileExtension(file) === 'gif') {
+      return {
+        dataUrl: source.replace(/^data:[^;,]*;/iu, 'data:image/gif;'),
+        contentType: 'image/gif'
+      };
+    }
+
+    const image = await loadImage(source);
+    const canvas = document.createElement('canvas');
+    canvas.width = ICON_OUTPUT_SIZE;
+    canvas.height = ICON_OUTPUT_SIZE;
+    const context = canvas.getContext('2d');
+    if (!context || !image.naturalWidth || !image.naturalHeight) {
+      throw new Error('Image canvas unavailable');
+    }
+    context.clearRect(0, 0, ICON_OUTPUT_SIZE, ICON_OUTPUT_SIZE);
+    const scale = Math.min(
+      ICON_OUTPUT_SIZE / image.naturalWidth,
+      ICON_OUTPUT_SIZE / image.naturalHeight
+    );
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    context.drawImage(
+      image,
+      (ICON_OUTPUT_SIZE - width) / 2,
+      (ICON_OUTPUT_SIZE - height) / 2,
+      width,
+      height
+    );
+    return { dataUrl: canvas.toDataURL('image/png'), contentType: 'image/png' };
   }
 
   function commitTitle(options = {}) {
@@ -270,7 +588,7 @@
 
   function syncEditingCopy() {
     editButtonLabel.textContent = isEditing ? t('done') : t('edit');
-    syncRenameInputs();
+    syncLauncherAccessibility();
   }
 
   function syncLauncherAction(link, isActive) {
@@ -296,8 +614,13 @@
     link.removeAttribute('href');
     link.removeAttribute('data-pressable');
     link.removeAttribute('data-transition-direction');
-    link.setAttribute('role', 'presentation');
-    link.tabIndex = -1;
+    link.setAttribute('role', 'button');
+    link.tabIndex = 0;
+    const item = link.closest('[data-launcher-item]');
+    const label = item && getLabel(item);
+    if (label) {
+      link.setAttribute('aria-label', t('editIconLabel', { name: label.textContent.trim() }));
+    }
   }
 
   function syncLauncherActions() {
@@ -314,17 +637,16 @@
     const next = Boolean(nextEditing);
     if (next === isEditing) {
       if (next && focusItem) {
-        const input = getRenameInput(focusItem);
-        if (input) {
-          input.focus();
-          input.select();
+        const link = focusItem.querySelector('.retreat-app-link');
+        if (link) {
+          link.focus();
         }
       }
       return;
     }
 
     if (!next) {
-      items.forEach((item) => commitRename(item, { announceChange: false }));
+      closeIconEditor({ restoreFocus: false });
       commitTitle();
     }
 
@@ -340,16 +662,9 @@
 
     items.forEach((item) => {
       const link = item.querySelector('.retreat-app-link');
-      const input = getRenameInput(item);
       item.draggable = false;
       if (link) {
         link.draggable = false;
-      }
-      if (input) {
-        input.hidden = !isEditing;
-        if (isEditing) {
-          input.value = getLabel(item).textContent.trim();
-        }
       }
     });
     syncLauncherActions();
@@ -359,10 +674,9 @@
     requestLiquidRefresh(60);
 
     if (isEditing && focusItem) {
-      const input = getRenameInput(focusItem);
-      if (input) {
-        input.focus();
-        input.select();
+      const link = focusItem.querySelector('.retreat-app-link');
+      if (link) {
+        link.focus();
       }
     }
   }
@@ -382,9 +696,9 @@
     assignPagesFromOrder();
     currentPage = Number(item.dataset.page) || currentPage;
     renderPage();
-    const input = getRenameInput(item);
-    if (input) {
-      input.focus();
+    const link = item.querySelector('.retreat-app-link');
+    if (link) {
+      link.focus();
     }
     announce('movedStatus', { name: getLabel(item).textContent.trim() });
   }
@@ -661,22 +975,12 @@
     if (completedDrag) {
       suppressClickFor(draggedItem);
       settleDrag(completedState);
-      return;
-    }
-
-    if (isEditing) {
-      const input = getRenameInput(draggedItem);
-      if (input) {
-        input.focus();
-        input.select();
-      }
     }
   }
 
   function bindItem(item) {
     const link = item.querySelector('.retreat-app-link');
-    const input = getRenameInput(item);
-    if (!link || !input) {
+    if (!link) {
       return;
     }
 
@@ -700,39 +1004,22 @@
           return;
         }
         if (isEditing) {
-          input.focus();
-          input.select();
+          openIconEditor(item);
         }
       }
     });
 
-    input.addEventListener('input', () => {
-      input.dataset.dirty = 'true';
-    });
-
-    input.addEventListener('blur', () => {
-      commitRename(item);
-    });
-
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
+    link.addEventListener('keydown', (event) => {
+      if (isEditing && (event.key === 'Enter' || event.key === ' ')) {
         event.preventDefault();
-        commitRename(item);
-        input.select();
+        openIconEditor(item);
         return;
       }
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        input.value = getLabel(item).textContent.trim();
-        delete input.dataset.dirty;
-        input.blur();
-        return;
-      }
-      if (event.altKey && event.shiftKey && event.key === 'ArrowLeft') {
+      if (isEditing && event.altKey && event.shiftKey && event.key === 'ArrowLeft') {
         event.preventDefault();
         moveByOffset(item, -1);
       }
-      if (event.altKey && event.shiftKey && event.key === 'ArrowRight') {
+      if (isEditing && event.altKey && event.shiftKey && event.key === 'ArrowRight') {
         event.preventDefault();
         moveByOffset(item, 1);
       }
@@ -747,6 +1034,82 @@
 
   editButton.addEventListener('click', () => {
     setEditing(!isEditing);
+  });
+
+  iconEditorClose.addEventListener('click', () => closeIconEditor());
+  iconEditorCancel.addEventListener('click', () => closeIconEditor());
+  iconEditorSave.addEventListener('click', saveIconEditor);
+
+  iconEditorName.addEventListener('input', () => {
+    if (!iconEditorState) {
+      return;
+    }
+    iconEditorState.errorKey = null;
+    renderIconEditorMessages();
+    syncIconEditorControls();
+  });
+
+  iconEditorName.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveIconEditor();
+    }
+  });
+
+  iconEditorChoose.addEventListener('click', () => {
+    if (iconEditorState && !iconEditorState.isProcessing) {
+      iconEditorFile.click();
+    }
+  });
+
+  iconEditorRevert.addEventListener('click', () => {
+    if (!iconEditorState || iconEditorState.isProcessing) {
+      return;
+    }
+    iconEditorState.draftIcon = null;
+    iconEditorState.selectedFileName = null;
+    iconEditorState.errorKey = null;
+    renderIconEditorPreview();
+  });
+
+  iconEditorFile.addEventListener('change', async () => {
+    const file = iconEditorFile.files && iconEditorFile.files[0];
+    const activeState = iconEditorState;
+    if (!file || !activeState) {
+      return;
+    }
+    if (!isSupportedIconFile(file)) {
+      activeState.errorKey = 'iconEditorUnsupportedType';
+      iconEditorFile.value = '';
+      renderIconEditorMessages();
+      return;
+    }
+
+    activeState.isProcessing = true;
+    activeState.errorKey = null;
+    syncIconEditorControls();
+    renderIconEditorMessages();
+    try {
+      const imported = await importIconFile(file);
+      if (iconEditorState !== activeState) {
+        return;
+      }
+      activeState.draftIcon = imported;
+      activeState.selectedFileName = file.name;
+      activeState.errorKey = null;
+      renderIconEditorPreview();
+    } catch (error) {
+      if (iconEditorState === activeState) {
+        activeState.errorKey = 'iconEditorLoadFailed';
+        renderIconEditorMessages();
+      }
+    } finally {
+      if (iconEditorState === activeState) {
+        activeState.isProcessing = false;
+        iconEditorFile.value = '';
+        syncIconEditorControls();
+      }
+    }
   });
 
   titleInput.addEventListener('input', () => {
@@ -803,6 +1166,33 @@
   window.addEventListener('pointercancel', handlePointerEnd);
 
   document.addEventListener('keydown', (event) => {
+    if (iconEditorState) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeIconEditor();
+        return;
+      }
+      if (event.key === 'Tab') {
+        const focusable = [
+          iconEditorName,
+          iconEditorChoose,
+          iconEditorRevert,
+          iconEditorCancel,
+          iconEditorSave,
+          iconEditorClose
+        ].filter((element) => !element.disabled && !element.hidden);
+        if (!focusable.length) {
+          return;
+        }
+        const currentIndex = focusable.indexOf(document.activeElement);
+        const nextIndex = event.shiftKey
+          ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+          : (currentIndex < 0 || currentIndex === focusable.length - 1 ? 0 : currentIndex + 1);
+        event.preventDefault();
+        focusable[nextIndex].focus();
+      }
+      return;
+    }
     if (event.key === 'Escape' && isEditing && document.activeElement !== titleInput) {
       event.preventDefault();
       setEditing(false);
@@ -834,10 +1224,12 @@
     }
   }, { once: true });
 
+  snapshotOriginalIcons();
+  applyStoredEdits();
   items.forEach(bindItem);
   assignPagesFromOrder();
   renderPage();
-  syncRenameInputs({ preserveFocused: false });
+  syncLauncherAccessibility();
 
   window.RetreatLauncher = {
     setEditing,
@@ -848,11 +1240,16 @@
     getState() {
       return {
         isEditing,
+        isIconEditorOpen: Boolean(iconEditorState),
         currentPage,
         order: items.map((item) => item.dataset.launcherItem),
         labels: Object.fromEntries(items.map((item) => [
           item.dataset.launcherItem,
           getLabel(item).textContent.trim()
+        ])),
+        customIcons: Object.fromEntries(items.map((item) => [
+          item.dataset.launcherItem,
+          customIconState.has(item.dataset.launcherItem)
         ]))
       };
     }

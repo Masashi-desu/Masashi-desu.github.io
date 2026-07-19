@@ -1,8 +1,8 @@
 /**
  * テスト概要:
- *  - 目的: RetreatScreen の編集モード中に各アイコンがリンク／押下対象として動作しないことを確認する。
- *  - 期待値: 編集中は href、リンク role、tab 順、ページ遷移属性、ホバー効果が無効になり、編集終了後は元のリンク状態へ復元する。
- *  - 検証方法: ローカル静的サーバーで RetreatScreen を開き、Chromium / WebKit で編集開始、アイコンクリック、言語変更、編集終了を順に操作して DOM 属性、URL、フォーカス、算出スタイルを取得する。
+ *  - 目的: RetreatScreen の編集モードで、一覧内編集を行わず本家同様の専用ウィンドウから名前・画像を変更できることを確認する。
+ *  - 期待値: 編集中はリンク遷移とホバー効果が無効になり、アイコンが編集ボタンとして動作する。変更は保存時だけ反映・永続化され、キャンセルでは破棄、元アイコン復元も保存時だけ反映される。
+ *  - 検証方法: ローカル静的サーバーで RetreatScreen を開き、Chromium / WebKit で編集ウィンドウの表示、フォーカス、名前変更、PNG 選択、キャンセル、保存、再読み込み、元アイコン復元、編集終了を順に操作して DOM・URL・localStorage・算出スタイルを取得する。
  */
 const http = require('http');
 const fs = require('fs');
@@ -10,6 +10,7 @@ const path = require('path');
 const { chromium, webkit } = require('playwright');
 
 const ROOT = path.resolve(__dirname, '../../site');
+const ICON_FIXTURE = path.join(ROOT, 'products/RetreatScreen/icon.png');
 const BROWSER_ENGINE = process.env.RETREATSCREEN_BROWSER || 'chromium';
 const BROWSER_TYPES = { chromium, webkit };
 
@@ -77,8 +78,8 @@ function assertEditingActionsDisabled(state) {
   Object.entries(state).forEach(([name, action]) => {
     assert(action.href === null, `${name} retained href in edit mode: ${JSON.stringify(action)}`);
     assert(action.pressable === null, `${name} retained data-pressable in edit mode: ${JSON.stringify(action)}`);
-    assert(action.role === 'presentation', `${name} retained action semantics in edit mode: ${JSON.stringify(action)}`);
-    assert(action.tabIndex === -1, `${name} remained in the tab order in edit mode: ${JSON.stringify(action)}`);
+    assert(action.role === 'button', `${name} was not exposed as an edit button: ${JSON.stringify(action)}`);
+    assert(action.tabIndex === 0, `${name} edit button was missing from the tab order: ${JSON.stringify(action)}`);
     assert(action.transitionDirection === null, `${name} retained page transition behavior in edit mode: ${JSON.stringify(action)}`);
   });
 }
@@ -104,7 +105,7 @@ async function main() {
   const browser = await browserType.launch({ headless: true });
 
   try {
-    const context = await browser.newContext({ viewport: { width: 880, height: 916 } });
+    const context = await browser.newContext({ viewport: { width: 880, height: 619 } });
     const page = await context.newPage();
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -124,6 +125,8 @@ async function main() {
 
     assertEditingActionsDisabled(await readActionState(page));
     assert(await page.getByRole('link', { name: 'Features' }).count() === 0, 'Features remained exposed as a link in edit mode.');
+    assert(await page.locator('.retreat-app-rename').count() === 0, 'An inline icon rename field remained in the launcher list.');
+    assert(await page.getByRole('button', { name: /Features/u }).count() === 1, 'Features was not exposed as an edit button.');
 
     await page.mouse.move(4, 4);
     const effectBeforeHover = await readIconEffect(page, 'features');
@@ -138,8 +141,101 @@ async function main() {
     await page.locator('[data-launcher-item="support"] .retreat-app-icon').click({ force: true });
     assert(page.url() === urlBeforeClick, `Support icon navigated during edit mode: ${page.url()}`);
     assert(
-      await page.locator('[data-launcher-item="support"] .retreat-app-rename').evaluate((input) => input === document.activeElement),
-      'Clicking an icon in edit mode did not focus its rename field.'
+      await page.locator('#retreat-icon-editor-name').evaluate((input) => input === document.activeElement),
+      'Clicking an icon in edit mode did not focus the editor name field.'
+    );
+    assert(await page.getByRole('dialog').isVisible(), 'Clicking an icon in edit mode did not open the icon editor.');
+    assert(await page.getByRole('button', { name: 'Choose File' }).count() === 0, 'The hidden file input leaked into the accessibility tree.');
+    const desktopDialogBounds = await page.locator('#retreat-icon-editor').boundingBox();
+    assert(
+      desktopDialogBounds && desktopDialogBounds.y >= 0 && desktopDialogBounds.y + desktopDialogBounds.height <= 619,
+      `The editor did not fit the 880 × 619 browser-comment viewport: ${JSON.stringify(desktopDialogBounds)}`
+    );
+    assert(
+      await page.locator('.retreat-launcher-header').evaluate((header) => header.inert),
+      'Underlying launcher content remained interactive while the icon editor was open.'
+    );
+    assert(
+      await page.locator('#retreat-content').evaluate((content) => content.inert),
+      'Product-page content remained interactive while the icon editor was open.'
+    );
+    await page.locator('#retreat-icon-editor-cancel').click();
+    await page.waitForSelector('#retreat-icon-editor-overlay', { state: 'hidden' });
+    assert(
+      await page.locator('[data-launcher-item="support"] .retreat-app-label').textContent() === 'Support',
+      'Cancel changed the launcher label.'
+    );
+
+    await page.locator('[data-launcher-item="features"] .retreat-app-icon').click();
+    await page.locator('#retreat-icon-editor-name').fill('');
+    assert(await page.locator('#retreat-icon-editor-save').isDisabled(), 'Save remained enabled for an empty icon name.');
+    await page.locator('#retreat-icon-editor-name').fill('Feature Lab');
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.locator('#retreat-icon-editor-choose').click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(ICON_FIXTURE);
+    await page.waitForFunction(() => (
+      document.querySelector('#retreat-icon-editor-preview img')?.getAttribute('src')?.startsWith('data:image/png')
+    ));
+    assert(
+      (await page.locator('#retreat-icon-editor-selected').textContent()).includes('icon.png'),
+      'The selected custom icon filename was not shown.'
+    );
+    await page.locator('#retreat-icon-editor-cancel').click();
+    assert(
+      await page.locator('[data-launcher-item="features"] .retreat-app-label').textContent() === 'Features',
+      'Cancel applied the draft icon name.'
+    );
+    assert(
+      await page.locator('[data-launcher-item="features"] .retreat-app-icon > i.ph-command').count() === 1,
+      'Cancel applied the draft custom image.'
+    );
+
+    await page.locator('[data-launcher-item="features"] .retreat-app-icon').click();
+    await page.locator('#retreat-icon-editor-name').fill('Feature Lab');
+    await page.locator('#retreat-icon-editor-file').setInputFiles(ICON_FIXTURE);
+    await page.waitForFunction(() => !document.querySelector('#retreat-icon-editor-save').disabled);
+    await page.locator('#retreat-icon-editor-save').click();
+    await page.waitForSelector('#retreat-icon-editor-overlay', { state: 'hidden' });
+    assert(
+      await page.locator('[data-launcher-item="features"] .retreat-app-label').textContent() === 'Feature Lab',
+      'Save did not apply the edited icon name.'
+    );
+    assert(
+      (await page.locator('[data-launcher-item="features"] .retreat-app-icon > img').getAttribute('src')).startsWith('data:image/png'),
+      'Save did not apply the custom icon image.'
+    );
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-launcher-item="features"] .retreat-app-icon', { state: 'visible' });
+    assert(
+      await page.locator('[data-launcher-item="features"] .retreat-app-label').textContent() === 'Feature Lab',
+      'The saved icon name did not survive reload.'
+    );
+    assert(
+      await page.locator('[data-launcher-item="features"] .retreat-app-icon > img').count() === 1,
+      'The saved custom icon did not survive reload.'
+    );
+
+    await page.locator('#retreat-edit-toggle').click();
+    await page.locator('[data-launcher-item="features"] .retreat-app-icon').click();
+    await page.locator('#retreat-icon-editor-revert').click();
+    assert(
+      await page.locator('#retreat-icon-editor-preview > .retreat-app-icon > i.ph-command').count() === 1,
+      'Revert did not preview the original icon.'
+    );
+    await page.locator('#retreat-icon-editor-cancel').click();
+    assert(
+      await page.locator('[data-launcher-item="features"] .retreat-app-icon > img').count() === 1,
+      'Cancel applied the draft revert operation.'
+    );
+
+    await page.locator('[data-launcher-item="features"] .retreat-app-icon').click();
+    await page.locator('#retreat-icon-editor-revert').click();
+    await page.locator('#retreat-icon-editor-save').click();
+    assert(
+      await page.locator('[data-launcher-item="features"] .retreat-app-icon > i.ph-command').count() === 1,
+      'Saving the revert operation did not restore the original icon.'
     );
 
     await page.evaluate(() => window.RetreatI18n.apply('en'));
@@ -154,7 +250,7 @@ async function main() {
     assert(restoredState.features.role === null && restoredState.features.tabIndex === 0, `Features semantics were not restored: ${JSON.stringify(restoredState.features)}`);
     assert(restoredState.products.href === '../../index.html#products-section', `Dynamic home link was not restored: ${JSON.stringify(restoredState.products)}`);
     assert(restoredState.products.transitionDirection === 'left', `Dynamic home transition was not restored: ${JSON.stringify(restoredState.products)}`);
-    assert(await page.getByRole('link', { name: 'Features' }).count() === 1, 'Features was not exposed as a link after editing.');
+    assert(await page.getByRole('link', { name: 'Feature Lab' }).count() === 1, 'The renamed icon was not exposed as a link after editing.');
 
     await page.mouse.move(4, 4);
     const normalEffectBeforeHover = await readIconEffect(page, 'features');
@@ -164,6 +260,21 @@ async function main() {
       JSON.stringify(normalEffectAfterHover) !== JSON.stringify(normalEffectBeforeHover),
       `Normal mode did not restore the link hover effect: ${JSON.stringify({ normalEffectBeforeHover, normalEffectAfterHover })}`
     );
+
+    await page.setViewportSize({ width: 380, height: 619 });
+    await page.locator('#retreat-edit-toggle').click();
+    await page.locator('[data-launcher-item="features"] .retreat-app-icon').click();
+    const mobileDialogBounds = await page.locator('#retreat-icon-editor').boundingBox();
+    assert(
+      mobileDialogBounds
+      && mobileDialogBounds.x >= 0
+      && mobileDialogBounds.y >= 0
+      && mobileDialogBounds.x + mobileDialogBounds.width <= 380
+      && mobileDialogBounds.y + mobileDialogBounds.height <= 619,
+      `The editor did not fit the 380 × 619 mobile viewport: ${JSON.stringify(mobileDialogBounds)}`
+    );
+    await page.locator('#retreat-icon-editor-cancel').click();
+    await page.locator('#retreat-edit-toggle').click();
 
     await page.locator('[data-launcher-item="features"] .retreat-app-icon').click();
     assert(new URL(page.url()).hash === '#details', `Features link did not navigate after editing: ${page.url()}`);

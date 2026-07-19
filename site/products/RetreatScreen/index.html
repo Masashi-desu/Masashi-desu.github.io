@@ -192,7 +192,6 @@
                   </span>
                   <span class="retreat-app-label" data-i18n="launcherDownload">Mac App Store</span>
                 </a>
-                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Mac App Store の名前を変更" hidden>
               </article>
 
               <article class="retreat-app-item" role="listitem" data-launcher-item="features" data-page="1">
@@ -200,7 +199,6 @@
                   <span class="retreat-app-icon retreat-app-icon--yellow"><i class="ph ph-command" aria-hidden="true"></i></span>
                   <span class="retreat-app-label" data-i18n="launcherFeatures">Features</span>
                 </a>
-                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Features の名前を変更" hidden>
               </article>
 
               <article class="retreat-app-item" role="listitem" data-launcher-item="flow" data-page="1">
@@ -208,7 +206,6 @@
                   <span class="retreat-app-icon retreat-app-icon--coral"><i class="ph ph-path" aria-hidden="true"></i></span>
                   <span class="retreat-app-label" data-i18n="launcherFlow">Flow</span>
                 </a>
-                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Flow の名前を変更" hidden>
               </article>
 
               <article class="retreat-app-item" role="listitem" data-launcher-item="specs" data-page="1">
@@ -216,7 +213,6 @@
                   <span class="retreat-app-icon retreat-app-icon--blue"><i class="ph ph-cpu" aria-hidden="true"></i></span>
                   <span class="retreat-app-label" data-i18n="launcherSpecs">Tech Specs</span>
                 </a>
-                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Tech Specs の名前を変更" hidden>
               </article>
 
               <article class="retreat-app-item" role="listitem" data-launcher-item="privacy" data-page="1">
@@ -224,7 +220,6 @@
                   <span class="retreat-app-icon retreat-app-icon--silver"><i class="ph ph-shield-check" aria-hidden="true"></i></span>
                   <span class="retreat-app-label" data-i18n="launcherPrivacy">Privacy</span>
                 </a>
-                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Privacy の名前を変更" hidden>
               </article>
 
               <article class="retreat-app-item" role="listitem" data-launcher-item="support" data-page="1">
@@ -232,7 +227,6 @@
                   <span class="retreat-app-icon retreat-app-icon--cyan"><i class="ph ph-lifebuoy" aria-hidden="true"></i></span>
                   <span class="retreat-app-label" data-i18n="launcherSupport">Support</span>
                 </a>
-                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Support の名前を変更" hidden>
               </article>
               </div>
 
@@ -242,7 +236,6 @@
                   <span class="retreat-app-icon retreat-app-icon--violet"><i class="ph ph-image-square" aria-hidden="true"></i></span>
                   <span class="retreat-app-label" data-i18n="launcherPreview">Preview</span>
                 </a>
-                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Preview の名前を変更" hidden>
               </article>
 
               <article class="retreat-app-item" role="listitem" data-launcher-item="products" data-page="2">
@@ -251,7 +244,6 @@
                   <span class="retreat-app-label" data-i18n="launcherProducts">Products</span>
                   <span class="visually-hidden" data-product-backlink-label>← 一覧に戻る</span>
                 </a>
-                <input class="retreat-app-rename" type="text" maxlength="28" aria-label="Products の名前を変更" hidden>
               </article>
               </div>
             </div>
@@ -259,7 +251,7 @@
         </div>
 
         <p id="retreat-edit-hint" class="retreat-edit-hint" data-i18n="editHint" hidden>
-          アイコンをドラッグして並べ替え、名前を入力して変更できます。
+          アイコンをドラッグして並べ替え、押すと名前や画像を変更できます。
         </p>
         <p id="retreat-live-status" class="visually-hidden" aria-live="polite"></p>
 
@@ -267,6 +259,83 @@
           <button class="retreat-page-dot is-active" type="button" data-page-target="1" aria-label="1ページ目" aria-current="page"></button>
           <button class="retreat-page-dot" type="button" data-page-target="2" aria-label="2ページ目"></button>
         </nav>
+
+        <div id="retreat-icon-editor-overlay" class="retreat-icon-editor-overlay" hidden>
+          <div class="retreat-icon-editor-backdrop" aria-hidden="true"></div>
+          <section
+            id="retreat-icon-editor"
+            class="retreat-icon-editor"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="retreat-icon-editor-title"
+            aria-describedby="retreat-icon-editor-name-hint retreat-icon-editor-format"
+          >
+            <button
+              id="retreat-icon-editor-close"
+              class="retreat-icon-editor-close"
+              type="button"
+              data-i18n-aria-label="iconEditorClose"
+              aria-label="閉じる"
+            >
+              <i class="ph ph-x" aria-hidden="true"></i>
+            </button>
+
+            <div class="retreat-icon-editor-name">
+              <label id="retreat-icon-editor-title" for="retreat-icon-editor-name" data-i18n="iconEditorNameLabel">アイコン名</label>
+              <input
+                id="retreat-icon-editor-name"
+                type="text"
+                maxlength="28"
+                autocomplete="off"
+                data-i18n-placeholder="iconEditorNamePlaceholder"
+                placeholder="ホーム画面に表示する名前"
+                aria-describedby="retreat-icon-editor-name-hint"
+              >
+              <p id="retreat-icon-editor-name-hint" data-i18n="iconEditorNameHint">保存するとランチャー上の表示名も更新されます。</p>
+            </div>
+
+            <div class="retreat-icon-editor-preview-row">
+              <div id="retreat-icon-editor-preview" class="retreat-icon-editor-preview" aria-live="polite"></div>
+              <div class="retreat-icon-editor-guidance">
+                <p data-i18n="iconEditorFileImportHint">Finder から PNG / JPG / GIF / SVG を選択するとコピーが保存され、元ファイル移動後も表示されます。</p>
+                <p class="retreat-icon-editor-guidance__strong" data-i18n="iconEditorRecommendedSize">推奨サイズ: 192pt (Retina 384px 相当)</p>
+                <p data-i18n="iconEditorSaveFormat">PNG / JPG / SVG は透過 PNG として保存されます。</p>
+              </div>
+            </div>
+
+            <p id="retreat-icon-editor-format" class="retreat-icon-editor-format" data-i18n="iconEditorSupportedFormats">対応形式: PNG / JPG / GIF / SVG</p>
+            <p id="retreat-icon-editor-selected" class="retreat-icon-editor-selected" hidden></p>
+            <p id="retreat-icon-editor-error" class="retreat-icon-editor-error" role="alert" hidden></p>
+
+            <div class="retreat-icon-editor-actions">
+              <input
+                id="retreat-icon-editor-file"
+                class="visually-hidden"
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/svg+xml,.png,.jpg,.jpeg,.gif,.svg"
+                tabindex="-1"
+                hidden
+              >
+              <button id="retreat-icon-editor-choose" type="button">
+                <i class="ph ph-folder" aria-hidden="true"></i>
+                <span data-i18n="iconEditorChoose">Finder から選択</span>
+              </button>
+              <button id="retreat-icon-editor-revert" type="button">
+                <i class="ph ph-arrow-u-up-left" aria-hidden="true"></i>
+                <span data-i18n="iconEditorRevert">元の参照アイコンに戻す</span>
+              </button>
+              <span class="retreat-icon-editor-actions__spacer" aria-hidden="true"></span>
+              <button id="retreat-icon-editor-cancel" type="button">
+                <i class="ph ph-x-circle" aria-hidden="true"></i>
+                <span data-i18n="iconEditorCancel">キャンセル</span>
+              </button>
+              <button id="retreat-icon-editor-save" class="retreat-icon-editor-save" type="button">
+                <i class="ph ph-check-circle" aria-hidden="true"></i>
+                <span data-i18n="iconEditorSave">保存</span>
+              </button>
+            </div>
+          </section>
+        </div>
       </div>
     </section>
 
@@ -426,7 +495,7 @@
   <script vite-ignore src="../../footer.js"></script>
   <script vite-ignore src="../product-backlink.js"></script>
   <script vite-ignore src="./retreat-i18n.js"></script>
-  <script vite-ignore src="./retreat-home.js?v=20260719-edit-actions"></script>
+  <script vite-ignore src="./retreat-home.js?v=20260719-icon-editor"></script>
   <script vite-ignore src="../../vendor/html2canvas.min.js"></script>
   <script vite-ignore src="../../vendor/liquidGL.js"></script>
   <script vite-ignore src="../../vendor/liquidgl-init.js"></script>
