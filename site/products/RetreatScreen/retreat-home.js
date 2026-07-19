@@ -182,7 +182,7 @@
   }
 
   function handlePageScroll(event) {
-    if (isEditing || event.ctrlKey) {
+    if (event.ctrlKey || iconEditorState || dragState?.active || totalPages <= 1) {
       return;
     }
 
@@ -1159,7 +1159,7 @@
     setPage(currentPage + (deltaX < 0 ? 1 : -1), { announcePage: true });
   });
 
-  interactionSurface.addEventListener('wheel', handlePageScroll, { passive: false });
+  interactionSurface.addEventListener('wheel', handlePageScroll, { passive: false, capture: true });
 
   window.addEventListener('pointermove', handlePointerMove, { passive: false });
   window.addEventListener('pointerup', handlePointerEnd);

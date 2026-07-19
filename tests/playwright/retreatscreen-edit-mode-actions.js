@@ -1,8 +1,8 @@
 /**
  * テスト概要:
  *  - 目的: RetreatScreen の編集モードで、一覧内編集を行わず本家同様の専用ウィンドウから名前・画像を変更できることを確認する。
- *  - 期待値: 編集中はリンク遷移とホバー効果が無効になり、アイコンが編集ボタンとして動作する。変更は保存時だけ反映・永続化され、キャンセルでは破棄、元アイコン復元も保存時だけ反映される。
- *  - 検証方法: ローカル静的サーバーで RetreatScreen を開き、Chromium / WebKit で編集ウィンドウの表示、フォーカス、名前変更、PNG 選択、キャンセル、保存、再読み込み、元アイコン復元、編集終了を順に操作して DOM・URL・localStorage・算出スタイルを取得する。
+ *  - 期待値: 編集中はリンク遷移とホバー効果が無効になり、アイコンが編集ボタンとして動作する一方、横スクロールによるページ送りは利用できる。変更は保存時だけ反映・永続化され、キャンセルでは破棄、元アイコン復元も保存時だけ反映される。
+ *  - 検証方法: ローカル静的サーバーで RetreatScreen を開き、Chromium / WebKit で編集モード中の横スクロール、編集ウィンドウの表示、フォーカス、名前変更、PNG 選択、キャンセル、保存、再読み込み、元アイコン復元、編集終了を順に操作して DOM・URL・localStorage・算出スタイルを取得する。
  */
 const http = require('http');
 const fs = require('fs');
@@ -94,6 +94,22 @@ async function readIconEffect(page, itemName) {
   });
 }
 
+async function scrollLauncherSurface(page, deltaX, expectedPage) {
+  const bounds = await page.locator('.retreat-launcher-panel__content').boundingBox();
+  assert(bounds, 'The launcher interaction surface did not have a bounding box.');
+  await page.mouse.move(
+    bounds.x + bounds.width * 0.75,
+    bounds.y + bounds.height * 0.42
+  );
+  await page.mouse.wheel(deltaX, 0);
+  await page.waitForFunction((pageNumber) => (
+    window.RetreatLauncher.getState().currentPage === pageNumber
+  ), expectedPage);
+  await page.waitForFunction(() => (
+    !document.querySelector('#retreat-app-grid').classList.contains('is-page-transitioning')
+  ));
+}
+
 async function main() {
   const browserType = BROWSER_TYPES[BROWSER_ENGINE];
   if (!browserType) {
@@ -120,6 +136,20 @@ async function main() {
     assert(normalState.products.href === '../../index.html#products-section', `Dynamic home link was not initialized: ${JSON.stringify(normalState.products)}`);
     assert(await page.getByRole('link', { name: 'Features' }).count() === 1, 'Features was not exposed as a link in normal mode.');
 
+    await page.setViewportSize({ width: 1101, height: 619 });
+    await scrollLauncherSurface(page, 48, 2);
+    assert(
+      await page.locator('[data-page-target="2"]').getAttribute('aria-current') === 'page',
+      'Horizontal scrolling on the launcher surface did not activate page 2 in normal mode.'
+    );
+    await page.waitForTimeout(400);
+    await scrollLauncherSurface(page, -48, 1);
+    assert(
+      await page.locator('[data-page-target="1"]').getAttribute('aria-current') === 'page',
+      'Horizontal scrolling on the launcher surface did not return to page 1 in normal mode.'
+    );
+    await page.waitForTimeout(400);
+
     await page.locator('#retreat-edit-toggle').click();
     await page.waitForSelector('#retreat-app-grid.is-editing');
 
@@ -127,6 +157,24 @@ async function main() {
     assert(await page.getByRole('link', { name: 'Features' }).count() === 0, 'Features remained exposed as a link in edit mode.');
     assert(await page.locator('.retreat-app-rename').count() === 0, 'An inline icon rename field remained in the launcher list.');
     assert(await page.getByRole('button', { name: /Features/u }).count() === 1, 'Features was not exposed as an edit button.');
+
+    await scrollLauncherSurface(page, 48, 2);
+    assert(
+      await page.locator('[data-page-target="2"]').getAttribute('aria-current') === 'page',
+      'Horizontal scrolling did not activate page 2 while editing.'
+    );
+    assert(
+      await page.locator('#retreat-app-grid').evaluate((element) => element.classList.contains('is-editing')),
+      'Horizontal scrolling unexpectedly exited edit mode.'
+    );
+    await page.waitForTimeout(400);
+    await scrollLauncherSurface(page, -48, 1);
+    assert(
+      await page.locator('[data-page-target="1"]').getAttribute('aria-current') === 'page',
+      'Horizontal scrolling did not return to page 1 while editing.'
+    );
+    await page.waitForTimeout(400);
+    await page.setViewportSize({ width: 880, height: 619 });
 
     await page.mouse.move(4, 4);
     const effectBeforeHover = await readIconEffect(page, 'features');
