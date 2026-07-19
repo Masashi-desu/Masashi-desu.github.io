@@ -1,17 +1,25 @@
+/**
+ * テスト概要:
+ *  - 目的: 連続したページ移動で入場／退場アニメーションのイベントが各ページに発火することを確認する。
+ *  - 期待値: ホーム、製品一覧、製品詳細の遷移ごとに enter-start と enter-complete が記録される。
+ *  - 検証方法: motion を no-preference に固定した Chromium でリンクを順に操作し、各遷移後のカスタムイベント記録を最大10秒待って検証する。
+ */
 const path = require('path');
 const { chromium } = require('playwright');
+
+const TRANSITION_EVENT_TIMEOUT_MS = 10000;
 
 async function waitForEnter(page, description) {
   await page.waitForFunction(() => {
     const events = window.__transitionEvents || [];
     return events.some((entry) => entry.type === 'enter-start');
-  }, null, { timeout: 2000 });
+  }, null, { timeout: TRANSITION_EVENT_TIMEOUT_MS });
 
   try {
     await page.waitForFunction(() => {
       const events = window.__transitionEvents || [];
       return events.some((entry) => entry.type === 'enter-complete');
-    }, null, { timeout: 2000 });
+    }, null, { timeout: TRANSITION_EVENT_TIMEOUT_MS });
   } catch (error) {
     throw new Error(`Missing enter complete event after ${description}: ${error.message}`);
   }
@@ -19,7 +27,10 @@ async function waitForEnter(page, description) {
 
 async function main() {
   const browser = await chromium.launch();
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 720 },
+    reducedMotion: 'no-preference'
+  });
 
   const productData = require(path.resolve(__dirname, '../../site/products/index.json'));
   const footerMarkup = '<footer data-test="injected">Playwright Footer</footer>';

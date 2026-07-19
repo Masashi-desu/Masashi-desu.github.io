@@ -20,6 +20,8 @@
   const title = document.getElementById('retreat-title');
   const titleInput = document.getElementById('retreat-title-input');
   const pageDots = Array.from(document.querySelectorAll('[data-page-target]'));
+  const launcherActionAttributes = ['href', 'data-pressable', 'data-transition-direction', 'role', 'tabindex'];
+  const launcherActionState = new WeakMap();
 
   if (!grid || !gridViewport || pagePanels.length === 0 || !glassPanel || !interactionSurface || !screen || !editButton || !editButtonLabel || !title || !titleInput) {
     return;
@@ -271,6 +273,42 @@
     syncRenameInputs();
   }
 
+  function syncLauncherAction(link, isActive) {
+    if (!launcherActionState.has(link)) {
+      launcherActionState.set(link, Object.fromEntries(
+        launcherActionAttributes.map((attribute) => [attribute, link.getAttribute(attribute)])
+      ));
+    }
+
+    const savedAttributes = launcherActionState.get(link);
+    if (isActive) {
+      launcherActionAttributes.forEach((attribute) => {
+        const value = savedAttributes[attribute];
+        if (value === null) {
+          link.removeAttribute(attribute);
+        } else {
+          link.setAttribute(attribute, value);
+        }
+      });
+      return;
+    }
+
+    link.removeAttribute('href');
+    link.removeAttribute('data-pressable');
+    link.removeAttribute('data-transition-direction');
+    link.setAttribute('role', 'presentation');
+    link.tabIndex = -1;
+  }
+
+  function syncLauncherActions() {
+    items.forEach((item) => {
+      const link = item.querySelector('.retreat-app-link');
+      if (link) {
+        syncLauncherAction(link, !isEditing);
+      }
+    });
+  }
+
   function setEditing(nextEditing, options = {}) {
     const { focusItem = null } = options;
     const next = Boolean(nextEditing);
@@ -306,8 +344,6 @@
       item.draggable = false;
       if (link) {
         link.draggable = false;
-        link.setAttribute('aria-disabled', String(isEditing));
-        link.tabIndex = isEditing ? -1 : 0;
       }
       if (input) {
         input.hidden = !isEditing;
@@ -316,6 +352,7 @@
         }
       }
     });
+    syncLauncherActions();
 
     syncEditingCopy();
     announce(isEditing ? 'editOnStatus' : 'editOffStatus');
@@ -784,6 +821,7 @@
 
   window.addEventListener('retreat:language-applied', () => {
     syncEditingCopy();
+    syncLauncherActions();
     if (title.dataset.userLabel !== 'true') {
       titleInput.value = title.textContent.trim() || 'RetreatScreen';
     }

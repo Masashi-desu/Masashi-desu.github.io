@@ -364,7 +364,7 @@ body.retreat-landing,
 .retreat-app-icon--green { background: var(--retreat-green); }
 .retreat-app-icon--silver { background: var(--retreat-silver); }
 
-.retreat-app-link:hover .retreat-app-icon {
+.retreat-app-grid:not(.is-editing) .retreat-app-link:hover .retreat-app-icon {
   filter: brightness(1.06);
   transform: translateY(-4px) scale(1.035);
   box-shadow: 0 1rem 1.75rem rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.52);
