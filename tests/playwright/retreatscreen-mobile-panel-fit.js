@@ -1,8 +1,8 @@
 /**
  * テスト概要:
- *  - 目的: RetreatScreen のスマホ表示が本家同様にタイトル下から上詰めされ、極端な縦長表示だけ本家比率へ戻ることを確認する。
- *  - 期待値: 通常のスマホではパネル高が viewport 高と一致し、縦横比 9:20 以下では 796 × 850 比率を上限にする。スマホ縦持ちのタイトル行からアイコン一覧までを 24〜52px に保ち、ネイティブ比率時は各部品を本家寸法から 1.1px 以内にする。
- *  - 検証方法: ローカル静的サーバーで RetreatScreen を配信し、Playwright Chromium / WebKit の複数 viewport で主要要素の矩形、段組み、タイトル下余白、ネイティブスケールを取得する。
+ *  - 目的: RetreatScreen のスマホ表示が初回の可視領域に安定して収まり、本家同様にタイトル下から上詰めされ、極端な縦長表示だけ本家比率へ戻ることを確認する。
+ *  - 期待値: 通常のスマホではパネル高が初回 visualViewport 高と一致し、ブラウザバーの開閉に伴う同一幅の resize / scroll では変化しない。向き変更では再計測し、縦横比 9:20 以下では 796 × 850 比率を上限にする。スマホ縦持ちのタイトル行からアイコン一覧までを 24〜52px に保ち、ネイティブ比率時は各部品を本家寸法から 1.1px 以内にする。
+ *  - 検証方法: ローカル静的サーバーで RetreatScreen を配信し、Playwright Chromium / WebKit の複数 viewport で主要要素の矩形、段組み、タイトル下余白、ネイティブスケールを取得する。iOS 内蔵ブラウザ相当のケースでは visualViewport をレイアウト viewport より低くし、同一幅の高さ変更では固定、orientationchange 後だけ再追従することも再現する。
  */
 const http = require('http');
 const fs = require('fs');
@@ -12,6 +12,7 @@ const { chromium, webkit } = require('playwright');
 const ROOT = path.resolve(__dirname, '../../site');
 const VIEWPORTS = [
   { name: 'browser-comment', width: 380, height: 619, columns: 3, followsViewport: true, minHeaderGridGap: 40, maxHeaderGridGap: 52 },
+  { name: 'ios-in-app-browser', width: 402, height: 874, initialVisibleHeight: 619, browserBarHiddenHeight: 700, orientationVisibleHeight: 650, expectedVisibleHeight: 650, columns: 3, followsViewport: true, minHeaderGridGap: 40, maxHeaderGridGap: 52 },
   { name: 'iphone-17-pro', width: 402, height: 874, columns: 3, followsViewport: true, minHeaderGridGap: 40, maxHeaderGridGap: 52 },
   { name: 'compact-portrait', width: 320, height: 568, columns: 3, followsViewport: true, minHeaderGridGap: 38, maxHeaderGridGap: 50 },
   { name: 'comment-tall-browser', width: 543, height: 1323, columns: 3, clampsOriginalRatio: true, minHeaderGridGap: 40, maxHeaderGridGap: 52 },
@@ -67,7 +68,8 @@ function startServer() {
 }
 
 function assertLayout(viewport, state) {
-  const maxBottom = viewport.height + LAYOUT_TOLERANCE;
+  const expectedViewportHeight = viewport.expectedVisibleHeight ?? viewport.initialVisibleHeight ?? viewport.height;
+  const maxBottom = expectedViewportHeight + LAYOUT_TOLERANCE;
   if (state.launcher.bottom > maxBottom || state.screen.bottom > maxBottom) {
     throw new Error(`Launcher exceeded ${viewport.name} viewport: ${JSON.stringify(state)}`);
   }
@@ -82,11 +84,11 @@ function assertLayout(viewport, state) {
   if (viewport.maxTitleGap != null && (state.titleToIconGap < minTitleGap || state.titleToIconGap > viewport.maxTitleGap)) {
     throw new Error(`Title/icon spacing was too large on ${viewport.name}: ${JSON.stringify(state)}`);
   }
-  if (viewport.followsViewport && Math.abs(state.launcher.height - viewport.height) > LAYOUT_TOLERANCE) {
+  if (viewport.followsViewport && Math.abs(state.launcher.height - expectedViewportHeight) > LAYOUT_TOLERANCE) {
     throw new Error(`Launcher did not follow ${viewport.name} viewport height: ${JSON.stringify(state)}`);
   }
   if (viewport.clampsOriginalRatio) {
-    const expectedHeight = Math.min(viewport.height, viewport.width * ORIGINAL_PANEL_HEIGHT_RATIO);
+    const expectedHeight = Math.min(expectedViewportHeight, viewport.width * ORIGINAL_PANEL_HEIGHT_RATIO);
     if (Math.abs(state.launcher.height - expectedHeight) > LAYOUT_TOLERANCE) {
       throw new Error(`Launcher did not clamp to the original ratio on ${viewport.name}: ${JSON.stringify(state)}`);
     }
@@ -171,20 +173,58 @@ async function main() {
         }
         await route.fulfill({ status: 204, body: '' });
       });
-      await context.addInitScript(() => {
+      await context.addInitScript(({ initialVisibleHeight }) => {
         try {
           localStorage.setItem('mdw-theme', 'dark');
           localStorage.setItem('mdw-lang', 'en');
         } catch (error) {
           // ignore storage write errors
         }
-      });
+        if (initialVisibleHeight && window.visualViewport) {
+          window.__retreatTestVisibleViewportHeight = initialVisibleHeight;
+          Object.defineProperty(window.visualViewport, 'height', {
+            configurable: true,
+            get: () => window.__retreatTestVisibleViewportHeight
+          });
+        }
+      }, { initialVisibleHeight: viewport.initialVisibleHeight });
 
       const page = await context.newPage();
       await page.goto(`http://127.0.0.1:${port}/products/RetreatScreen/index.html`, {
         waitUntil: 'domcontentloaded'
       });
       await page.waitForSelector('[data-launcher-item="download"] .retreat-app-icon', { state: 'visible' });
+
+      if (viewport.browserBarHiddenHeight) {
+        const initialLauncherHeight = await page.locator('#launcher').evaluate((launcher) => (
+          launcher.getBoundingClientRect().height
+        ));
+        await page.evaluate((visibleHeight) => {
+          window.__retreatTestVisibleViewportHeight = visibleHeight;
+          window.dispatchEvent(new Event('resize'));
+          window.visualViewport.dispatchEvent(new Event('resize'));
+          window.visualViewport.dispatchEvent(new Event('scroll'));
+        }, viewport.browserBarHiddenHeight);
+        await page.evaluate(() => new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        }));
+        const stableLauncherHeight = await page.locator('#launcher').evaluate((launcher) => (
+          launcher.getBoundingClientRect().height
+        ));
+        if (Math.abs(stableLauncherHeight - initialLauncherHeight) > LAYOUT_TOLERANCE) {
+          throw new Error(`Launcher followed browser chrome on ${viewport.name}: ${JSON.stringify({ initialLauncherHeight, stableLauncherHeight })}`);
+        }
+      }
+
+      if (viewport.orientationVisibleHeight) {
+        await page.evaluate((visibleHeight) => {
+          window.__retreatTestVisibleViewportHeight = visibleHeight;
+          window.dispatchEvent(new Event('orientationchange'));
+        }, viewport.orientationVisibleHeight);
+        await page.evaluate(() => new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        }));
+      }
 
       const state = await page.evaluate(() => {
         const rect = (selector) => {

@@ -83,6 +83,56 @@
   <script>
     (function () {
       const root = document.documentElement;
+      const visualViewport = window.visualViewport;
+      let viewportSyncFrame = 0;
+      let forceViewportSync = false;
+      let syncedLayoutWidth = 0;
+
+      function syncVisibleViewportHeight() {
+        viewportSyncFrame = 0;
+        const layoutWidth = Number(window.innerWidth || root.clientWidth);
+        if (
+          !forceViewportSync
+          && syncedLayoutWidth > 0
+          && Math.abs(layoutWidth - syncedLayoutWidth) < 1
+        ) {
+          return;
+        }
+        forceViewportSync = false;
+        syncedLayoutWidth = layoutWidth;
+        const visualHeight = Number(visualViewport && visualViewport.height);
+        const layoutHeight = Number(window.innerHeight || root.clientHeight);
+        const visibleHeight = visualHeight > 0 && layoutHeight > 0
+          ? Math.min(visualHeight, layoutHeight)
+          : (visualHeight || layoutHeight);
+        if (visibleHeight > 0) {
+          const cssHeight = `${visibleHeight}px`;
+          if (root.style.getPropertyValue('--retreat-visible-viewport-height') !== cssHeight) {
+            root.style.setProperty('--retreat-visible-viewport-height', cssHeight);
+          }
+        }
+      }
+
+      function queueVisibleViewportSync(force = false) {
+        forceViewportSync = forceViewportSync || force;
+        if (!viewportSyncFrame) {
+          viewportSyncFrame = window.requestAnimationFrame(() => syncVisibleViewportHeight());
+        }
+      }
+
+      forceViewportSync = true;
+      syncVisibleViewportHeight();
+      window.addEventListener('resize', () => queueVisibleViewportSync(), { passive: true });
+      window.addEventListener('orientationchange', () => queueVisibleViewportSync(true), { passive: true });
+      window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+          queueVisibleViewportSync(true);
+        }
+      }, { passive: true });
+      if (visualViewport) {
+        visualViewport.addEventListener('resize', () => queueVisibleViewportSync(), { passive: true });
+      }
+
       try {
         const stored = localStorage.getItem('mdw-theme');
         const preference = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';

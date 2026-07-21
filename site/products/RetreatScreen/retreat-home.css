@@ -1341,8 +1341,8 @@ body.is-retreat-icon-editor-open {
 @media (max-width: 48rem) {
   .retreat-viewport {
     --retreat-viewport-pad: 0.35rem;
-    /* Ordinary phone viewports follow the available screen height. */
-    height: 100svh;
+    /* iOS in-app browsers can expose a 100svh taller than their visible area. */
+    height: var(--retreat-visible-viewport-height, 100svh);
   }
 
   .retreat-screen {
@@ -1589,7 +1589,7 @@ body.is-retreat-icon-editor-open {
  */
 @media (max-width: 48rem) and (max-aspect-ratio: 9 / 20) {
   .retreat-viewport {
-    height: min(100svh, var(--retreat-original-panel-max-height));
+    height: min(var(--retreat-visible-viewport-height, 100svh), var(--retreat-original-panel-max-height));
   }
 
   .retreat-launcher-panel__content {
