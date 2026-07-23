@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TypeFetch | Masahi Desu Works</title>
+  <link rel="icon" href="./icon.png" type="image/png">
   <!-- mdw:meta-config
   {
     "title": "TypeFetch | Masahi Desu Works",
@@ -119,6 +120,7 @@
     </header>
 
     <main>
+      <div class="tf-operation-story" data-operation-story>
       <section id="top" class="tf-hero" aria-labelledby="tf-title">
         <p class="tf-hero__index" aria-hidden="true">INPUT / ANYWHERE</p>
         <h1 id="tf-title" class="tf-hero__title" aria-label="TypeFetch">
@@ -129,58 +131,60 @@
 確定した文字だけを、前面へ。</p>
 
         <div id="tf-demo" class="tf-demo" data-callout-open="true">
-          <section class="tf-target-window" aria-labelledby="tf-target-label">
-            <div class="tf-target-window__bar">
-              <span class="tf-target-window__lights" aria-hidden="true"><i></i><i></i><i></i></span>
-              <div class="tf-target-window__bar-title">
-                <label id="tf-target-label" for="tf-target-input" data-i18n="targetLabel">前面アプリのテキストボックス</label>
+          <div class="tf-demo__surface">
+            <section class="tf-target-window" aria-labelledby="tf-target-label">
+              <div class="tf-target-window__bar">
+                <span class="tf-target-window__lights" aria-hidden="true"><i></i><i></i><i></i></span>
+                <div class="tf-target-window__bar-title">
+                  <label id="tf-target-label" for="tf-target-input" data-i18n="targetLabel">前面アプリのテキストボックス</label>
+                </div>
               </div>
-            </div>
-            <div class="tf-target-window__body">
-              <textarea id="tf-target-input" autocomplete="off" spellcheck="true" aria-describedby="tf-demo-status">TypeFetch</textarea>
-              <div class="tf-target-window__footer">
-                <p id="tf-demo-status" role="status" aria-live="polite" data-i18n="demoReady">キャレット位置を選び、TypeFetchを呼び出せます。</p>
-                <button class="tf-open-button" type="button" data-open-callout>
-                  <span data-i18n="openButton">TypeFetchを表示</span>
-                  <kbd>⌘⇧Space</kbd>
-                </button>
+              <div class="tf-target-window__body">
+                <textarea id="tf-target-input" autocomplete="off" spellcheck="true" aria-describedby="tf-demo-status">TypeFetch</textarea>
+                <div class="tf-target-window__footer">
+                  <p id="tf-demo-status" role="status" aria-live="polite" data-i18n="demoReady">キャレット位置を選び、TypeFetchを呼び出せます。</p>
+                  <button class="tf-open-button" type="button" data-open-callout>
+                    <span data-i18n="openButton">TypeFetchを表示</span>
+                    <kbd>⌘⇧Space</kbd>
+                  </button>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <section
-            id="tf-callout"
-            class="tf-callout"
-            role="dialog"
-            aria-modal="false"
-            aria-labelledby="tf-callout-title"
-            aria-describedby="tf-callout-subtitle tf-callout-shortcuts"
-            aria-hidden="false"
-          >
-            <div class="tf-callout__heading">
-              <h2 id="tf-callout-title" data-i18n="calloutTitle">テキストを入力…</h2>
-              <p id="tf-callout-subtitle" data-i18n="calloutSubtitle">確定すると前面のアプリに入力されます。</p>
-            </div>
-            <label class="visually-hidden" for="tf-callout-input" data-i18n="calloutLabel">前面アプリへ送るテキスト</label>
-            <textarea
-              id="tf-callout-input"
-              autocomplete="off"
-              autocapitalize="sentences"
-              spellcheck="true"
-              data-i18n-placeholder="calloutPlaceholder"
-              placeholder="ここに入力してください"
-            ></textarea>
-            <div class="tf-callout__footer">
-              <p id="tf-callout-shortcuts" class="tf-callout__shortcuts">
-                <span><kbd>⌘Return</kbd> <span data-i18n="confirmHint">で確定</span></span>
-                <span><kbd>Esc</kbd> <span data-i18n="cancelHint">でキャンセル</span></span>
-              </p>
-              <div class="tf-callout__actions">
-                <button class="tf-callout-button tf-callout-button--cancel" type="button" data-cancel-callout data-i18n="cancelButton">キャンセル</button>
-                <button class="tf-callout-button tf-callout-button--confirm" type="button" data-confirm-callout data-i18n="confirmButton">確定</button>
+            <section
+              id="tf-callout"
+              class="tf-callout"
+              role="dialog"
+              aria-modal="false"
+              aria-labelledby="tf-callout-title"
+              aria-describedby="tf-callout-subtitle tf-callout-shortcuts"
+              aria-hidden="false"
+            >
+              <div class="tf-callout__heading">
+                <h2 id="tf-callout-title" data-i18n="calloutTitle">テキストを入力…</h2>
+                <p id="tf-callout-subtitle" data-i18n="calloutSubtitle">確定すると前面のアプリに入力されます。</p>
               </div>
-            </div>
-          </section>
+              <label class="visually-hidden" for="tf-callout-input" data-i18n="calloutLabel">前面アプリへ送るテキスト</label>
+              <textarea
+                id="tf-callout-input"
+                autocomplete="off"
+                autocapitalize="sentences"
+                spellcheck="true"
+                data-i18n-placeholder="calloutPlaceholder"
+                placeholder="ここに入力してください"
+              ></textarea>
+              <div class="tf-callout__footer">
+                <p id="tf-callout-shortcuts" class="tf-callout__shortcuts">
+                  <span><kbd>⌘Return</kbd> <span data-i18n="confirmHint">で確定</span></span>
+                  <span><kbd>Esc</kbd> <span data-i18n="cancelHint">でキャンセル</span></span>
+                </p>
+                <div class="tf-callout__actions">
+                  <button class="tf-callout-button tf-callout-button--cancel" type="button" data-cancel-callout data-i18n="cancelButton">キャンセル</button>
+                  <button class="tf-callout-button tf-callout-button--confirm" type="button" data-confirm-callout data-i18n="confirmButton">確定</button>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
 
         <a class="tf-scroll-cue" href="#manual">
@@ -192,16 +196,17 @@
       <section id="manual" class="tf-manual" aria-labelledby="tf-manual-title">
         <header class="tf-manual__header">
           <p>OPERATION / THREE MOVES</p>
-          <h2 id="tf-manual-title" class="whitespace-pre-line" data-i18n="manualTitle">キーを押す。
-書く。
-渡す。</h2>
+          <h2 id="tf-manual-title">
+            <span class="tf-manual__title-step" data-story-title-step="1" data-i18n="manualTitleOne">キーを押す。</span>
+            <span class="tf-manual__title-step" data-story-title-step="2" data-i18n="manualTitleTwo">書く。</span>
+            <span class="tf-manual__title-step" data-story-title-step="3" data-i18n="manualTitleThree">渡す。</span>
+          </h2>
           <p class="whitespace-pre-line" data-i18n="manualIntro">TypeFetchは前面アプリの流れを止めません。
 必要な瞬間だけ現れ、確定したら消えます。</p>
         </header>
 
         <ol class="tf-move-list">
           <li class="tf-move">
-            <span class="tf-move__number">01</span>
             <div class="tf-move__body">
               <p class="tf-move__key"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>Space</kbd></p>
               <h3 data-i18n="moveOneTitle">呼び出す</h3>
@@ -210,7 +215,6 @@
             </div>
           </li>
           <li class="tf-move">
-            <span class="tf-move__number">02</span>
             <div class="tf-move__body">
               <p class="tf-move__key"><kbd>Return</kbd></p>
               <h3 data-i18n="moveTwoTitle">そのまま書く</h3>
@@ -219,7 +223,6 @@ Return単独は改行として使えます。</p>
             </div>
           </li>
           <li class="tf-move">
-            <span class="tf-move__number">03</span>
             <div class="tf-move__body">
               <p class="tf-move__key"><kbd>⌘</kbd><kbd>Return</kbd></p>
               <h3 data-i18n="moveThreeTitle">前面へ渡す</h3>
@@ -254,6 +257,7 @@ Return単独は改行として使えます。</p>
           </div>
         </dl>
       </section>
+      </div>
 
       <section class="tf-showcase" aria-labelledby="tf-showcase-title">
         <header class="tf-showcase__header">

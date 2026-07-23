@@ -14,7 +14,7 @@
     "build:social": "node tools/generate-social-image.js",
     "test": "npm run test:non-browser && npm run test:pc-browser && npm run test:mobile-chromium && npm run test:webkit",
     "test:non-browser": "npm run test:typefetch-appcast && npm run test:segmented-scroll-core",
-    "test:pc-browser": "npm run test:page-transitions && npm run test:product-backlink-source && npm run test:home-philosophy-tiles && npm run test:home-products-responsive && npm run test:surround-segments && npm run test:retreatscreen-edit-mode-actions",
+    "test:pc-browser": "npm run test:page-transitions && npm run test:product-backlink-source && npm run test:home-philosophy-tiles && npm run test:home-products-responsive && npm run test:surround-segments && npm run test:retreatscreen-edit-mode-actions && npm run test:typefetch-scroll-story",
     "test:mobile-chromium": "npm run test:home-mobile-swipe && npm run test:catalog-mobile-overflow && npm run test:retreatscreen-mobile-panel-fit && npm run test:footer-mobile-order && npm run test:liquidgl-return-position && npm run test:home-reload-liquidgl",
     "test:webkit": "npm run test:retreatscreen-mobile-panel-fit:webkit && npm run test:retreatscreen-edit-mode-actions:webkit && npm run test:home-ios-safari-swipe && npm run test:catalog-mobile-scroll && npm run test:liquidgl-segment-mobile && npm run test:home-product-carousel",
     "test:typefetch-appcast-unit": "ruby tests/typefetch-appcast-sync.rb",
@@ -38,7 +38,8 @@
     "test:home-reload-liquidgl": "node tests/playwright/home-reload-scroll-top-liquidgl.js",
     "test:home-products-responsive": "node tests/playwright/home-products-responsive-fit.js",
     "test:home-product-carousel": "node tests/playwright/home-product-carousel-mobile-loop.js",
-    "test:surround-segments": "node tests/playwright/surround1x0-light-theme.js"
+    "test:surround-segments": "node tests/playwright/surround1x0-light-theme.js",
+    "test:typefetch-scroll-story": "node tests/playwright/typefetch-scroll-story.js"
   },
   "repository": {
     "type": "git",

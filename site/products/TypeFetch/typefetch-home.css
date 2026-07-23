@@ -70,6 +70,12 @@ body.typefetch-landing,
   background: var(--tf-page);
 }
 
+.typefetch-landing .tf-page.page-transition-target {
+  transform: none;
+  transition: opacity 450ms ease;
+  will-change: opacity;
+}
+
 .visually-hidden {
   position: absolute !important;
   width: 1px !important;
@@ -158,8 +164,18 @@ body.typefetch-landing,
   justify-self: end;
 }
 
-.tf-hero {
+.tf-operation-story {
   position: relative;
+  background: #070910;
+  isolation: isolate;
+}
+
+.tf-hero {
+  --tf-demo-flow-height: clamp(35rem, 68svh, 45rem);
+  --tf-demo-flow-offset: clamp(6.5rem, 14vw, 11rem);
+  position: sticky;
+  z-index: 1;
+  top: 0;
   display: flex;
   min-height: max(52rem, 100svh);
   flex-direction: column;
@@ -168,6 +184,28 @@ body.typefetch-landing,
   padding: 7.5rem clamp(1rem, 3vw, 3rem) 5rem;
   background: #070910;
   isolation: isolate;
+}
+
+.tf-operation-story.is-manual-active .tf-hero::after {
+  width: 1px;
+  flex: 0 0 calc(var(--tf-demo-flow-height) + var(--tf-demo-flow-offset));
+  content: "";
+  pointer-events: none;
+}
+
+.tf-hero__index,
+.tf-hero__title,
+.tf-hero__lede,
+.tf-scroll-cue {
+  transition: opacity 260ms ease, transform 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tf-operation-story.is-manual-active .tf-hero__index,
+.tf-operation-story.is-manual-active .tf-hero__title,
+.tf-operation-story.is-manual-active .tf-hero__lede,
+.tf-operation-story.is-manual-active .tf-scroll-cue {
+  opacity: 0;
+  transform: translateY(-0.75rem);
 }
 
 .tf-hero__index {
@@ -224,8 +262,67 @@ body.typefetch-landing,
   position: relative;
   z-index: 2;
   width: min(74rem, 100%);
-  min-height: clamp(35rem, 68svh, 45rem);
-  margin: clamp(6.5rem, 14vw, 11rem) auto 0;
+  min-height: var(--tf-demo-flow-height);
+  margin: var(--tf-demo-flow-offset) auto 0;
+  transform: translateY(var(--tf-demo-approach-y, 0px));
+  transform-origin: center center;
+  transition: opacity 300ms ease;
+  will-change: transform;
+}
+
+.tf-operation-story.is-manual-active .tf-demo {
+  position: fixed;
+  top: 50svh;
+  left: 50vw;
+  width: min(74rem, calc(100vw - clamp(2rem, 6vw, 6rem)));
+  margin: 0;
+  opacity: 0.92;
+  transform: translate(-50%, -50%);
+}
+
+.tf-operation-story.is-demo-handoff .tf-demo {
+  transform: none;
+  transition: none;
+}
+
+.tf-operation-story.is-demo-moving .tf-demo {
+  transform: none;
+  transition:
+    opacity 300ms ease,
+    top 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    left 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tf-operation-story.is-demo-moving .tf-demo__surface {
+  transition: none;
+}
+
+.tf-demo__surface {
+  position: absolute;
+  inset: 0;
+  transform: scale(1);
+  transform-origin: center center;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tf-operation-story.is-manual-active .tf-demo__surface {
+  transform: scale(0.62);
+}
+
+.tf-operation-story.is-demo-handoff .tf-demo__surface {
+  transform: scale(1);
+  transition: none;
+}
+
+.tf-operation-story.is-demo-measuring .tf-demo,
+.tf-operation-story.is-demo-measuring .tf-demo__surface {
+  transition: none;
+}
+
+.tf-operation-story.is-demo-returning .tf-demo__surface {
+  transform: scale(1);
 }
 
 .tf-target-window {
@@ -536,20 +633,30 @@ body.typefetch-landing,
 }
 
 .tf-manual {
+  position: relative;
+  z-index: 4;
   display: grid;
   min-height: 100vh;
   grid-template-columns: minmax(18rem, 0.74fr) minmax(0, 1.4fr);
   border-top: 1px solid var(--tf-line-soft);
-  background: #0a0d15;
+  background: transparent;
+  pointer-events: none;
 }
 
 .tf-manual__header {
   position: sticky;
+  z-index: 2;
   top: 4.5rem;
+  display: flex;
   align-self: start;
   min-height: calc(100svh - 4.5rem);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
   padding: clamp(3rem, 6vw, 6rem) clamp(1.5rem, 4.2vw, 5rem);
   border-right: 1px solid var(--tf-line-soft);
+  background: transparent;
+  text-shadow: 0 0.18rem 1.4rem rgba(0, 0, 0, 0.94);
 }
 
 .tf-manual__header > p:first-child,
@@ -565,7 +672,10 @@ body.typefetch-landing,
 }
 
 .tf-manual__header h2 {
-  margin: clamp(3rem, 9vw, 8rem) 0 0;
+  display: flex;
+  margin: clamp(1.75rem, 3vw, 3rem) 0 0;
+  flex-direction: column;
+  align-items: flex-start;
   color: var(--tf-ink);
   font-family: var(--tf-display);
   font-size: clamp(2.85rem, 3.55vw, 4.25rem);
@@ -575,9 +685,26 @@ body.typefetch-landing,
   word-break: keep-all;
 }
 
+.tf-manual__title-step {
+  display: block;
+  opacity: 1;
+  transition: color 240ms ease, opacity 240ms ease;
+}
+
+.tf-operation-story.is-manual-active .tf-manual__title-step {
+  opacity: 0.42;
+}
+
+.tf-operation-story[data-story-step="1"] .tf-manual__title-step[data-story-title-step="1"],
+.tf-operation-story[data-story-step="2"] .tf-manual__title-step[data-story-title-step="2"],
+.tf-operation-story[data-story-step="3"] .tf-manual__title-step[data-story-title-step="3"] {
+  color: #ffffff;
+  opacity: 1;
+}
+
 .tf-manual__header > p:last-child {
   max-width: 30rem;
-  margin: clamp(2rem, 4vw, 4rem) 0 0;
+  margin: clamp(1.5rem, 2.4vw, 2.5rem) 0 0;
   color: var(--tf-muted);
   font-size: clamp(0.9rem, 1.15vw, 1.08rem);
   line-height: 1.9;
@@ -592,40 +719,37 @@ body.typefetch-landing,
 .tf-move {
   display: grid;
   min-height: min(48rem, 76svh);
-  grid-template-columns: clamp(4.75rem, 8.5vw, 7.5rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   border-bottom: 1px solid var(--tf-line-soft);
+  background: transparent;
 }
 
 .tf-move:last-child {
   border-bottom: 0;
 }
 
-.tf-move__number {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 2.5rem 1rem;
-  border-right: 1px solid var(--tf-line-soft);
-  color: rgba(241, 242, 246, 0.16);
-  font-family: var(--tf-display);
-  font-size: clamp(4rem, 7vw, 8rem);
-  font-weight: 600;
-  letter-spacing: -0.08em;
-  line-height: 0.8;
-  writing-mode: vertical-rl;
-}
-
 .tf-move__body {
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   justify-content: center;
   padding: clamp(3rem, 6vw, 7rem) clamp(1.5rem, 5vw, 6rem);
+  background: transparent;
+  text-align: right;
+  text-shadow: 0 0.18rem 1.4rem rgba(0, 0, 0, 0.94);
+  transition: opacity 260ms ease, transform 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tf-operation-story.is-manual-active .tf-move:not(.is-current) .tf-move__body {
+  opacity: 0.42;
+  transform: translateY(0.85rem);
 }
 
 .tf-move__key {
   display: flex;
   margin: 0;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.7rem;
 }
 
@@ -661,9 +785,11 @@ body.typefetch-landing,
 }
 
 .tf-rules {
+  position: relative;
+  z-index: 5;
   padding: clamp(5rem, 10vw, 10rem) clamp(1rem, 5vw, 6rem);
   border-top: 1px solid var(--tf-line-soft);
-  background: #10131d;
+  background: rgba(16, 19, 29, 0.74);
 }
 
 .tf-rules__header {
@@ -952,8 +1078,8 @@ body.typefetch-landing,
     top: 14.2rem;
   }
 
-  .tf-demo {
-    margin-top: 11rem;
+  .tf-hero {
+    --tf-demo-flow-offset: 11rem;
   }
 
   .tf-manual {
@@ -1021,6 +1147,8 @@ body.typefetch-landing,
   }
 
   .tf-hero {
+    --tf-demo-flow-height: 43rem;
+    --tf-demo-flow-offset: 10.25rem;
     min-height: 58rem;
     padding: 6.25rem 0.75rem 4.5rem;
   }
@@ -1041,9 +1169,12 @@ body.typefetch-landing,
     line-height: 1.65;
   }
 
-  .tf-demo {
-    min-height: 43rem;
-    margin-top: 10.25rem;
+  .tf-operation-story.is-manual-active .tf-demo {
+    width: calc(100vw - 1.5rem);
+  }
+
+  .tf-operation-story.is-manual-active .tf-demo__surface {
+    transform: scale(0.54);
   }
 
   .tf-target-window {
@@ -1128,28 +1259,27 @@ body.typefetch-landing,
   }
 
   .tf-manual__header {
-    min-height: 80vh;
+    display: flex;
+    min-height: 110svh;
+    flex-direction: column;
+    justify-content: flex-end;
     padding: 4rem 1.25rem;
   }
 
   .tf-manual__header h2 {
-    margin-top: 5rem;
+    margin-top: 3rem;
     font-size: clamp(2.8rem, 13.5vw, 4.2rem);
     line-height: 0.92;
     word-break: keep-all;
   }
 
   .tf-move {
-    min-height: 76vh;
-    grid-template-columns: 4rem minmax(0, 1fr);
-  }
-
-  .tf-move__number {
-    padding: 1.5rem 0.75rem;
-    font-size: 3.6rem;
+    min-height: 100svh;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .tf-move__body {
+    justify-content: flex-end;
     padding: 3.5rem 1.25rem;
   }
 
@@ -1219,14 +1349,56 @@ body.typefetch-landing,
   }
 }
 
+@media (max-width: 640px) and (orientation: portrait) {
+  .tf-operation-story.is-manual-active .tf-demo {
+    width: calc(100vw - 1.5rem);
+    height: min(43rem, calc(100svh - 5rem));
+    min-height: 0;
+  }
+
+  .tf-operation-story.is-manual-active .tf-demo__surface {
+    transform: scale(1);
+  }
+
+  .tf-operation-story.is-manual-active .tf-callout {
+    width: 35rem;
+    height: 24.25rem;
+    min-height: 0;
+    aspect-ratio: 560 / 388;
+    transform: translate(-50%, -52%) scale(0.54);
+  }
+
+  .tf-operation-story.is-manual-active .tf-callout[aria-hidden="true"] {
+    transform: translate(-50%, -47%) scale(0.54);
+  }
+}
+
+@media (max-width: 360px) and (orientation: portrait) {
+  .tf-operation-story.is-manual-active .tf-callout {
+    transform: translate(-50%, -52%) scale(0.48);
+  }
+
+  .tf-operation-story.is-manual-active .tf-callout[aria-hidden="true"] {
+    transform: translate(-50%, -47%) scale(0.48);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
 
   .tf-callout,
+  .tf-demo,
+  .tf-demo__surface,
   .tf-open-button,
-  .tf-callout-button {
+  .tf-callout-button,
+  .tf-hero__index,
+  .tf-hero__title,
+  .tf-hero__lede,
+  .tf-scroll-cue,
+  .tf-manual__title-step,
+  .tf-move__body {
     transition: none;
   }
 
