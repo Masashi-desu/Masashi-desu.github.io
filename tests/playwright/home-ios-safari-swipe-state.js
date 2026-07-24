@@ -222,18 +222,22 @@ async function main() {
     await dispatchSwipe(page, 650, 190);
     await page.waitForTimeout(1300);
     assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'swipe catch->products');
+    await waitForAnimationFrames(page, 40);
 
     await dispatchSwipe(page, 650, 190);
     await page.waitForTimeout(1300);
     assertFooterState(await getHomeState(page), 'swipe products->footer');
+    await waitForAnimationFrames(page, 40);
 
     await dispatchSwipe(page, 190, 650);
     await page.waitForTimeout(1300);
     assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'swipe footer->products');
+    await waitForAnimationFrames(page, 40);
 
     await dispatchSwipe(page, 190, 650);
     await page.waitForTimeout(1300);
     assertSectionState(await getHomeState(page), 'catch-section', 'catchTop', 'swipe products->catch');
+    await waitForAnimationFrames(page, 40);
 
     // (4) プログラムスクロールが数回無視されても補正されること(iOS の慣性中挙動の模擬)
     await page.evaluate(() => {
@@ -256,6 +260,7 @@ async function main() {
       throw new Error(`Expected the dropped-scroll simulation to swallow 3 calls, swallowed ${droppedCalls}`);
     }
     assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'dropped-scroll recovery');
+    await waitForAnimationFrames(page, 40);
 
     // (5) ロック中の連続スワイプ後も位置と nav が食い違わないこと
     await dispatchSwipe(page, 190, 650);
@@ -294,6 +299,7 @@ async function main() {
     });
     await page.waitForTimeout(1400);
     assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'unmanaged mid-scroll recovery (section)');
+    await waitForAnimationFrames(page, 40);
 
     await page.evaluate(() => {
       const documentHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
@@ -301,6 +307,7 @@ async function main() {
     });
     await page.waitForTimeout(1400);
     assertFooterState(await getHomeState(page), 'unmanaged mid-scroll recovery (footer)');
+    await waitForAnimationFrames(page, 40);
 
     // (7) 長押しでシステムがジェスチャを奪い、touchend が届かないままスクロールされても
     //     自己修復すること(実機 Safari の「長押し→スクロールバー表示→スクロール」の再現)
