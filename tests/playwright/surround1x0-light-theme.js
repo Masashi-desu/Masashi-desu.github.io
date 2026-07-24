@@ -22,6 +22,8 @@ const { spawn, spawnSync } = require('child_process');
 const { chromium } = require('playwright');
 
 const ROOT = path.resolve(__dirname, '../..');
+const VITE_PACKAGE = require.resolve('vite/package.json');
+const VITE_CLI = path.resolve(path.dirname(VITE_PACKAGE), 'bin/vite.js');
 
 function getAvailablePort() {
   return new Promise((resolve, reject) => {
@@ -60,18 +62,49 @@ function waitForServer(url, timeoutMs = 15000) {
 }
 
 function stopProcess(child) {
-  if (!child || child.killed) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) {
     return Promise.resolve();
   }
   return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      child.kill('SIGKILL');
-    }, 3000);
-    child.once('exit', () => {
-      clearTimeout(timeout);
+    let forceTimer;
+    let settleTimer;
+    let settled = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(forceTimer);
+      clearTimeout(settleTimer);
       resolve();
-    });
+    };
+
+    child.once('exit', finish);
+    if (child.exitCode !== null || child.signalCode !== null) {
+      finish();
+      return;
+    }
+
     child.kill('SIGTERM');
+    forceTimer = setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill('SIGKILL');
+      }
+      settleTimer = setTimeout(finish, 1000);
+    }, 3000);
+  });
+}
+
+function startVite(mode, port) {
+  const args = [VITE_CLI];
+  if (mode === 'preview') {
+    args.push('preview');
+  }
+  args.push('--host', '127.0.0.1', '--port', String(port), '--strictPort');
+  return spawn(process.execPath, args, {
+    cwd: ROOT,
+    env: { ...process.env, BROWSER: 'none' },
+    stdio: ['ignore', 'pipe', 'pipe']
   });
 }
 
@@ -172,11 +205,7 @@ async function verifyProductionAccent() {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const pageUrl = `${baseUrl}/products/Surround1x0-AKDK/index.html?from=home`;
-  const preview = spawn('npm', ['run', 'preview', '--', '--port', String(port), '--strictPort'], {
-    cwd: ROOT,
-    env: { ...process.env, BROWSER: 'none' },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
+  const preview = startVite('preview', port);
   let previewOutput = '';
   preview.stdout.on('data', (chunk) => { previewOutput += chunk.toString(); });
   preview.stderr.on('data', (chunk) => { previewOutput += chunk.toString(); });
@@ -226,11 +255,7 @@ async function main() {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const pageUrl = `${baseUrl}/products/Surround1x0-AKDK/index.html?from=home`;
-  const vite = spawn('npm', ['run', 'dev', '--', '--port', String(port), '--strictPort'], {
-    cwd: ROOT,
-    env: { ...process.env, BROWSER: 'none' },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
+  const vite = startVite('dev', port);
   let viteOutput = '';
   vite.stdout.on('data', (chunk) => { viteOutput += chunk.toString(); });
   vite.stderr.on('data', (chunk) => { viteOutput += chunk.toString(); });
