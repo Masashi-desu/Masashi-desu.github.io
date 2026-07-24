@@ -93,6 +93,21 @@ async function dispatchSwipe(page, startY, endY, steps = 14) {
   }, { startY, endY, steps });
 }
 
+async function waitForAnimationFrames(page, frameCount) {
+  await page.evaluate((count) => new Promise((resolve) => {
+    let remaining = count;
+    const step = () => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        resolve();
+        return;
+      }
+      window.requestAnimationFrame(step);
+    };
+    window.requestAnimationFrame(step);
+  }), frameCount);
+}
+
 async function getHomeState(page) {
   return page.evaluate(() => {
     const active = document.querySelector('.home-section-nav__button.is-active, .home-section-nav__footer-link.is-active');
@@ -222,7 +237,7 @@ async function main() {
 
     // (4) プログラムスクロールが数回無視されても補正されること(iOS の慣性中挙動の模擬)
     await page.evaluate(() => {
-      const original = window.scrollTo.bind(window);
+      window.__originalScrollTo = window.scrollTo;
       window.__dropScrollCalls = 3;
       window.__droppedScrollCalls = 0;
       window.scrollTo = (...args) => {
@@ -231,7 +246,7 @@ async function main() {
           window.__droppedScrollCalls += 1;
           return undefined;
         }
-        return original(...args);
+        return window.__originalScrollTo.apply(window, args);
       };
     });
     await dispatchSwipe(page, 650, 190);
@@ -257,6 +272,16 @@ async function main() {
     if (rapidState.activeTarget !== aligned.target) {
       throw new Error(`Expected nav to match settled section ${aligned.target}: ${JSON.stringify(rapidState)}`);
     }
+
+    // settle 後の位置補正は一定時間ではなく一定フレーム数だけ継続する。CI 負荷で rAF が遅い場合も
+    // 前シナリオの補正が次の管理外スクロールを上書きしないよう、全補正フレームの完了を待つ。
+    await waitForAnimationFrames(page, 40);
+    await page.evaluate(() => {
+      window.scrollTo = window.__originalScrollTo;
+      delete window.__originalScrollTo;
+      delete window.__dropScrollCalls;
+      delete window.__droppedScrollCalls;
+    });
 
     // (6) JS 管理外のスクロールで中途半端な位置に置かれても自己修復すること
     //     (ボタンを押したまま2本指でスワイプした場合など、JS が関与しないネイティブスクロールの模擬)。
