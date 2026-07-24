@@ -83,6 +83,21 @@ async function dispatchSwipeOnSelector(page, selector, startY, endY, steps = 14)
   }, { selector, startY, endY, steps });
 }
 
+async function waitForAnimationFrames(page, frameCount) {
+  await page.evaluate((count) => new Promise((resolve) => {
+    let remaining = count;
+    const step = () => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        resolve();
+        return;
+      }
+      window.requestAnimationFrame(step);
+    };
+    window.requestAnimationFrame(step);
+  }), frameCount);
+}
+
 async function getCatalogState(page) {
   return page.evaluate(() => {
     const active = document.querySelector(
@@ -200,6 +215,7 @@ async function main() {
     await page.click('.catalog-section-nav__footer-link');
     await page.waitForTimeout(1300);
     assertFooterState(await getCatalogState(page), 'nav click to footer');
+    await waitForAnimationFrames(page, 40);
 
     await page.evaluate(() => {
       const documentHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
@@ -213,18 +229,22 @@ async function main() {
     await dispatchSwipeOnSelector(page, '#catalog-footer', 190, 650);
     await page.waitForTimeout(1300);
     assertPaginationState(await getCatalogState(page), 'partial footer upward swipe');
+    await waitForAnimationFrames(page, 40);
 
     await dispatchSwipeOnSelector(page, '#catalog-pagination-section', 650, 190);
     await page.waitForTimeout(1300);
     assertFooterState(await getCatalogState(page), 'pagination downward swipe');
+    await waitForAnimationFrames(page, 40);
 
     await dispatchSwipeOnSelector(page, '#catalog-footer', 190, 650);
     await page.waitForTimeout(1300);
     assertPaginationState(await getCatalogState(page), 'footer upward swipe');
+    await waitForAnimationFrames(page, 40);
 
     await dispatchSwipeOnSelector(page, '#catalog-pagination-section', 190, 650);
     await page.waitForTimeout(1300);
     assertLastProductState(await getCatalogState(page), 'pagination upward swipe');
+    await waitForAnimationFrames(page, 40);
 
     await page.evaluate(() => {
       document.documentElement.style.scrollSnapType = 'none';
@@ -242,6 +262,7 @@ async function main() {
     });
     await page.waitForTimeout(1500);
     assertPaginationState(await getCatalogState(page), 'unmanaged stop near pagination');
+    await waitForAnimationFrames(page, 40);
 
     await page.evaluate(() => {
       document.documentElement.style.scrollSnapType = 'none';
