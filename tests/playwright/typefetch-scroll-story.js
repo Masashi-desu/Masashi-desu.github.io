@@ -1,8 +1,8 @@
 /**
  * テスト概要:
  *  - 目的: TypeFetch の操作説明が透明な前景としてヒーローデモへ重なり、スクロール位置に応じて呼び出し・入力・受け渡しの3段階を再現することを確認する。
- *  - 期待値: 操作説明の背景は透明、ヒーローは sticky、左見出しは上詰めで current 行だけ不透過、右手順は右寄せ、番号レールは存在しない。縦に短い viewport では操作説明が画面へ入る前にヒーローデモが上へ移動し、TypeFetch入力パネル全体が見えて操作できる。操作説明の先頭が viewport 中央へ到達するまではヒーローが操作可能で、中央を越えてから同じデモが現在位置から viewport 中央へ連続移動・縮小し、逆方向も連続する。ルール終端側からストーリーへ再進入した後にヒーローへ戻っても、デモは画面外へ消えず、その時点のヒーロー内の実位置まで連続して戻る。各手順の中央表示時に対応する手順が current となり、2段階目では入力、3段階目では前面アプリへの挿入が反映される。ルールセクションは半透明で、最終状態の固定デモを同セクションの終端まで維持する。先頭へ戻ると手動デモの初期状態へ復帰する。
- *  - 検証方法: ローカル静的サーバーで TypeFetch を開き、短い viewport で説明領域が画面外にある間のデモ移動量、入力パネル下端、focus 状態を確認し、複数 viewport で中央引き継ぎ線の直前・直後の active/inert/focus 状態を確認する。続いて Chromium の 1387 × 994 viewport で切り替え前後のデモ矩形を animation frame ごとに採取し、各手順とルールセクションを順に中央へスクロールする。さらに 1280 × 666 viewport でルール終端側から再進入して上方向へ戻り、デモが全フレームで viewport 内に残り、終点でも座標ジャンプせず relative 配置へ復帰することを確認する。算出スタイル、公開状態 API、textarea 値、aria 属性、console/page error も取得する。
+ *  - 期待値: 操作説明の背景は透明、ヒーローは sticky、左見出しは上詰めで current 行だけ不透過、右手順は右寄せ、番号レールは存在しない。縦に短い viewport では操作説明が画面へ入る前にヒーローデモが上へ移動し、TypeFetch入力パネル全体が見えて操作できる。モバイルでは前面アプリの外枠は viewport 幅へ追従する一方、本文の文字、ウィンドウバー、余白、フッター操作は小さい縮尺を保つ。操作説明の先頭が viewport 中央へ到達するまではヒーローが操作可能で、中央を越えてから同じデモが現在位置から viewport 中央へ連続移動・縮小し、逆方向も連続する。ルール終端側からストーリーへ再進入した後にヒーローへ戻っても、デモは画面外へ消えず、その時点のヒーロー内の実位置まで連続して戻る。各手順の中央表示時に対応する手順が current となり、2段階目では入力、3段階目では前面アプリへの挿入が反映される。ルールセクションは半透明で、最終状態の固定デモを同セクションの終端まで維持する。先頭へ戻ると手動デモの初期状態へ復帰する。
+ *  - 検証方法: ローカル静的サーバーで TypeFetch を開き、390px と 426px 幅で前面アプリの viewport 幅比、文字サイズ、バー、余白、フッター配置を算出スタイルから確認する。短い viewport で説明領域が画面外にある間のデモ移動量、入力パネル下端、focus 状態を確認し、複数 viewport で中央引き継ぎ線の直前・直後の active/inert/focus 状態を確認する。続いて Chromium の 1387 × 994 viewport で切り替え前後のデモ矩形を animation frame ごとに採取し、各手順とルールセクションを順に中央へスクロールする。さらに 1280 × 666 viewport でルール終端側から再進入して上方向へ戻り、デモが全フレームで viewport 内に残り、終点でも座標ジャンプせず relative 配置へ復帰することを確認する。公開状態 API、textarea 値、aria 属性、console/page error も取得する。
  */
 const fs = require('fs');
 const http = require('http');
@@ -250,6 +250,64 @@ async function verifyDeferredControlHandoff(page, viewport) {
   await page.waitForTimeout(480);
 }
 
+async function verifyMobileTargetVisualHierarchy(page) {
+  const samples = [];
+
+  for (const width of [390, 426]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForFunction(() => !window.TypeFetchScrollStory.getState().active);
+
+    samples.push(await page.evaluate(() => {
+      const target = document.querySelector('.tf-target-window');
+      const targetRect = target.getBoundingClientRect();
+      const input = document.querySelector('#tf-target-input');
+      const bar = document.querySelector('.tf-target-window__bar');
+      const light = document.querySelector('.tf-target-window__lights i');
+      const body = document.querySelector('.tf-target-window__body');
+      const footer = document.querySelector('.tf-target-window__footer');
+      const openButton = document.querySelector('.tf-open-button');
+      const inputFontSize = Number.parseFloat(getComputedStyle(input).fontSize);
+
+      return {
+        viewportWidth: window.innerWidth,
+        targetViewportWidthRatio: targetRect.width / window.innerWidth,
+        inputFontSize,
+        inputFontViewportRatio: inputFontSize / window.innerWidth,
+        barHeight: bar.getBoundingClientRect().height,
+        lightDiameter: light.getBoundingClientRect().width,
+        bodyPaddingLeft: Number.parseFloat(getComputedStyle(body).paddingLeft),
+        footerFlexDirection: getComputedStyle(footer).flexDirection,
+        openButtonHeight: openButton.getBoundingClientRect().height,
+        openButtonWidthRatio: openButton.getBoundingClientRect().width / targetRect.width
+      };
+    }));
+  }
+
+  for (const sample of samples) {
+    assert(sample.targetViewportWidthRatio >= 0.9, `Mobile target app did not follow the viewport width: ${JSON.stringify(samples)}`);
+    assert(sample.inputFontSize <= 24, `Mobile target text was too large: ${JSON.stringify(samples)}`);
+    assert(sample.inputFontViewportRatio <= 0.06, `Mobile target text did not keep a compact viewport-relative scale: ${JSON.stringify(samples)}`);
+    assert(sample.barHeight <= 42, `Mobile target window bar was too tall: ${JSON.stringify(samples)}`);
+    assert(sample.lightDiameter <= 8, `Mobile target window controls were too large: ${JSON.stringify(samples)}`);
+    assert(sample.bodyPaddingLeft <= 16, `Mobile target window padding was too large: ${JSON.stringify(samples)}`);
+    assert(sample.footerFlexDirection === 'row', `Mobile target footer did not keep the compact horizontal layout: ${JSON.stringify(samples)}`);
+    assert(sample.openButtonHeight >= 44, `Mobile target open button did not keep a usable touch target: ${JSON.stringify(samples)}`);
+    assert(sample.openButtonWidthRatio < 0.6, `Mobile target open button occupied too much width: ${JSON.stringify(samples)}`);
+  }
+
+  assert(
+    samples[1].inputFontSize > samples[0].inputFontSize,
+    `Mobile target text did not follow the viewport width within its compact scale: ${JSON.stringify(samples)}`
+  );
+
+  await page.setViewportSize(VIEWPORT);
+  await page.evaluate(() => new Promise((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+  }));
+  await page.waitForTimeout(480);
+}
+
 async function verifyPreviewApproachBeforeManual(page) {
   const viewport = { width: 1280, height: 666 };
   await page.setViewportSize(viewport);
@@ -385,6 +443,7 @@ async function main() {
       `The rules section background was not translucent: ${JSON.stringify(initial)}`
     );
 
+    await verifyMobileTargetVisualHierarchy(page);
     await verifyPreviewApproachBeforeManual(page);
     await verifyDeferredControlHandoff(page, { width: 1387, height: 815 });
     await verifyDeferredControlHandoff(page, { width: 599, height: 994 });

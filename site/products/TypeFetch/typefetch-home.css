@@ -1178,38 +1178,64 @@ body.typefetch-landing,
   }
 
   .tf-target-window {
-    border-radius: 1.6rem;
+    border-radius: 1.35rem;
   }
 
   .tf-target-window__bar {
-    height: 3.4rem;
+    height: 2.5rem;
     grid-template-columns: 1fr auto 1fr;
-    padding: 0 1rem;
-    font-size: 0.55rem;
+    padding: 0 0.75rem;
+    font-size: 0.5rem;
   }
 
   .tf-target-window__bar-title label {
-    font-size: 0.68rem;
+    font-size: 0.56rem;
     white-space: nowrap;
   }
 
+  .tf-target-window__lights {
+    gap: 0.28rem;
+  }
+
+  .tf-target-window__lights i {
+    width: 0.42rem;
+    height: 0.42rem;
+  }
+
   .tf-target-window__body {
-    height: calc(100% - 3.4rem);
-    padding: 1.2rem;
+    height: calc(100% - 2.5rem);
+    padding: 0.9rem;
   }
 
   #tf-target-input {
-    font-size: clamp(2rem, 12vw, 4rem);
+    font-size: clamp(1.125rem, 5.2vw, 1.45rem);
   }
 
   .tf-target-window__footer {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
+    gap: 0.65rem;
+    padding-top: 0.75rem;
+  }
+
+  .tf-target-window__footer p {
+    font-size: 0.54rem;
+    line-height: 1.4;
   }
 
   .tf-open-button {
-    width: 100%;
+    width: auto;
+    min-height: 2.75rem;
     justify-content: space-between;
+    gap: 0.55rem;
+    padding: 0.45rem 0.5rem 0.45rem 0.75rem;
+    border-radius: 0.72rem;
+    font-size: 0.62rem;
+  }
+
+  .tf-open-button kbd {
+    padding: 0.28rem 0.38rem;
+    border-radius: 0.42rem;
+    font-size: 0.52rem;
   }
 
   .tf-callout {
