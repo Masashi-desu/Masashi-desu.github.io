@@ -1,8 +1,8 @@
 /**
  * テスト概要:
- *  - 目的: スマホ表示で snapshot が一度固まっても、fallback 表示後に LiquidGL セグメントコントロールへ復帰することを検証する。
- *  - 期待値: iPhone 幅の WebKit context で catalog nav track が load 未発火中に fallback として表示され、その後 texture 作成後に fallback class と背景 style が外れる。
- *  - 検証方法: DOMContentLoaded 時に遅延画像を追加し、初回 html2canvas を未解決にしたまま /products/index.html を開いて fallback 状態と復帰後の computed/inline style を取得する。
+ *  - 目的: スマホ表示で snapshot が一度固まり、未読込の lazy 画像が残っても、fallback 表示後に LiquidGL セグメントコントロールへ復帰することを検証する。
+ *  - 期待値: iPhone 幅の WebKit context で catalog nav track が load 未発火中に fallback として表示され、lazy 画像を snapshot 対象外にして texture 作成後に fallback class と背景 style が外れる。
+ *  - 検証方法: DOMContentLoaded 時に遅延画像と lazy 画像を追加し、初回 html2canvas を未解決にしたまま /products/index.html を開いて fallback 状態と復帰後の computed/inline style を取得する。
  */
 const http = require('http');
 const fs = require('fs');
@@ -89,6 +89,15 @@ async function main() {
               return new Promise(() => {});
             }
             const options = args[1] || {};
+            const stalledLazyImage = document.querySelector('[data-liquidgl-stalled-lazy-image]');
+            window.__mdwLazyImageIgnored = Boolean(
+              stalledLazyImage &&
+              typeof options.ignoreElements === 'function' &&
+              options.ignoreElements(stalledLazyImage)
+            );
+            if (stalledLazyImage && !window.__mdwLazyImageIgnored) {
+              return new Promise(() => {});
+            }
             const scale = Number.isFinite(options.scale) ? options.scale : 1;
             const canvas = document.createElement('canvas');
             canvas.width = Math.max(1, Math.round((options.width || window.innerWidth) * scale));
@@ -110,6 +119,14 @@ async function main() {
         image.src = delayedImagePath;
         image.style.cssText = 'position:absolute;left:-9999px;top:0;width:1px;height:1px;';
         document.body.appendChild(image);
+
+        const lazyImage = document.createElement('img');
+        lazyImage.alt = '';
+        lazyImage.loading = 'lazy';
+        lazyImage.src = '/__liquidgl-stalled-lazy-image.png';
+        lazyImage.dataset.liquidglStalledLazyImage = '';
+        lazyImage.style.cssText = 'position:absolute;left:-9999px;top:0;width:1px;height:1px;';
+        document.body.appendChild(lazyImage);
       });
       try {
         localStorage.setItem('mdw-theme', 'dark');
@@ -135,7 +152,8 @@ async function main() {
         height: rect ? Number(rect.height.toFixed(2)) : null,
         className: nav ? nav.className : null,
         hasTexture: !!(window.__liquidGLRenderer__ && window.__liquidGLRenderer__.texture),
-        html2canvasCallCount: window.__mdwHtml2canvasCallCount
+        html2canvasCallCount: window.__mdwHtml2canvasCallCount,
+        lazyImageIgnored: window.__mdwLazyImageIgnored
       };
     });
 
@@ -187,12 +205,16 @@ async function main() {
         inlineBackdropFilter: nav ? nav.style.backdropFilter : null,
         inlineWebkitBackdropFilter: nav ? nav.style.webkitBackdropFilter : null,
         hasTexture: !!(window.__liquidGLRenderer__ && window.__liquidGLRenderer__.texture),
-        html2canvasCallCount: window.__mdwHtml2canvasCallCount
+        html2canvasCallCount: window.__mdwHtml2canvasCallCount,
+        lazyImageIgnored: window.__mdwLazyImageIgnored
       };
     });
 
     if (restoredState.opacity < 0.95 || !restoredState.hasTexture || /is-liquidgl-fallback/.test(restoredState.className || '')) {
       throw new Error(`Expected LiquidGL segment nav to restore after fallback: ${JSON.stringify(restoredState)}`);
+    }
+    if (!restoredState.lazyImageIgnored) {
+      throw new Error(`Expected stalled lazy image to be excluded from the LiquidGL snapshot: ${JSON.stringify(restoredState)}`);
     }
     if (/var\\(--home-nav-bg\\)/.test(restoredState.inlineBackground || '')) {
       throw new Error(`Fallback background style should be removed after LiquidGL restore: ${JSON.stringify(restoredState)}`);

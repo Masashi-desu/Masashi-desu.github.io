@@ -33,7 +33,7 @@
     "test:retreatscreen-edit-mode-actions:webkit": "RETREATSCREEN_BROWSER=webkit node tests/playwright/retreatscreen-edit-mode-actions.js",
     "test:catalog-mobile-scroll": "node tests/playwright/catalog-mobile-pagination-footer-swipe.js",
     "test:footer-mobile-order": "node tests/playwright/footer-mobile-copyright-order.js",
-    "test:liquidgl-segment-mobile": "node tests/playwright/liquidgl-segment-mobile-before-load.js",
+    "test:liquidgl-segment-mobile": "node tests/playwright/liquidgl-segment-mobile-before-load.js && node tests/playwright/liquidgl-segment-mobile-context-restore.js",
     "test:liquidgl-return-position": "node tests/playwright/liquidgl-x-inapp-return-position.js",
     "test:home-reload-liquidgl": "node tests/playwright/home-reload-scroll-top-liquidgl.js",
     "test:home-products-responsive": "node tests/playwright/home-products-responsive-fit.js",

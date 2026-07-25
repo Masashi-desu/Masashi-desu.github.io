@@ -81,3 +81,5 @@ Playwright などで追加する自動テストスクリプトには、以下を
 テスト名も内容が判別できるように命名し、後から見た人が意図を理解しやすいようにします。既存例: `tests/playwright/footer-accent-focus.js`, `tests/playwright/surround1x0-light-theme.js`。
 
 X 内蔵ブラウザなどの `WKWebView` で履歴復帰時に `visualViewport` の古い offset が残る条件は、`npm run test:liquidgl-return-position` で再現し、LiquidGL の描画矩形が固定ナビの DOM 矩形と一致することを検証します。
+
+iOS Mobile Safari で未読込の lazy 画像が snapshot clone に残る条件と、ページ復帰時に WebGL context が破棄される条件は、`npm run test:liquidgl-segment-mobile` で再現し、セグメントが一時的な CSS fallback を経て LiquidGL 描画へ復帰することを検証します。

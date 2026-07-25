@@ -52,6 +52,24 @@
     }, delay);
   }
 
+  function resume() {
+    const renderer = getRenderer();
+    if (!renderer) {
+      return;
+    }
+    if (
+      renderer._contextLost ||
+      (renderer.gl && typeof renderer.gl.isContextLost === 'function' && renderer.gl.isContextLost())
+    ) {
+      revealPendingLenses();
+      return;
+    }
+    const snapshot = typeof renderer.resume === 'function'
+      ? renderer.resume()
+      : renderer.captureSnapshot();
+    trackSnapshot(snapshot);
+  }
+
   function normalizeInstances(result) {
     if (!result) {
       return [];
@@ -208,6 +226,11 @@
 
   window.addEventListener('load', () => refresh(REFRESH_DELAY_MS), { once: true });
   window.addEventListener('liquidgl:snapshot-ready', () => restorePendingFallback());
+  window.addEventListener('liquidgl:context-lost', () => revealPendingLenses());
+  window.addEventListener('liquidgl:context-restored', () => {
+    revealPendingLenses();
+    refresh(0);
+  });
   window.addEventListener('liquidgl:snapshot-failed', () => {
     const renderer = getRenderer();
     if (renderer && Array.isArray(renderer.lenses) && renderer.lenses.some((lens) => lens && lens._mdwPendingFallback)) {
@@ -216,6 +239,12 @@
   });
   window.addEventListener('mdw:footer-loaded', () => refresh(REFRESH_DELAY_MS));
   window.addEventListener('mdw:transition-enter-complete', () => refresh(REFRESH_DELAY_MS));
+  window.addEventListener('pageshow', () => window.setTimeout(resume, 0));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      window.setTimeout(resume, 0);
+    }
+  });
   document.addEventListener('change', (event) => {
     if (event.target instanceof HTMLSelectElement && event.target.matches('.theme-select')) {
       refresh(1100);

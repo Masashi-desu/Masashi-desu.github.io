@@ -124,12 +124,50 @@
       this.scaleFactor = 1;
       this.snapshotImageTimeout = snapshotImageTimeout;
       this.snapshotCaptureTimeout = snapshotCaptureTimeout;
+      this._captureGeneration = 0;
+      this._contextLost = false;
+      this._revealGeneration = 0;
       this._snapshotResolution = Math.max(
         0.1,
         Math.min(3.0, snapshotResolution)
       );
       this.startTime = Date.now();
       this._scrollUpdateCounter = 0;
+
+      this.canvas.addEventListener("webglcontextlost", (event) => {
+        event.preventDefault();
+        this._contextLost = true;
+        this._captureGeneration++;
+        this._revealGeneration++;
+        this._capturing = false;
+        this._revealAnimating = false;
+        this.texture = null;
+        this.canvas.style.opacity = "0";
+        emitRendererEvent("liquidgl:context-lost", {
+          renderer: this,
+        });
+      });
+      this.canvas.addEventListener("webglcontextrestored", () => {
+        this._contextLost = false;
+        this.texture = null;
+        this.textureWidth = 0;
+        this.textureHeight = 0;
+        try {
+          this._initGL();
+          this._resizeCanvas();
+          this.lenses.forEach((lens) => lens.updateMetrics());
+          emitRendererEvent("liquidgl:context-restored", {
+            renderer: this,
+          });
+          this.captureSnapshot();
+        } catch (error) {
+          console.error("liquidGL: WebGL context restore failed.", error);
+          emitRendererEvent("liquidgl:snapshot-failed", {
+            renderer: this,
+            error,
+          });
+        }
+      });
 
       this._initGL();
 
@@ -433,6 +471,7 @@
 
     /* ----------------------------- */
     _resizeCanvas() {
+      if (this._contextLost || this.gl.isContextLost()) return;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       this.canvas.width = innerWidth * dpr;
       this.canvas.height = innerHeight * dpr;
@@ -443,8 +482,16 @@
 
     /* ----------------------------- */
     async captureSnapshot() {
-      if (this._capturing || typeof html2canvas === "undefined") return;
+      if (
+        this._capturing ||
+        this._contextLost ||
+        this.gl.isContextLost() ||
+        typeof html2canvas === "undefined"
+      ) {
+        return false;
+      }
       this._capturing = true;
+      const captureGeneration = this._captureGeneration;
 
       const undos = [];
 
@@ -475,6 +522,19 @@
           this.canvas.style.visibility = "hidden";
           undos.push(() => (this.canvas.style.visibility = "visible"));
 
+          const lazyImages = Array.from(
+            this.snapshotTarget.querySelectorAll('img[loading="lazy"]')
+          );
+          lazyImages.forEach((image) => {
+            if (!image.complete || image.naturalWidth <= 0) {
+              return;
+            }
+            image.loading = "eager";
+            undos.push(() => {
+              image.loading = "lazy";
+            });
+          });
+
           const lensElements = this.lenses
             .flatMap((lens) => [lens.el, lens._shadowEl])
             .filter(Boolean);
@@ -482,6 +542,12 @@
           const ignoreElementsFunc = (element) => {
             if (!element || !element.hasAttribute) return false;
             if (element === this.canvas || lensElements.includes(element)) {
+              return true;
+            }
+            if (
+              element.tagName === "IMG" &&
+              (element.getAttribute("loading") || "").toLowerCase() === "lazy"
+            ) {
               return true;
             }
             const style = window.getComputedStyle(element);
@@ -513,9 +579,29 @@
             `liquidGL snapshot timed out after ${this.snapshotCaptureTimeout}ms`
           );
 
+          if (
+            captureGeneration !== this._captureGeneration ||
+            this._contextLost ||
+            this.gl.isContextLost()
+          ) {
+            return false;
+          }
           return this._uploadTexture(snapCanvas);
         } catch (e) {
-          console.error("liquidGL snapshot failed on attempt " + attempt, e);
+          if (
+            captureGeneration !== this._captureGeneration ||
+            this._contextLost ||
+            this.gl.isContextLost()
+          ) {
+            return false;
+          }
+          const errorMessage =
+            e && typeof e.message === "string"
+              ? `${e.name || "Error"}: ${e.message}`
+              : String(e);
+          console.error(
+            `liquidGL snapshot failed on attempt ${attempt}: ${errorMessage}`
+          );
           if (attempt < maxAttempts) {
             console.log(
               `Retrying snapshot capture (${attempt + 1}/${maxAttempts})...`
@@ -534,7 +620,9 @@
           for (let i = undos.length - 1; i >= 0; i--) {
             undos[i]();
           }
-          this._capturing = false;
+          if (captureGeneration === this._captureGeneration) {
+            this._capturing = false;
+          }
         }
       };
 
@@ -543,7 +631,9 @@
 
     /* ----------------------------- */
     _uploadTexture(srcCanvas) {
-      if (!srcCanvas) return false;
+      if (!srcCanvas || this._contextLost || this.gl.isContextLost()) {
+        return false;
+      }
 
       if (!(srcCanvas instanceof HTMLCanvasElement)) {
         const tmp = document.createElement("canvas");
@@ -621,7 +711,7 @@
     /* ----------------------------- */
     render() {
       const gl = this.gl;
-      if (!this.texture) return;
+      if (!this.texture || this._contextLost || gl.isContextLost()) return;
 
       if (this._isScrolling) {
         this._scrollUpdateCounter++;
@@ -690,6 +780,17 @@
           }
         }
       });
+    }
+
+    /* ----------------------------- */
+    resume() {
+      if (this._contextLost || this.gl.isContextLost()) {
+        return false;
+      }
+      this._resizeCanvas();
+      this.lenses.forEach((lens) => lens.updateMetrics());
+      this.render();
+      return this.captureSnapshot();
     }
 
     /* ----------------------------- */
@@ -1714,6 +1815,7 @@
       if (this.renderer._revealAnimating) return;
 
       this.renderer._revealAnimating = true;
+      const revealGeneration = ++this.renderer._revealGeneration;
 
       const dur =
         typeof this.options.revealDuration === "number"
@@ -1722,6 +1824,9 @@
       const start = performance.now();
 
       const animate = () => {
+        if (revealGeneration !== this.renderer._revealGeneration) {
+          return;
+        }
         const progress = Math.min(1, (performance.now() - start) / dur);
 
         this.renderer.lenses.forEach((ln) => {
