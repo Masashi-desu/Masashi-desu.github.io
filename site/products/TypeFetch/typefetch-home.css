@@ -1377,6 +1377,7 @@ body.typefetch-landing,
 
 @media (max-width: 640px) and (orientation: portrait) {
   .tf-operation-story.is-manual-active .tf-demo {
+    top: calc(50svh + 2rem);
     width: calc(100vw - 1.5rem);
     height: min(43rem, calc(100svh - 5rem));
     min-height: 0;
