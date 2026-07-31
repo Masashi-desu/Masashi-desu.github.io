@@ -209,11 +209,64 @@ function assertMobileFooterDesign(state) {
   assert(footer.shellBackground === 'rgba(0, 0, 0, 0)', 'Mobile footer select shell rendered a rectangular background', footer);
 }
 
-async function readFooterFocusStates(page) {
+function getExpectedFooterFocus(theme) {
+  return theme === 'light'
+    ? {
+        border: 'rgb(77, 70, 178)',
+        background: 'rgba(255, 255, 255, 0.72)',
+        ring: 'rgba(113, 112, 204, 0.24)'
+      }
+    : {
+        border: 'rgb(157, 159, 220)',
+        background: 'rgba(255, 255, 255, 0.05)',
+        ring: 'rgba(113, 112, 204, 0.32)'
+      };
+}
+
+async function readFooterFocusStates(page, theme) {
+  const expected = getExpectedFooterFocus(theme);
   const states = {};
   for (const selector of ['.lang-select', '.theme-select']) {
-    await page.locator(selector).focus();
-    await page.waitForTimeout(220);
+    const locator = page.locator(selector);
+    let focusError;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await locator.focus();
+      try {
+        await page.waitForFunction(({ target, border, background, ring }) => {
+          const element = document.querySelector(target);
+          if (!element || document.activeElement !== element) {
+            return false;
+          }
+          const style = getComputedStyle(element);
+          return style.borderColor === border
+            && style.backgroundColor === background
+            && style.boxShadow.includes(ring);
+        }, {
+          target: selector,
+          border: expected.border,
+          background: expected.background,
+          ring: expected.ring
+        }, { timeout: 2000, polling: 50 });
+        focusError = null;
+        break;
+      } catch (error) {
+        focusError = error;
+      }
+    }
+    if (focusError) {
+      const details = await locator.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          activeElement: document.activeElement
+            ? `${document.activeElement.tagName}.${document.activeElement.className}`
+            : null,
+          border: style.borderColor,
+          background: style.backgroundColor,
+          ring: style.boxShadow
+        };
+      });
+      throw new Error(`${selector} focus style did not settle: ${JSON.stringify(details)}`);
+    }
     states[selector] = await page.locator(selector).evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -227,17 +280,7 @@ async function readFooterFocusStates(page) {
 }
 
 function assertFooterFocus(states, theme) {
-  const expected = theme === 'light'
-    ? {
-        border: 'rgb(77, 70, 178)',
-        background: 'rgba(255, 255, 255, 0.72)',
-        ring: 'rgba(113, 112, 204, 0.24)'
-      }
-    : {
-        border: 'rgb(157, 159, 220)',
-        background: 'rgba(255, 255, 255, 0.05)',
-        ring: 'rgba(113, 112, 204, 0.32)'
-      };
+  const expected = getExpectedFooterFocus(theme);
   for (const [selector, state] of Object.entries(states)) {
     assert(state.border === expected.border, `${selector} did not use the icon-derived focus border`, state);
     assert(state.background === expected.background, `${selector} focus background changed unexpectedly`, state);
@@ -296,7 +339,7 @@ async function run() {
     assert(state.callout.cancelText === 'rgba(255, 255, 255, 0.85)', 'TypeFetch cancel text did not match the app', state);
     assert(state.callout.confirm.includes('rgb(74, 145, 255)') && state.callout.confirm.includes('rgb(46, 115, 245)'), 'TypeFetch confirm gradient did not match the app', state);
     assertDesktopFooterDesign(state, 'dark');
-    assertFooterFocus(await readFooterFocusStates(page), 'dark');
+    assertFooterFocus(await readFooterFocusStates(page, 'dark'), 'dark');
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} dark desktop`);
 
     await page.locator('.theme-select').selectOption('light');
@@ -317,7 +360,7 @@ async function run() {
     assert(state.footer === 'rgb(244, 247, 251)', 'Light footer background was not applied', state);
     assert(state.iframe.includes('bg_color=ffffff') && state.iframe.includes('fg_color=192231'), 'Light itch.io embed URL was not applied', state);
     assertDesktopFooterDesign(state, 'light');
-    assertFooterFocus(await readFooterFocusStates(page), 'light');
+    assertFooterFocus(await readFooterFocusStates(page, 'light'), 'light');
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} light desktop`);
 
     await page.reload({ waitUntil: 'domcontentloaded' });

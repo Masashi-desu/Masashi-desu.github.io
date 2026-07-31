@@ -2,7 +2,8 @@
  * テスト概要:
  *  - 目的: iOS Mobile Safari でページ復帰時に WebGL context が破棄されても、LiquidGL セグメントが復帰することを検証する。
  *  - 期待値: context loss 中は CSS fallback が表示され、context restore 後は texture と不透明な WebGL ピクセルが再生成されて fallback が外れる。
- *  - 検証方法: iPhone 幅の WebKit context で WEBGL_lose_context を発生・復帰させ、イベント、class、renderer、描画ピクセルを取得する。
+ *  - 検証方法: 初期snapshot更新の完了後、iPhone 幅の WebKit context で WEBGL_lose_context を発生・復帰させる。
+ *    復帰後はrendererのcapture/reveal停止状態が安定してから、イベント、class、opacity、描画ピクセルを取得する。
  */
 const http = require('http');
 const fs = require('fs');
@@ -92,6 +93,43 @@ async function getState(page) {
   });
 }
 
+async function waitForRendererSettled(page, requireRestored = false) {
+  await page.waitForFunction((needsRestore) => {
+    const renderer = window.__liquidGLRenderer__;
+    const nav = document.querySelector('.home-section-nav__track');
+    const events = Array.isArray(window.__mdwLiquidGLContextEvents)
+      ? window.__mdwLiquidGLContextEvents
+      : [];
+    const ready = Boolean(
+      renderer &&
+      renderer.gl &&
+      !renderer.gl.isContextLost() &&
+      renderer.texture &&
+      renderer.lenses.length &&
+      !renderer._capturing &&
+      !renderer._revealAnimating &&
+      nav &&
+      !nav.classList.contains('is-liquidgl-fallback') &&
+      Number(getComputedStyle(nav).opacity) >= 0.95 &&
+      Number(getComputedStyle(renderer.canvas).opacity) >= 0.95 &&
+      (!needsRestore || events.includes('restored'))
+    );
+    const marker = needsRestore
+      ? '__mdwLiquidGLRestoreSettledAt'
+      : '__mdwLiquidGLInitialSettledAt';
+    if (!ready) {
+      window[marker] = null;
+      return false;
+    }
+    const now = performance.now();
+    if (!Number.isFinite(window[marker])) {
+      window[marker] = now;
+      return false;
+    }
+    return now - window[marker] >= 250;
+  }, requireRestored, { timeout: 15000, polling: 50 });
+}
+
 async function main() {
   const server = await startServer();
   const port = server.address().port;
@@ -118,6 +156,10 @@ async function main() {
       window.__liquidGLRenderer__.texture &&
       window.__liquidGLRenderer__.lenses.length
     ), null, { timeout: 12000 });
+    // load/footer/transition が予約する初期 refresh を先に完了させ、
+    // context restore 後の reveal と競合しない状態から回帰シナリオを開始する。
+    await page.waitForTimeout(1500);
+    await waitForRendererSettled(page);
 
     const extensionAvailable = await page.evaluate(() => {
       const renderer = window.__liquidGLRenderer__;
@@ -165,21 +207,7 @@ async function main() {
     await page.evaluate(() => {
       window.__mdwLiquidGLLoseContextExtension.restoreContext();
     });
-    await page.waitForFunction(() => {
-      const renderer = window.__liquidGLRenderer__;
-      const nav = document.querySelector('.home-section-nav__track');
-      return Boolean(
-        renderer &&
-        !renderer.gl.isContextLost() &&
-        renderer.texture &&
-        nav &&
-        !nav.classList.contains('is-liquidgl-fallback') &&
-        Number(getComputedStyle(nav).opacity) >= 0.95 &&
-        Number(getComputedStyle(renderer.canvas).opacity) >= 0.95 &&
-        Array.isArray(window.__mdwLiquidGLContextEvents) &&
-        window.__mdwLiquidGLContextEvents.includes('restored')
-      );
-    }, null, { timeout: 12000 });
+    await waitForRendererSettled(page, true);
 
     const restoredState = await getState(page);
     if (
