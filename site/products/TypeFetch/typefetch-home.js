@@ -79,6 +79,7 @@
   const openButtons = Array.from(document.querySelectorAll('[data-open-callout]'));
   const cancelButton = document.querySelector('[data-cancel-callout]');
   const confirmButton = document.querySelector('[data-confirm-callout]');
+  const purchaseEmbed = document.querySelector('.tf-purchase__embed iframe[data-theme-src-dark][data-theme-src-light]');
   let calloutOpen = callout && callout.getAttribute('aria-hidden') !== 'true';
   let isComposing = false;
   let targetSelection = { start: 0, end: 0 };
@@ -94,6 +95,17 @@
 
   function resolveLocale(locale) {
     return locale === 'en' ? 'en' : 'ja';
+  }
+
+  function syncPurchaseEmbedTheme() {
+    if (!purchaseEmbed) {
+      return;
+    }
+    const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+    const source = purchaseEmbed.dataset[theme === 'light' ? 'themeSrcLight' : 'themeSrcDark'];
+    if (source && purchaseEmbed.getAttribute('src') !== source) {
+      purchaseEmbed.setAttribute('src', source);
+    }
   }
 
   function readStoredLanguage() {
@@ -844,6 +856,7 @@
   };
 
   recordFallbacks();
+  syncPurchaseEmbedTheme();
   setupLanguageSelector();
   applyLanguage(currentLocale);
   captureTargetSelection({ atEnd: true });
@@ -857,5 +870,10 @@
   window.addEventListener('mdw:footer-loaded', () => {
     setupLanguageSelector();
     applyLanguage(currentLocale);
+  });
+
+  new MutationObserver(syncPurchaseEmbedTheme).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme']
   });
 })();

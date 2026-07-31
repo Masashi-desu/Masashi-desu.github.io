@@ -394,7 +394,11 @@ async function main() {
   try {
     const context = await browser.newContext({
       viewport: VIEWPORT,
+      colorScheme: 'dark',
       reducedMotion: 'no-preference'
+    });
+    await context.addInitScript(() => {
+      localStorage.setItem('mdw-theme', 'dark');
     });
     const page = await context.newPage();
     const pageErrors = [];
