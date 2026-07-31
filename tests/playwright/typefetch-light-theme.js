@@ -3,6 +3,8 @@
  *  - 目的: TypeFetch 製品ページが共通テーマ設定とOS設定へ追従し、ライトテーマをページ全体へ適用できることを検証する。
  *  - 期待値: ライト時は背景 #f4f7fb、本文 #192231、前面アプリのデモ面 #ffffff、各セクション固有の明るい背景が適用される。
  *    TypeFetch入力パネル自体は実アプリと同じ固定ダーク配色を維持し、itch.io 埋め込みはライト配色URLへ切り替わる。
+ *    フッターは共通デザインの寸法・配置を使い、角丸selectの外側に矩形背景を描画せず、TypeFetch固有色を適用する。
+ *    フッターselectのフォーカス境界線とリングは、ライト／ダーク双方でTypeFetchアプリアイコン由来の紫色を使う。
  *    選択は再読み込み後も保持され、system選択はOS配色へ追従する。
  *    ライト／ダークのどちらでもデスクトップと390px幅に横方向のオーバーフローがない。
  *  - 検証方法: 一時ポートのVite開発サーバーを起動し、隔離したPlaywrightブラウザでテーマselectを操作する。
@@ -140,6 +142,22 @@ async function readThemeState(page) {
       facts: style('.tf-facts').backgroundColor,
       purchase: style('.tf-purchase').backgroundColor,
       footer: style('.tf-footer').backgroundColor,
+      footerDesign: {
+        sharedDirection: style('.site-footer__shared').flexDirection,
+        sharedAlign: style('.site-footer__shared').alignItems,
+        sharedGap: style('.site-footer__shared').gap,
+        actionsDirection: style('.site-footer__actions').flexDirection,
+        actionsGap: style('.site-footer__actions').gap,
+        labelSize: style('.site-footer__label').fontSize,
+        labelSpacing: style('.site-footer__label').letterSpacing,
+        labelTransform: style('.site-footer__label').textTransform,
+        shellBackground: style('.site-footer__select-shell').backgroundColor,
+        selectBackground: style('.lang-select').backgroundColor,
+        selectRadius: style('.lang-select').borderRadius,
+        selectSize: style('.lang-select').fontSize,
+        selectSpacing: style('.lang-select').letterSpacing,
+        selectTransform: style('.lang-select').textTransform
+      },
       iframe: document.querySelector('.tf-purchase__embed iframe')?.src,
       overflow: {
         clientWidth: document.documentElement.clientWidth,
@@ -158,6 +176,73 @@ function assertNoHorizontalOverflow(state, label) {
     `${label} generated horizontal overflow`,
     state.overflow
   );
+}
+
+function assertDesktopFooterDesign(state, theme) {
+  const expectedBackground = theme === 'light'
+    ? 'rgba(255, 255, 255, 0.72)'
+    : 'rgba(255, 255, 255, 0.05)';
+  const footer = state.footerDesign;
+  assert(footer.sharedDirection === 'row', 'Desktop footer did not use the shared row layout', footer);
+  assert(footer.sharedAlign === 'flex-start', 'Desktop footer alignment diverged from the shared design', footer);
+  assert(footer.sharedGap === '24px' && footer.actionsGap === '14px', 'Desktop footer spacing diverged from the shared design', footer);
+  assert(
+    footer.labelSize === '12px' && footer.labelSpacing === 'normal' && footer.labelTransform === 'none',
+    'Footer label typography diverged from the shared design',
+    footer
+  );
+  assert(footer.shellBackground === 'rgba(0, 0, 0, 0)', 'Footer select shell rendered a rectangular background', footer);
+  assert(footer.selectBackground === expectedBackground, 'Footer select did not use the TypeFetch surface color', footer);
+  assert(
+    footer.selectRadius === '999px' && footer.selectSize === '13px'
+      && footer.selectSpacing === 'normal' && footer.selectTransform === 'none',
+    'Footer select geometry or typography diverged from the shared design',
+    footer
+  );
+}
+
+function assertMobileFooterDesign(state) {
+  const footer = state.footerDesign;
+  assert(footer.sharedDirection === 'column', 'Mobile footer did not use the shared stacked layout', footer);
+  assert(footer.sharedAlign === 'center', 'Mobile footer alignment diverged from the shared design', footer);
+  assert(footer.actionsDirection === 'row', 'Mobile footer controls did not keep the shared horizontal layout', footer);
+  assert(footer.shellBackground === 'rgba(0, 0, 0, 0)', 'Mobile footer select shell rendered a rectangular background', footer);
+}
+
+async function readFooterFocusStates(page) {
+  const states = {};
+  for (const selector of ['.lang-select', '.theme-select']) {
+    await page.locator(selector).focus();
+    await page.waitForTimeout(220);
+    states[selector] = await page.locator(selector).evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        border: style.borderColor,
+        background: style.backgroundColor,
+        ring: style.boxShadow
+      };
+    });
+  }
+  return states;
+}
+
+function assertFooterFocus(states, theme) {
+  const expected = theme === 'light'
+    ? {
+        border: 'rgb(77, 70, 178)',
+        background: 'rgba(255, 255, 255, 0.72)',
+        ring: 'rgba(113, 112, 204, 0.24)'
+      }
+    : {
+        border: 'rgb(157, 159, 220)',
+        background: 'rgba(255, 255, 255, 0.05)',
+        ring: 'rgba(113, 112, 204, 0.32)'
+      };
+  for (const [selector, state] of Object.entries(states)) {
+    assert(state.border === expected.border, `${selector} did not use the icon-derived focus border`, state);
+    assert(state.background === expected.background, `${selector} focus background changed unexpectedly`, state);
+    assert(state.ring.includes(expected.ring), `${selector} did not use the icon-derived focus ring`, state);
+  }
 }
 
 async function run() {
@@ -210,6 +295,8 @@ async function run() {
     assert(state.callout.cancel === 'rgba(255, 255, 255, 0.08)', 'TypeFetch cancel button did not match the app', state);
     assert(state.callout.cancelText === 'rgba(255, 255, 255, 0.85)', 'TypeFetch cancel text did not match the app', state);
     assert(state.callout.confirm.includes('rgb(74, 145, 255)') && state.callout.confirm.includes('rgb(46, 115, 245)'), 'TypeFetch confirm gradient did not match the app', state);
+    assertDesktopFooterDesign(state, 'dark');
+    assertFooterFocus(await readFooterFocusStates(page), 'dark');
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} dark desktop`);
 
     await page.locator('.theme-select').selectOption('light');
@@ -229,6 +316,8 @@ async function run() {
     assert(state.purchase === 'rgb(229, 235, 244)', 'Light purchase background was not applied', state);
     assert(state.footer === 'rgb(244, 247, 251)', 'Light footer background was not applied', state);
     assert(state.iframe.includes('bg_color=ffffff') && state.iframe.includes('fg_color=192231'), 'Light itch.io embed URL was not applied', state);
+    assertDesktopFooterDesign(state, 'light');
+    assertFooterFocus(await readFooterFocusStates(page), 'light');
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} light desktop`);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -239,6 +328,7 @@ async function run() {
 
     await page.setViewportSize({ width: 390, height: 844 });
     state = await readThemeState(page);
+    assertMobileFooterDesign(state);
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} light mobile`);
 
     await page.locator('.theme-select').selectOption('system');
