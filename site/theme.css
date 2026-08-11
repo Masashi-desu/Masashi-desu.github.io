@@ -1558,7 +1558,7 @@ body.page-product--surround .site-footer__icon {
   }
 
   .home-products {
-    align-content: start;
+    align-content: center;
     gap: clamp(1rem, 2.5vh, 1.5rem);
   }
 

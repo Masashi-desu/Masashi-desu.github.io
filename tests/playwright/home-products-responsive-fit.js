@@ -2,10 +2,10 @@
  * テスト概要:
  *  - 目的: ホームの Product セクションで、低い横長 viewport や小さいスマホ幅でも
  *    右下の「プロダクト一覧」CTA と carousel カードが画面外へはみ出さず、縦長 viewport でも
- *    CTA がカード群から不自然に分断されないことを確認する。
+ *    CTA がカード群から不自然に分断されず、セクション内のコンテンツが縦中央に配置されることを確認する。
  *  - 期待値: document/body に横スクロールが発生せず、CTA は viewport 内かつ carousel より下に表示され、
  *    表示中カードの下端は carousel のクリップ領域内に収まり、carousel と CTA の間隔は
- *    viewport 高に対して過大にならない。
+ *    viewport 高に対して過大にならない。幅 36rem 以下ではコンテンツ上下の余白差が 2px 以内になる。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium context で
  *    複数 viewport に切り替えながら Product セクションへ移動し、DOMRect と scrollWidth を取得する。
  */
@@ -17,6 +17,7 @@ const { chromium } = require('playwright');
 const ROOT = path.resolve(__dirname, '../../site');
 const OVERFLOW_TOLERANCE = 1;
 const MAX_CAROUSEL_CTA_GAP_RATIO = 0.045;
+const MOBILE_VERTICAL_CENTER_TOLERANCE = 2;
 const RESET_CSS = `
   *,*::before,*::after{box-sizing:border-box}
   *{margin:0}
@@ -31,6 +32,7 @@ const VIEWPORTS = [
   { width: 1280, height: 545, name: 'desktop-short-boundary' },
   { width: 852, height: 393, name: 'phone-landscape' },
   { width: 667, height: 375, name: 'small-landscape' },
+  { width: 444, height: 994, name: 'browser-comment-mobile' },
   { width: 393, height: 852, name: 'phone-portrait' },
   { width: 320, height: 568, name: 'narrow-phone' }
 ];
@@ -121,6 +123,7 @@ async function getProductLayoutState(page) {
       productsRect: roundRect(document.querySelector('.home-products')),
       headerRect: roundRect(document.querySelector('.home-products__header')),
       gridRect,
+      footerRect: roundRect(document.querySelector('.home-products__footer')),
       ctaRect: roundRect(document.querySelector('.home-products__all-link')),
       visibleCards
     };
@@ -193,6 +196,15 @@ async function assertProductsFitAtViewport(browser, serverPort, viewport) {
     const maxCarouselCtaGap = Math.max(32, state.viewport.height * MAX_CAROUSEL_CTA_GAP_RATIO);
     if (carouselCtaGap > maxCarouselCtaGap) {
       throw new Error(`Product CTA was separated too far from carousel (${viewport.name}): ${JSON.stringify({ carouselCtaGap, maxCarouselCtaGap, state })}`);
+    }
+
+    if (state.viewport.width <= 576) {
+      const contentTopGap = state.headerRect.top - state.productsRect.top;
+      const contentBottomGap = state.productsRect.bottom - state.footerRect.bottom;
+      const verticalCenterOffset = Math.abs(contentTopGap - contentBottomGap);
+      if (verticalCenterOffset > MOBILE_VERTICAL_CENTER_TOLERANCE) {
+        throw new Error(`Product content was not vertically centered (${viewport.name}): ${JSON.stringify({ contentTopGap, contentBottomGap, verticalCenterOffset, state })}`);
+      }
     }
 
     const clippedCard = state.visibleCards.find((rect) => rect.bottom > state.gridRect.bottom + OVERFLOW_TOLERANCE);
