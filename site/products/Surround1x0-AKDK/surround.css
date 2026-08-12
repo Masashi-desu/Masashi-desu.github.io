@@ -439,6 +439,7 @@ body.page-product--surround.surround-page {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
   min-height: 3rem;
   padding: 0.75rem 1.35rem;
   border: 1px solid var(--home-nav-active-bg);
@@ -450,6 +451,18 @@ body.page-product--surround.surround-page {
     background-color var(--transition-fast),
     border-color var(--transition-fast),
     transform var(--transition-fast);
+}
+
+.surround-action__icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: 0 0 auto;
+  background-color: currentColor;
+}
+
+.surround-action__icon--github {
+  -webkit-mask: url("https://cdn.jsdelivr.net/npm/simple-icons@v16/icons/github.svg") center / contain no-repeat;
+  mask: url("https://cdn.jsdelivr.net/npm/simple-icons@v16/icons/github.svg") center / contain no-repeat;
 }
 
 .surround-action:hover {

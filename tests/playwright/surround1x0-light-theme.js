@@ -10,7 +10,8 @@
  *    グレーのアクセントが選択される。全セグメントの文字レイヤーは3D canvasより手前に置く。
  *    第1セグメントは中間幅で左右ユニットの距離を縮め、
  *    390px幅でも横スクロールや主要導線の欠けが発生しない。歯車セグメントはフッタを文書末尾に表示し、
- *    04の3Dシーンを維持して同一シーンのモーションを再発火させない。
+ *    04のGitHub導線はSimple Icons CDNのGitHubアイコンを文字の左側に表示する。
+ *    フッタでは04の3Dシーンを維持して同一シーンのモーションを再発火させない。
  *  - 検証方法: Viteの本番ビルドをpreviewして製品アクセントを検証した後、開発サーバーを一時ポートで起動する。
  *    Playwright Chromiumからページを開き、公開された3D状態、セグメント位置、テーマselect、DOMRect、
  *    scrollWidthをデスクトップとモバイルの両方で計測する。
@@ -411,12 +412,26 @@ async function main() {
     const actionOrder = await page.locator('.surround-actions .surround-action').evaluateAll((elements) => (
       elements.map((element) => ({
         primary: element.classList.contains('surround-action--primary'),
-        secondary: element.classList.contains('surround-action--secondary')
+        secondary: element.classList.contains('surround-action--secondary'),
+        githubIcon: Boolean(element.querySelector('.surround-action__icon--github')),
+        simpleIconsCdn: (() => {
+          const icon = element.querySelector('.surround-action__icon--github');
+          if (!icon) {
+            return false;
+          }
+          const style = getComputedStyle(icon);
+          return `${style.maskImage} ${style.webkitMaskImage}`.includes('cdn.jsdelivr.net/npm/simple-icons@v16/icons/github.svg');
+        })()
       }))
     ));
     assert(
       actionOrder.length === 2 && actionOrder[0].secondary && actionOrder[1].primary,
       'Segment 04 actions were not ordered home-left and repository-right',
+      actionOrder
+    );
+    assert(
+      !actionOrder[0].githubIcon && actionOrder[1].githubIcon && actionOrder[1].simpleIconsCdn,
+      'Repository action did not render the Simple Icons CDN GitHub icon on its left side',
       actionOrder
     );
 
