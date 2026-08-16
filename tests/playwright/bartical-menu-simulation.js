@@ -1,7 +1,7 @@
 /**
  * テスト概要:
  *  - 目的: Bartical 製品ページのメニューバー型ランチャーが、初期表示・切り替え・セクション移動を実アプリ風に再現することを確認する。
- *  - 期待値: メインメニューは初期表示で展開され、縦型メニューから独立した実アプリ準拠のAboutにappcast.xmlから同期した1.0.0(1)と製品ページURLを表示する。AboutのアイコンとfaviconはBarticalのIcon Composer書類から書き出した正式PNGを使い、ライトテーマではmacOSのライト外観に合わせた明るい半透明ウィンドウと薄いMaterialカードへ切り替わる。Overviewの配置例は境界①・②を持ち、外部アイコンを⌘ドラッグすると右側で最初の境界から所属を再計算し、hover時に「①に所属しています」のような番号付きツールチップを表示する。縦型メニューにSparklesは置かず、所属項目の操作でAboutを閉じない。ヒーローは動的viewportからメニューバー高を引いた範囲へ収まり、Aboutと映像がviewport下へはみ出さない。背景はテーマ別MP4と指定ベース色を使い、縦メニュー末尾の設定も他の所属項目と同じアンカー展開を経て、元アイコン直下のメニューからライト／ダークを切り替える。元アプリメニューの左端は選択した元アイコンの左端へ揃え、狭い画面では8pxの安全余白へ収める。縦書きBARTICALは置かず、左端の戻る導線は矢印アイコンだけを表示する。正式SVGは通常時から右寄りへ固定し、所属項目の展開後も中心座標を変えない。展開した元項目は縦型メニューの上から下の順に対応して右から左へ並べ、選択中の背面だけを白い半透明の横長macOS風ピルとして表示する。右側の他アプリアイコンはアンカー展開中も消さない。
+ *  - 期待値: メインメニューは初期表示で展開され、縦型メニューから独立した実アプリ準拠のAboutにappcast.xmlから同期した1.0.0(1)と製品ページURLを表示する。AboutのアイコンとfaviconはBarticalのIcon Composer書類から書き出した正式PNGを使い、ライトテーマではmacOSのライト外観に合わせた明るい半透明ウィンドウと薄いMaterialカードへ切り替わる。Overviewの配置例は境界①・②を持ち、外部アイコンを⌘ドラッグすると右側で最初の境界から所属を再計算し、hover時に「①に所属しています」のような番号付きツールチップを表示する。縦型メニューにSparklesは置かず、所属項目の操作でAboutを閉じない。ヒーローは動的viewportからメニューバー高を引いた範囲へ収まり、Aboutと映像がviewport下へはみ出さない。背景はテーマ別MP4と指定ベース色を使い、縦メニュー末尾の設定も他の所属項目と同じアンカー展開を経て、元アイコン直下のメニューからライト／ダークを切り替える。元アプリメニューの左端は選択した元アイコンの左端へ揃え、狭い画面では8pxの安全余白へ収める。縦書きBARTICALは置かず、左端の戻る導線は矢印アイコンだけを表示する。正式SVGは通常時から右寄りへ固定し、所属項目の展開後も中心座標を変えない。展開した元項目は縦型メニューの上から下の順に対応して右から左へ並べ、選択中はフォーカス中でも青い円形アウトラインを重ねず、背面の白い半透明の横長macOS風ピルだけを表示する。右側の他アプリアイコンはアンカー展開中も消さず、画面外へ続く分をメニューバー内でクリップしてページ全体の横スクロールを発生させない。
  *  - 検証方法: ローカル静的サーバーで Bartical ページを配信し、ChromiumまたはWebKitで1440×900、1372×619、393×852、320×568のviewportを開く。DOM属性、表示状態、フォーカス順、URL hash、アイコン実体、要素矩形、console/page errorを取得して検証する。H.264デコーダーを同梱しないLinux版WebKitでは動画の設定とレイアウトを検証し、デコード完了はmacOS WebKitとChromiumで検証する。
  */
 const fs = require('fs');
@@ -791,6 +791,12 @@ function assertInitialState(state, viewport) {
   assert(state.systemItemCount === 5, `[${viewport.name}] Right-side menu-bar app icons were removed`, state);
   assert(state.bodyOverflowX === 'clip', `[${viewport.name}] Right-side overflow was not clipped without horizontal scrolling`, state);
   assert(
+    state.overflow.documentScrollWidth === state.overflow.clientWidth
+      && state.overflow.bodyScrollWidth === state.overflow.clientWidth,
+    `[${viewport.name}] Menu-bar overflow expanded the document horizontally`,
+    state.overflow
+  );
+  assert(
     state.iconSizeDifference !== null && state.iconSizeDifference <= 2,
     `[${viewport.name}] Other menu-bar app icons did not match the Bartical icon scale`,
     { iconSizeDifference: state.iconSizeDifference }
@@ -1046,6 +1052,11 @@ async function verifyInteractions(page, viewport) {
   });
   await customizeSourceItem.click();
   await page.waitForFunction(() => document.documentElement.dataset.barticalActivation === 'revealed');
+  await page.keyboard.press('Tab');
+  await page.locator('[data-original-section][aria-pressed="true"]').focus();
+  await page.waitForFunction(() => (
+    document.querySelector('[data-original-section][aria-pressed="true"]')?.matches(':focus-visible')
+  ));
   const activationState = await page.evaluate(() => {
     const activationStrip = document.querySelector('[data-activation-strip]');
     const sourceMenu = document.querySelector('[data-source-menu]');
@@ -1083,10 +1094,14 @@ async function verifyInteractions(page, viewport) {
       selectedOriginalPresentation: (() => {
         const item = document.querySelector('[data-original-section][aria-pressed="true"]');
         const itemRect = item?.getBoundingClientRect();
+        const itemStyle = item ? getComputedStyle(item) : null;
         const pillStyle = item ? getComputedStyle(item, '::before') : null;
-        return itemRect && pillStyle ? {
+        return itemRect && itemStyle && pillStyle ? {
           itemWidth: itemRect.width,
           itemHeight: itemRect.height,
+          focusVisible: item.matches(':focus-visible'),
+          outlineStyle: itemStyle.outlineStyle,
+          outlineWidth: itemStyle.outlineWidth,
           pillWidth: Number.parseFloat(pillStyle.width),
           pillHeight: Number.parseFloat(pillStyle.height),
           pillBorderRadius: pillStyle.borderRadius,
@@ -1153,6 +1168,9 @@ async function verifyInteractions(page, viewport) {
         > activationState.selectedOriginalPresentation.itemWidth
       && activationState.selectedOriginalPresentation.pillHeight
         === activationState.selectedOriginalPresentation.itemHeight
+      && activationState.selectedOriginalPresentation.focusVisible
+      && activationState.selectedOriginalPresentation.outlineStyle === 'none'
+      && activationState.selectedOriginalPresentation.outlineWidth === '0px'
       && activationState.selectedOriginalPresentation.pillBorderRadius === '999px'
       && activationState.selectedOriginalPresentation.pillBackgroundColor === 'rgba(255, 255, 255, 0.18)'
       && activationState.selectedOriginalPresentation.pillOpacity === '1',
@@ -1188,6 +1206,12 @@ async function verifyInteractions(page, viewport) {
       && activationState.sourceMenuRect.bottom <= activationState.viewport.height + LAYOUT_TOLERANCE,
     `[${viewport.name}] Original app menu exceeded the viewport`,
     activationState
+  );
+  assert(
+    activationState.overflow.documentScrollWidth === activationState.overflow.clientWidth
+      && activationState.overflow.bodyScrollWidth === activationState.overflow.clientWidth,
+    `[${viewport.name}] Revealed menu-bar state expanded the document horizontally`,
+    activationState.overflow
   );
 
   await page.keyboard.press('Escape');

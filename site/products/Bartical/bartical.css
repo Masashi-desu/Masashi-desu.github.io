@@ -108,6 +108,7 @@ html {
   background: rgb(3 5 22 / 46%);
   border-bottom: 1px solid rgb(255 255 255 / 8%);
   box-shadow: 0 1px 0 rgb(0 0 0 / 16%), 0 10px 32px rgb(0 0 0 / 12%);
+  overflow-x: clip;
   -webkit-backdrop-filter: saturate(135%) blur(24px);
   backdrop-filter: saturate(135%) blur(24px);
 }
@@ -225,12 +226,16 @@ html {
 .bt-launcher:focus-visible,
 .bt-backlink:focus-visible,
 .bt-vertical-menu button:focus-visible,
-.bt-original-item:focus-visible,
+.bt-original-item:not([aria-pressed="true"]):focus-visible,
 .bt-activation-launchers button:focus-visible,
 .bt-source-menu button:focus-visible,
 .bt-footer a:focus-visible {
   outline: 3px solid var(--bt-focus);
   outline-offset: 3px;
+}
+
+.bt-original-item[aria-pressed="true"]:focus-visible {
+  outline: 0;
 }
 
 .bt-vertical-menu {
