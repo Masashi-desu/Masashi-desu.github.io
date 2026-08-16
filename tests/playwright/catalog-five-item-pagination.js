@@ -1,8 +1,8 @@
 /**
  * テスト概要:
  *  - 目的: 製品一覧が全件を同時描画せず5件単位でページ切り替えし、Bartical一覧背景にホームカードと同じ動画を使うことを確認する。
- *  - 期待値: 6件中1ページ目は1〜5の5section、2ページ目は6のみを描画する。前後ボタン・現在ページ・全体通番が同期し、Bartical背景はBarticalCardDemo.mp4をscreenshot.png poster付きでミュート・ループ・インライン再生する。
- *  - 検証方法: ローカル静的サーバーで /products/ をChromiumに開き、DOM数、ナビ番号、ページ状態、動画属性を取得して前後ボタンとカテゴリ変更を操作する。
+ *  - 期待値: 6件中1ページ目は1〜5の5section、2ページ目は6のみを描画する。前後ボタン・現在ページ・全体通番が同期し、Bartical背景はBarticalCardDemo.mp4をscreenshot.png poster付きでミュート・ループ・インライン再生する。2ページ目の実画像は読込完了後にページを戻し、画像取得を途中で中断しない。
+ *  - 検証方法: ローカル静的サーバーで /products/ をChromiumまたはWebKitに開き、DOM数、ナビ番号、ページ状態、画像の読込完了、動画属性を取得して前後ボタンとカテゴリ変更を操作する。
  */
 const fs = require('fs');
 const http = require('http');
@@ -182,6 +182,11 @@ async function main() {
       const sections = document.querySelectorAll('[data-catalog-section="product"]');
       return sections.length === 1 && sections[0].dataset.productIndex === '5';
     });
+    await page.waitForFunction(() => {
+      const image = document.querySelector('#catalog-product-surround1x0-akdk .catalog-product-section__image');
+      return image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
+    });
+    await page.waitForLoadState('networkidle');
     const secondPage = await readState(page);
     assert(secondPage.sectionIds.length === 1, 'Second page did not render only the remaining product', secondPage);
     assert(JSON.stringify(secondPage.navNumbers) === JSON.stringify(['6']), 'Second page nav did not preserve global number 6', secondPage);
