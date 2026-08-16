@@ -2,7 +2,7 @@
  * テスト概要:
  *  - 目的: TypeFetch の操作説明が透明な前景としてヒーローデモへ重なり、スクロール位置に応じて呼び出し・入力・受け渡しの3段階を再現することを確認する。
  *  - 期待値: 操作説明の背景は透明、ヒーローは sticky、左見出しは上詰めで current 行だけ不透過、右手順は右寄せ、番号レールは存在しない。縦に短い viewport では操作説明が画面へ入る前にヒーローデモが上へ移動し、TypeFetch入力パネル全体が見えて操作できる。モバイルでは前面アプリの外枠は viewport 幅へ追従する一方、本文の文字、ウィンドウバー、余白、フッター操作は小さい縮尺を保ち、縦向きでは固定ヘッダーを除いた表示領域に収まる。操作説明の先頭が viewport 中央へ到達するまではヒーローが操作可能で、中央を越えてから同じデモが現在位置から viewport 中央へ連続移動・縮小し、逆方向も連続する。ルール終端側からストーリーへ再進入した後にヒーローへ戻っても、デモは画面外へ消えず、その時点のヒーロー内の実位置まで連続して戻る。各手順の中央表示時に対応する手順が current となり、2段階目では入力、3段階目では前面アプリへの挿入が反映される。ルールセクションは半透明で、最終状態の固定デモを同セクションの終端まで維持する。先頭へ戻ると手動デモの初期状態へ復帰する。
- *  - 検証方法: ローカル静的サーバーで TypeFetch を開き、390px と 426px 幅で前面アプリの viewport 幅比、文字サイズ、バー、余白、フッター配置を算出スタイルから確認する。短い viewport で説明領域が画面外にある間のデモ移動量、入力パネル下端、focus 状態を確認し、複数 viewport で中央引き継ぎ線の直前・直後の active/inert/focus 状態を確認する。続いて Chromium の 1387 × 994 viewport で切り替え前後のデモ矩形を animation frame ごとに採取し、各手順とルールセクションを順に中央へスクロールする。さらに 1280 × 666 viewport でルール終端側から再進入して上方向へ戻り、デモが全フレームで viewport 内に残り、終点でも座標ジャンプせず relative 配置へ復帰することを確認する。363 × 619 の縦向きモバイルでは固定プレビューの上下端とヘッダー下の表示領域中央を検証する。公開状態 API、textarea 値、aria 属性、console/page error も取得する。
+ *  - 検証方法: ローカル静的サーバーで TypeFetch を開き、390px と 426px 幅で前面アプリの viewport 幅比、文字サイズ、バー、余白、フッター配置を算出スタイルから確認する。短い viewport で説明領域が画面外にある間のデモ移動量、入力パネル下端、focus 状態を確認し、複数 viewport で中央引き継ぎ線の直前・直後の active/inert/focus 状態を確認する。続いて Chromium の 1387 × 994 viewport で切り替え前後のデモ矩形を animation frame ごとに採取し、各手順とルールセクションを順に中央へスクロールする。さらに 1280 × 666 viewport でルール終端側から再進入して上方向へ戻り、デモが全フレームで viewport 内に残り、終点でも座標ジャンプせず relative 配置へ復帰することを確認する。363 × 619 の縦向きモバイルでは固定プレビューの上下端とヘッダー下の表示領域中央を検証する。公開状態 API、textarea 値、aria 属性、console/page error も取得する。ただし Google Fonts の CDN 障害はシステムフォントへフォールバック可能で操作フローと無関係なため、fonts.gstatic.com のリソース読込エラーだけは除外する。
  */
 const fs = require('fs');
 const http = require('http');
@@ -407,6 +407,9 @@ async function main() {
     page.on('console', (message) => {
       if (message.type() === 'error') {
         const { url } = message.location();
+        if (url && new URL(url).hostname === 'fonts.gstatic.com') {
+          return;
+        }
         consoleErrors.push(url ? `${message.text()} (${url})` : message.text());
       }
     });
