@@ -1,5 +1,24 @@
 [
   {
+    "dir": "Bartical/",
+    "title": "Bartical",
+    "title_ja": "Bartical",
+    "title_en": "Bartical",
+    "desc": "Group menu bar items into vertical menus.",
+    "desc_ja": "メニューバー項目を境界ごとにまとめ、縦型メニューから操作できます。",
+    "desc_en": "Group menu bar items by boundaries and operate them from vertical menus.",
+    "image": "BarticalAppIcon.png",
+    "catalog_image": "BarticalCatalogIcon.png",
+    "header": "screenshot.png",
+    "video": "BarticalCardDemo.mp4",
+    "date": "2026-08-15",
+    "url": "",
+    "categories": [
+      "MacApp",
+      "Utility"
+    ]
+  },
+  {
     "dir": "",
     "title": "KeycapMaker",
     "title_ja": "KeycapMaker",

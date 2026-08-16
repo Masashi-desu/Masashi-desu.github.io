@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ja" class="page-product-document">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bartical | Masahi Desu Works</title>
+  <link rel="icon" href="./BarticalFavicon.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="./BarticalAppIcon.png" sizes="256x256">
+  <!-- mdw:meta-config
+  {
+    "title": "Bartical | Masahi Desu Works",
+    "description": "メニューバー項目を境界ごとにまとめ、縦型メニューから元の項目を操作できるmacOSユーティリティ。",
+    "url": "https://masashi-desu.github.io/products/Bartical/",
+    "ogType": "product",
+    "locale": "ja_JP",
+    "alternateLocales": ["en_US"],
+    "image": "https://masashi-desu.github.io/products/Bartical/screenshot.png",
+    "imageAlt": "Bartical のメニューバーと縦型メニューのシミュレーション",
+    "published": "2026-08-15",
+    "structuredData": {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Bartical",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "macOS 14 or later",
+      "description": "A macOS utility that groups menu bar items by physical boundaries and opens them from a vertical menu.",
+      "url": "https://masashi-desu.github.io/products/Bartical/",
+      "image": [
+        "https://masashi-desu.github.io/products/Bartical/screenshot.png"
+      ],
+      "datePublished": "2026-08-15",
+      "publisher": {
+        "@type": "Organization",
+        "name": "Masahi Desu Works"
+      }
+    }
+  }
+  -->
+  <!-- mdw:meta:start -->
+  <meta name="description" content="メニューバー項目を境界ごとにまとめ、縦型メニューから元の項目を操作できるmacOSユーティリティ。">
+  <meta property="og:site_name" content="Masahi Desu Works">
+  <meta property="og:type" content="product">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:title" content="Bartical | Masahi Desu Works">
+  <meta property="og:description" content="メニューバー項目を境界ごとにまとめ、縦型メニューから元の項目を操作できるmacOSユーティリティ。">
+  <meta property="og:url" content="https://masashi-desu.github.io/products/Bartical/">
+  <meta property="og:image" content="https://masashi-desu.github.io/products/Bartical/screenshot.png">
+  <meta property="og:image:alt" content="Bartical のメニューバーと縦型メニューのシミュレーション">
+  <meta name="twitter:image" content="https://masashi-desu.github.io/products/Bartical/screenshot.png">
+  <meta name="twitter:image:alt" content="Bartical のメニューバーと縦型メニューのシミュレーション">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Bartical | Masahi Desu Works">
+  <meta name="twitter:description" content="メニューバー項目を境界ごとにまとめ、縦型メニューから元の項目を操作できるmacOSユーティリティ。">
+  <link rel="canonical" href="https://masashi-desu.github.io/products/Bartical/">
+  <meta property="article:published_time" content="2026-08-15">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Bartical",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "macOS 14 or later",
+    "description": "A macOS utility that groups menu bar items by physical boundaries and opens them from a vertical menu.",
+    "url": "https://masashi-desu.github.io/products/Bartical/",
+    "image": [
+      "https://masashi-desu.github.io/products/Bartical/screenshot.png"
+    ],
+    "datePublished": "2026-08-15",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Masahi Desu Works"
+    }
+  }
+  </script>
+  <!-- mdw:meta:end -->
+  <link rel="stylesheet" href="../../theme.css">
+  <link rel="stylesheet" href="./bartical.css">
+  <script>
+    (function () {
+      const root = document.documentElement;
+      try {
+        const stored = localStorage.getItem('mdw-theme');
+        const preference = stored === 'light' || stored === 'dark' || stored === 'system'
+          ? stored
+          : 'system';
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.dataset.theme = preference === 'light' || preference === 'dark'
+          ? preference
+          : (prefersDark ? 'dark' : 'light');
+        root.dataset.themePreference = preference;
+      } catch (error) {
+        root.dataset.theme = window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
+        root.dataset.themePreference = 'system';
+      }
+    })();
+  </script>
+</head>
+<body class="page-shell page-product--bartical bt-landing">
+  <div class="bt-page" data-transition-fade>
+    <video
+      class="bt-hero__video"
+      data-hero-video
+      data-src-dark="./hero-bg-dark.mp4"
+      data-src-light="./hero-bg-light.mp4"
+      autoplay
+      muted
+      loop
+      playsinline
+      preload="metadata"
+      aria-hidden="true"
+    ></video>
+    <header class="bt-menubar" data-bartical-menubar>
+      <div class="bt-menubar__brand">
+        <a
+          class="bt-backlink"
+          href="../index.html"
+          data-product-backlink
+          data-transition-direction="left"
+          aria-label="プロダクト一覧に戻る"
+          data-i18n-aria-label="backAria"
+        >
+          <i data-lucide="arrow-left" aria-hidden="true"></i>
+          <span class="bt-sr-only" data-product-backlink-label data-i18n="back">一覧へ</span>
+        </a>
+      </div>
+
+      <nav class="bt-launchers" aria-label="Bartical ランチャー" data-i18n-aria-label="launchersAria">
+        <div class="bt-launcher-slot">
+          <button
+            class="bt-launcher bt-launcher--number"
+            type="button"
+            data-launcher="3"
+            aria-expanded="false"
+            aria-controls="bt-menu-3"
+            aria-label="Bartical 3 ランチャー"
+            data-i18n-aria-label="launcherThreeAria"
+          ><img src="./BarticalNumber3.png" alt="" width="52" height="52"></button>
+          <nav id="bt-menu-3" class="bt-vertical-menu" data-menu-panel="3" aria-label="Bartical 3 の所属項目" data-i18n-aria-label="menuThreeAria" hidden>
+            <button class="bt-source-item" type="button" data-section-link="privacy" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="プライバシーの元項目を開く" data-i18n-aria-label="navPrivacyAria">
+              <i data-lucide="shield-check" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navPrivacy">プライバシー</span>
+            </button>
+            <button class="bt-source-item" type="button" data-section-link="requirements" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="必要環境の元項目を開く" data-i18n-aria-label="navRequirementsAria">
+              <i data-lucide="laptop-minimal-check" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navRequirements">必要環境</span>
+            </button>
+            <button class="bt-source-item" type="button" data-section-link="coming-soon" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="Coming Soonの元項目を開く" data-i18n-aria-label="navComingAria">
+              <i data-lucide="hourglass" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navComing">Coming Soon</span>
+            </button>
+          </nav>
+        </div>
+
+        <div class="bt-launcher-slot">
+          <button
+            class="bt-launcher bt-launcher--number"
+            type="button"
+            data-launcher="2"
+            aria-expanded="false"
+            aria-controls="bt-menu-2"
+            aria-label="Bartical 2 ランチャー"
+            data-i18n-aria-label="launcherTwoAria"
+          ><img src="./BarticalNumber2.png" alt="" width="52" height="52"></button>
+          <nav id="bt-menu-2" class="bt-vertical-menu" data-menu-panel="2" aria-label="Bartical 2 の所属項目" data-i18n-aria-label="menuTwoAria" hidden>
+            <button class="bt-source-item" type="button" data-section-link="how-it-works" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="しくみの元項目を開く" data-i18n-aria-label="navHowAria">
+              <i data-lucide="workflow" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navHow">しくみ</span>
+            </button>
+            <button class="bt-source-item" type="button" data-section-link="customize" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="カスタマイズの元項目を開く" data-i18n-aria-label="navCustomizeAria">
+              <i data-lucide="sliders-horizontal" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navCustomize">カスタマイズ</span>
+            </button>
+            <button class="bt-source-item" type="button" data-section-link="requirements" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="必要環境の元項目を開く" data-i18n-aria-label="navRequirementsAria">
+              <i data-lucide="laptop-minimal-check" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navRequirements">必要環境</span>
+            </button>
+          </nav>
+        </div>
+
+        <div class="bt-launcher-slot bt-launcher-slot--primary">
+          <button
+            class="bt-launcher bt-launcher--primary"
+            type="button"
+            data-launcher="main"
+            aria-expanded="true"
+            aria-controls="bt-menu-main"
+            aria-label="Bartical メインランチャー"
+            data-i18n-aria-label="launcherMainAria"
+          ><img src="./BarticalIconBody.svg" alt="" width="28" height="28"></button>
+          <nav id="bt-menu-main" class="bt-vertical-menu bt-vertical-menu--primary" data-menu-panel="main" aria-label="Bartical の所属項目" data-i18n-aria-label="menuMainAria">
+            <button class="bt-source-item" type="button" data-section-link="how-it-works" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="しくみの元項目を開く" data-i18n-aria-label="navHowAria">
+              <i data-lucide="workflow" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navHow">しくみ</span>
+            </button>
+            <button class="bt-source-item" type="button" data-section-link="customize" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="カスタマイズの元項目を開く" data-i18n-aria-label="navCustomizeAria">
+              <i data-lucide="sliders-horizontal" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navCustomize">カスタマイズ</span>
+            </button>
+            <button class="bt-source-item" type="button" data-section-link="privacy" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="プライバシーの元項目を開く" data-i18n-aria-label="navPrivacyAria">
+              <i data-lucide="shield-check" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navPrivacy">プライバシー</span>
+            </button>
+            <button class="bt-source-item" type="button" data-section-link="requirements" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="必要環境の元項目を開く" data-i18n-aria-label="navRequirementsAria">
+              <i data-lucide="laptop-minimal-check" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navRequirements">必要環境</span>
+            </button>
+            <button class="bt-source-item" type="button" data-section-link="coming-soon" aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="Coming Soonの元項目を開く" data-i18n-aria-label="navComingAria">
+              <i data-lucide="hourglass" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="navComing">Coming Soon</span>
+            </button>
+            <button class="bt-source-item bt-theme-settings-trigger" type="button" data-section-link="theme" data-theme-settings-trigger aria-haspopup="menu" aria-controls="bt-source-menu" aria-label="表示テーマの元項目を開く" data-i18n-aria-label="themeSettingsAria">
+              <i data-lucide="settings" aria-hidden="true"></i><span class="bt-vertical-menu__label" data-i18n="themeSettingsLabel">表示設定</span>
+            </button>
+          </nav>
+        </div>
+      </nav>
+
+      <div class="bt-activation-strip" data-activation-strip aria-label="一時表示した設定用アンカー、元項目、ランチャー" data-i18n-aria-label="activationStripAria" hidden>
+        <div class="bt-activation-anchors bt-activation-anchors--leading" aria-label="設定用アンカー" data-i18n-aria-label="activationAnchorsAria">
+          <span class="bt-activation-anchor" role="img" aria-label="Bartical 3 設定用アンカー" data-i18n-aria-label="anchorThreeAria"><img src="./BarticalNumber3.png" alt="" width="52" height="52"></span>
+          <span class="bt-activation-anchor" role="img" aria-label="Bartical 2 設定用アンカー" data-i18n-aria-label="anchorTwoAria"><img src="./BarticalNumber2.png" alt="" width="52" height="52"></span>
+        </div>
+
+        <div class="bt-original-items" aria-label="復元した元のメニューバー項目" data-i18n-aria-label="originalItemsAria">
+          <button class="bt-original-item" type="button" data-original-section="how-it-works" aria-label="しくみの元項目" data-i18n-aria-label="navHowAria"><i data-lucide="workflow" aria-hidden="true"></i></button>
+          <button class="bt-original-item" type="button" data-original-section="customize" aria-label="カスタマイズの元項目" data-i18n-aria-label="navCustomizeAria"><i data-lucide="sliders-horizontal" aria-hidden="true"></i></button>
+          <button class="bt-original-item" type="button" data-original-section="privacy" aria-label="プライバシーの元項目" data-i18n-aria-label="navPrivacyAria"><i data-lucide="shield-check" aria-hidden="true"></i></button>
+          <button class="bt-original-item" type="button" data-original-section="requirements" aria-label="必要環境の元項目" data-i18n-aria-label="navRequirementsAria"><i data-lucide="laptop-minimal-check" aria-hidden="true"></i></button>
+          <button class="bt-original-item" type="button" data-original-section="coming-soon" aria-label="Coming Soonの元項目" data-i18n-aria-label="navComingAria"><i data-lucide="hourglass" aria-hidden="true"></i></button>
+          <button class="bt-original-item" type="button" data-original-section="theme" aria-label="表示テーマの元項目" data-i18n-aria-label="themeSettingsAria"><i data-lucide="settings" aria-hidden="true"></i></button>
+        </div>
+
+        <div class="bt-activation-anchors bt-activation-anchors--current">
+          <span class="bt-activation-anchor bt-activation-anchor--main" role="img" aria-label="Bartical メイン設定用アンカー" data-i18n-aria-label="anchorMainAria"><img src="./BarticalIconBody.svg" alt="" width="52" height="52"></span>
+        </div>
+
+        <div class="bt-activation-launchers" aria-label="表示を維持するBarticalランチャー" data-i18n-aria-label="activationLaunchersAria">
+          <button type="button" data-activation-launcher="3" aria-label="Bartical 3 ランチャー" data-i18n-aria-label="launcherThreeAria"><img src="./BarticalNumber3.png" alt="" width="52" height="52"></button>
+          <button type="button" data-activation-launcher="2" aria-label="Bartical 2 ランチャー" data-i18n-aria-label="launcherTwoAria"><img src="./BarticalNumber2.png" alt="" width="52" height="52"></button>
+          <button type="button" data-activation-launcher="main" aria-label="Bartical メインランチャー" data-i18n-aria-label="launcherMainAria"><img src="./BarticalIconBody.svg" alt="" width="52" height="52"></button>
+        </div>
+      </div>
+
+      <div id="bt-source-menu" class="bt-source-menu" data-source-menu role="menu" aria-label="元アプリのメニュー" data-i18n-aria-label="sourceMenuAria" hidden>
+        <div data-source-section-actions role="none">
+          <button type="button" role="menuitem" data-source-navigation>
+            <i data-lucide="arrow-right" aria-hidden="true"></i><span data-source-navigation-label>概要を表示</span>
+          </button>
+          <div class="bt-source-menu__separator" role="separator"></div>
+          <button type="button" role="menuitem" data-source-close>
+            <i data-lucide="x" aria-hidden="true"></i><span data-i18n="sourceClose">メニューを閉じる</span>
+          </button>
+        </div>
+        <div data-theme-source-actions role="none" hidden>
+          <button type="button" role="menuitemradio" data-theme-option="light" aria-checked="false">
+            <i data-lucide="sun" aria-hidden="true"></i><span data-i18n="themeLight">ライト</span>
+          </button>
+          <button type="button" role="menuitemradio" data-theme-option="dark" aria-checked="false">
+            <i data-lucide="moon" aria-hidden="true"></i><span data-i18n="themeDark">ダーク</span>
+          </button>
+        </div>
+        <label class="bt-sr-only" for="bt-theme-select" data-i18n="themeLabel">テーマ</label>
+        <select id="bt-theme-select" class="theme-select bt-sr-only" data-theme-select tabindex="-1" aria-hidden="true">
+          <option value="light" data-i18n="themeLight">ライト</option>
+          <option value="dark" data-i18n="themeDark">ダーク</option>
+        </select>
+      </div>
+
+      <div class="bt-menubar__system" aria-label="ほかのメニューバーアプリ" data-i18n-aria-label="otherAppsAria">
+        <span title="Calendar"><i data-lucide="calendar-days" aria-hidden="true"></i></span>
+        <span title="Cloud"><i data-lucide="cloud" aria-hidden="true"></i></span>
+        <span title="Wi-Fi"><i data-lucide="wifi" aria-hidden="true"></i></span>
+        <span class="bt-menubar__optional" title="Sound"><i data-lucide="volume-2" aria-hidden="true"></i></span>
+        <span class="bt-menubar__optional" title="Battery"><i data-lucide="battery-full" aria-hidden="true"></i></span>
+        <time class="bt-menubar__clock" datetime="12:24">12:24</time>
+      </div>
+    </header>
+
+    <main>
+      <section
+        id="top"
+        class="bt-hero"
+        aria-label="Bartical メニューバーシミュレーション"
+        data-i18n-aria-label="heroSimulationAria"
+      >
+        <div class="bt-hero__inner">
+          <section
+            id="bt-about-window"
+            class="bt-about-window"
+            data-about-window
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="bt-about-window-title"
+          >
+            <header class="bt-about__titlebar">
+              <div class="bt-about__traffic" aria-label="ウィンドウ操作" data-i18n-aria-label="aboutWindowControlsAria">
+                <button class="bt-about__traffic-close" type="button" data-about-close aria-label="Aboutを閉じる" data-i18n-aria-label="aboutCloseAria"></button>
+                <span class="bt-about__traffic-minimize" aria-hidden="true"></span>
+                <span class="bt-about__traffic-zoom" aria-hidden="true"></span>
+              </div>
+              <h2 id="bt-about-window-title" data-i18n="aboutWindowTitle">Barticalについて</h2>
+            </header>
+
+            <div class="bt-about__content">
+              <div class="bt-about__identity">
+                <img class="bt-about__app-icon" src="./BarticalAppIcon.png" alt="" width="164" height="164">
+                <div>
+                  <h3>Bartical</h3>
+                  <p class="bt-about__version-line"><span data-i18n="aboutVersionLabel">バージョン</span> <output data-about-version>1.0.0(1)</output></p>
+                </div>
+              </div>
+
+              <div class="bt-about__details">
+                <dl>
+                  <div>
+                    <dt data-i18n="aboutVersionLabel">バージョン</dt>
+                    <dd><output data-about-version>1.0.0(1)</output></dd>
+                  </div>
+                  <div>
+                    <dt data-i18n="aboutCopyrightLabel">著作権</dt>
+                    <dd>Copyright © 2026 Bartical</dd>
+                  </div>
+                </dl>
+                <div class="bt-about__website">
+                  <p data-i18n="aboutWebsiteLabel">ウェブサイト</p>
+                  <a href="https://masashi-desu.github.io/products/Bartical">https://masashi-desu.github.io/products/Bartical</a>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <p class="bt-sr-only" role="status" aria-live="polite" data-launcher-status data-i18n="statusAboutOpen">メインランチャーとAboutを開いています。バージョン1.0.0(1)。</p>
+      </section>
+
+      <section id="overview" class="bt-section bt-section--paper bt-overview-section bt-viewport-section" aria-labelledby="bt-title">
+        <div class="bt-section__inner bt-overview__inner">
+          <header class="bt-overview-lead">
+            <p class="bt-kicker">01 / MENU BAR / VERTICAL</p>
+            <h1 id="bt-title" data-i18n="heroTitle">散らかったメニューバーを、縦にしまう。</h1>
+            <p class="whitespace-pre-line" data-i18n="heroLede">境界の左側に置いた項目を、物理位置から自動でひとまとめに。</p>
+          </header>
+
+          <div class="bt-placement" aria-label="メニューバー項目と2つの番号付き境界の配置シミュレーション" data-i18n-aria-label="placementAria">
+            <div class="bt-placement__label">
+              <i data-lucide="command" aria-hidden="true"></i>
+              <span data-i18n="placementLabel">Commandドラッグで配置</span>
+            </div>
+            <div class="bt-placement__bar" data-placement-bar>
+              <button type="button" class="bt-placement__item" data-placement-item="calendar" data-placement-label-key="placementCalendar" aria-label="カレンダー"><i data-lucide="calendar-days" aria-hidden="true"></i></button>
+              <button type="button" class="bt-placement__item" data-placement-item="cloud" data-placement-label-key="placementCloud" aria-label="クラウド"><i data-lucide="cloud" aria-hidden="true"></i></button>
+              <span class="bt-placement__boundary" data-placement-boundary="2" aria-label="番号付き境界 2" data-i18n-aria-label="boundaryTwoAria">2</span>
+              <button type="button" class="bt-placement__item" data-placement-item="bell" data-placement-label-key="placementBell" aria-label="通知"><i data-lucide="bell" aria-hidden="true"></i></button>
+              <button type="button" class="bt-placement__item" data-placement-item="wifi" data-placement-label-key="placementWifi" aria-label="Wi-Fi"><i data-lucide="wifi" aria-hidden="true"></i></button>
+              <span class="bt-placement__boundary" data-placement-boundary="1" aria-label="番号付き境界 1" data-i18n-aria-label="boundaryOneAria">1</span>
+              <span class="bt-placement__space" aria-hidden="true"></span>
+              <span class="bt-placement__launcher"><img src="./BarticalIconBody.svg" alt="" width="24" height="24"></span>
+            </div>
+            <p data-i18n="placementCaption">各アイコンは、右側で最初の境界に所属します。⌘ドラッグで境界をまたいで移動できます。</p>
+            <p class="bt-sr-only" role="status" aria-live="polite" data-placement-status></p>
+          </div>
+        </div>
+      </section>
+
+      <section id="how-it-works" class="bt-section bt-section--ink bt-viewport-section" aria-labelledby="how-title">
+        <div class="bt-section__inner">
+          <header class="bt-section__header bt-section__header--split">
+            <div>
+              <p class="bt-kicker">02 / HOW IT WORKS</p>
+              <h2 id="how-title" data-i18n="howTitle">3つの動きだけ。</h2>
+            </div>
+            <p data-i18n="howBody">置く。開く。元アプリを操作する。終われば自動で戻ります。</p>
+          </header>
+
+          <ol class="bt-steps">
+            <li>
+              <span class="bt-step__number">01</span>
+              <i data-lucide="move-horizontal" aria-hidden="true"></i>
+              <h3 data-i18n="stepOneTitle">境界を置く</h3>
+              <p data-i18n="stepOneBody">まとめたい項目の右側へ、番号付き境界をCommandドラッグします。</p>
+            </li>
+            <li>
+              <span class="bt-step__number">02</span>
+              <i data-lucide="panel-top-open" aria-hidden="true"></i>
+              <h3 data-i18n="stepTwoTitle">ランチャーを開く</h3>
+              <p data-i18n="stepTwoBody">所属項目だけの細い縦型メニューが、メニューバーから伸びます。</p>
+            </li>
+            <li>
+              <span class="bt-step__number">03</span>
+              <i data-lucide="mouse-pointer-click" aria-hidden="true"></i>
+              <h3 data-i18n="stepThreeTitle">いつも通り操作</h3>
+              <p data-i18n="stepThreeBody">アンカーと元アイコンを一時表示して元アプリのmenuやPopoverを開き、終了後は自動で再格納します。</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="customize" class="bt-section bt-section--paper bt-viewport-section" aria-labelledby="customize-title">
+        <div class="bt-section__inner">
+          <header class="bt-section__header bt-section__header--split">
+            <div>
+              <p class="bt-kicker">03 / YOUR BARTICALS</p>
+              <h2 id="customize-title" data-i18n="customizeTitle">Barticalごとに、自分で設定。</h2>
+            </div>
+            <p data-i18n="customizeBody">名称・アイコン・表示方法・色を個別に設定し、必要な数だけ追加できます。</p>
+          </header>
+
+          <div class="bt-customizer" aria-label="Barticalごとに設定できる項目" data-i18n-aria-label="customizerAria">
+            <article class="bt-customizer__card">
+              <div class="bt-customizer__icon"><i data-lucide="sliders-horizontal" aria-hidden="true"></i></div>
+              <p class="bt-customizer__name" data-i18n="customizerNameLabel">名称</p>
+              <p data-i18n="customizerNameValue">用途に合わせて自由に設定</p>
+            </article>
+            <article class="bt-customizer__card">
+              <div class="bt-customizer__icon"><i data-lucide="shapes" aria-hidden="true"></i></div>
+              <p class="bt-customizer__name" data-i18n="customizerIconLabel">アイコン</p>
+              <p data-i18n="customizerIconValue">SF Symbols・任意SVG・番号</p>
+            </article>
+            <article class="bt-customizer__card">
+              <div class="bt-customizer__icon"><i data-lucide="palette" aria-hidden="true"></i></div>
+              <p class="bt-customizer__name" data-i18n="customizerAppearanceLabel">表示方法と色</p>
+              <p data-i18n="customizerAppearanceValue">Template・Original・Custom Color</p>
+            </article>
+          </div>
+
+          <ul class="bt-chip-list" aria-label="Barticalの追加と個別設定" data-i18n-aria-label="iconFormatsAria">
+            <li><i data-lucide="gallery-vertical-end" aria-hidden="true"></i><span data-i18n="iconCount">必要な数だけ追加</span></li>
+            <li><i data-lucide="sliders-horizontal" aria-hidden="true"></i><span data-i18n="individualSettings">Barticalごとに個別設定</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="privacy" class="bt-section bt-section--violet bt-viewport-section" aria-labelledby="privacy-title">
+        <div class="bt-section__inner bt-privacy">
+          <div class="bt-privacy__mark"><i data-lucide="shield-check" aria-hidden="true"></i></div>
+          <div class="bt-privacy__copy">
+            <p class="bt-kicker">04 / LOCAL BY DESIGN</p>
+            <h2 id="privacy-title" data-i18n="privacyTitle">Macの中で、完結する。</h2>
+            <p data-i18n="privacyBody">表示画像とAccessibility情報は整理と操作にだけ使い、外部へ送信しません。</p>
+          </div>
+          <dl class="bt-privacy__facts">
+            <div><dt><i data-lucide="lock-keyhole" aria-hidden="true"></i><span data-i18n="privacyFactOneLabel">データ</span></dt><dd data-i18n="privacyFactOneValue">外部送信なし</dd></div>
+            <div><dt><i data-lucide="mouse-pointer-2" aria-hidden="true"></i><span data-i18n="privacyFactTwoLabel">操作</span></dt><dd data-i18n="privacyFactTwoValue">カーソルへ非介入</dd></div>
+            <div><dt><i data-lucide="shield-alert" aria-hidden="true"></i><span data-i18n="privacyFactThreeLabel">安全性</span></dt><dd data-i18n="privacyFactThreeValue">不正配置では格納しない</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section id="requirements" class="bt-section bt-section--paper bt-viewport-section" aria-labelledby="requirements-title">
+        <div class="bt-section__inner">
+          <header class="bt-section__header">
+            <p class="bt-kicker">05 / REQUIREMENTS</p>
+            <h2 id="requirements-title" data-i18n="requirementsTitle">動作に必要なもの。</h2>
+          </header>
+          <dl class="bt-requirements">
+            <div>
+              <dt><i data-lucide="laptop-minimal-check" aria-hidden="true"></i><span data-i18n="requirementOsLabel">対応OS</span></dt>
+              <dd data-i18n="requirementOsValue">macOS 14 以降</dd>
+            </div>
+            <div>
+              <dt><i data-lucide="accessibility" aria-hidden="true"></i><span>Accessibility</span></dt>
+              <dd data-i18n="requirementAccessibility">元の項目を検出・操作</dd>
+            </div>
+            <div>
+              <dt><i data-lucide="screen-share" aria-hidden="true"></i><span data-i18n="requirementRecordingLabel">画面とシステムオーディオの収録</span></dt>
+              <dd data-i18n="requirementRecording">現在のアイコン表示を取得</dd>
+            </div>
+            <div>
+              <dt><i data-lucide="languages" aria-hidden="true"></i><span data-i18n="requirementLanguageLabel">表示言語</span></dt>
+              <dd data-i18n="requirementLanguage">日本語を含む10言語</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section id="coming-soon" class="bt-coming bt-viewport-section" aria-labelledby="coming-title">
+        <div class="bt-coming__inner">
+          <img src="./BarticalIconBody.svg" alt="" width="148" height="148">
+          <p class="bt-kicker">06 / COMING SOON</p>
+          <h2 id="coming-title" data-i18n="comingTitle">Barticalは、準備中。</h2>
+          <p data-i18n="comingBody">配信開始まで、もう少しお待ちください。</p>
+          <button class="bt-coming__button" type="button" disabled aria-disabled="true">
+            <i data-lucide="hourglass" aria-hidden="true"></i>
+            <span>Coming Soon</span>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="bt-footer" data-transition-ignore>
+      <div class="bt-footer__lead">
+        <a href="#top">BARTICAL / TOP</a>
+        <a href="../index.html" data-product-backlink data-transition-direction="left">
+          <span data-product-backlink-label data-i18n="back">一覧へ</span>
+        </a>
+      </div>
+      <div data-include="footer" data-footer-src="../../partials/footer.html"></div>
+    </footer>
+  </div>
+
+  <script vite-ignore src="../../theme.js"></script>
+  <script vite-ignore src="../../footer.js"></script>
+  <script vite-ignore src="../product-backlink.js"></script>
+  <script vite-ignore src="../../vendor/bartical-lucide.min.js"></script>
+  <script vite-ignore src="./bartical.js"></script>
+</body>
+</html>

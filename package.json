@@ -12,11 +12,12 @@
     "preview": "vite preview --host 127.0.0.1",
     "build:meta": "node tools/apply-meta-template.js",
     "build:social": "node tools/generate-social-image.js",
+    "build:bartical-icons": "rolldown -c tools/rolldown.bartical-lucide.config.mjs --minify",
     "test": "npm run test:non-browser && npm run test:pc-browser && npm run test:mobile-chromium && npm run test:webkit",
     "test:non-browser": "npm run test:typefetch-appcast && npm run test:segmented-scroll-core",
-    "test:pc-browser": "npm run test:page-transitions && npm run test:product-backlink-source && npm run test:home-philosophy-tiles && npm run test:home-products-responsive && npm run test:surround-segments && npm run test:retreatscreen-edit-mode-actions && npm run test:typefetch-scroll-story && npm run test:typefetch-theme",
+    "test:pc-browser": "npm run test:page-transitions && npm run test:product-backlink-source && npm run test:home-philosophy-tiles && npm run test:home-products-responsive && npm run test:catalog-pagination && npm run test:surround-segments && npm run test:retreatscreen-edit-mode-actions && npm run test:typefetch-scroll-story && npm run test:typefetch-theme && npm run test:bartical-page",
     "test:mobile-chromium": "npm run test:home-mobile-swipe && npm run test:catalog-mobile-overflow && npm run test:retreatscreen-mobile-panel-fit && npm run test:footer-mobile-order && npm run test:liquidgl-return-position && npm run test:home-reload-liquidgl",
-    "test:webkit": "npm run test:retreatscreen-mobile-panel-fit:webkit && npm run test:retreatscreen-edit-mode-actions:webkit && npm run test:home-ios-safari-swipe && npm run test:catalog-mobile-scroll && npm run test:liquidgl-segment-mobile && npm run test:home-product-carousel && npm run test:typefetch-theme:webkit",
+    "test:webkit": "npm run test:retreatscreen-mobile-panel-fit:webkit && npm run test:retreatscreen-edit-mode-actions:webkit && npm run test:home-ios-safari-swipe && npm run test:catalog-mobile-scroll && npm run test:catalog-pagination:webkit && npm run test:liquidgl-segment-mobile && npm run test:home-product-carousel && npm run test:typefetch-theme:webkit && npm run test:bartical-page:webkit",
     "test:typefetch-appcast-unit": "ruby tests/typefetch-appcast-sync.rb",
     "test:typefetch-appcast-output": "node tests/typefetch-appcast-build-output.mjs",
     "test:typefetch-appcast": "npm run test:typefetch-appcast-unit && npm run build && npm run test:typefetch-appcast-output",
@@ -27,6 +28,8 @@
     "test:home-ios-safari-swipe": "node tests/playwright/home-ios-safari-swipe-state.js",
     "test:home-philosophy-tiles": "node tests/playwright/home-philosophy-tiles.js",
     "test:catalog-mobile-overflow": "node tests/playwright/catalog-mobile-no-horizontal-overflow.js",
+    "test:catalog-pagination": "node tests/playwright/catalog-five-item-pagination.js",
+    "test:catalog-pagination:webkit": "CATALOG_BROWSER=webkit node tests/playwright/catalog-five-item-pagination.js",
     "test:retreatscreen-mobile-panel-fit": "node tests/playwright/retreatscreen-mobile-panel-fit.js",
     "test:retreatscreen-mobile-panel-fit:webkit": "RETREATSCREEN_BROWSER=webkit node tests/playwright/retreatscreen-mobile-panel-fit.js",
     "test:retreatscreen-edit-mode-actions": "node tests/playwright/retreatscreen-edit-mode-actions.js",
@@ -41,7 +44,9 @@
     "test:surround-segments": "node tests/playwright/surround1x0-light-theme.js",
     "test:typefetch-scroll-story": "node tests/playwright/typefetch-scroll-story.js",
     "test:typefetch-theme": "node tests/playwright/typefetch-light-theme.js",
-    "test:typefetch-theme:webkit": "TYPEFETCH_BROWSER=webkit node tests/playwright/typefetch-light-theme.js"
+    "test:typefetch-theme:webkit": "TYPEFETCH_BROWSER=webkit node tests/playwright/typefetch-light-theme.js",
+    "test:bartical-page": "node tests/playwright/bartical-menu-simulation.js",
+    "test:bartical-page:webkit": "BARTICAL_BROWSER=webkit node tests/playwright/bartical-menu-simulation.js"
   },
   "repository": {
     "type": "git",
@@ -60,9 +65,11 @@
     "embla-carousel-auto-scroll": "^8.6.0",
     "embla-carousel-wheel-gestures": "^8.1.0",
     "playwright": "^1.59.1",
+    "rolldown": "1.1.5",
     "vite": "^8.0.11"
   },
   "dependencies": {
+    "lucide": "1.31.0",
     "three": "^0.180.0"
   }
 }

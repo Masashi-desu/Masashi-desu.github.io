@@ -453,14 +453,28 @@
 
       function handleReduceMotionChange() {
         const autoScroll = getProductCarouselAutoScroll();
-        if (!autoScroll) {
-          return;
+        if (autoScroll) {
+          if (reduceMotion.matches) {
+            autoScroll.stop();
+          } else {
+            autoScroll.play();
+          }
         }
-        if (reduceMotion.matches) {
-          autoScroll.stop();
-        } else {
-          autoScroll.play();
-        }
+        syncProductCardVideos();
+      }
+
+      function syncProductCardVideos() {
+        productGrid?.querySelectorAll('.home-product-card__media-video').forEach((video) => {
+          video.autoplay = !reduceMotion.matches;
+          if (reduceMotion.matches) {
+            video.pause();
+            return;
+          }
+          const playback = video.play();
+          if (playback && typeof playback.catch === 'function') {
+            playback.catch(() => {});
+          }
+        });
       }
 
       function renderProductCards(lang) {
@@ -499,16 +513,35 @@
           const titleText = lang === 'en' ? (item.title_en || item.title) : (item.title_ja || item.title);
           const descText = lang === 'en' ? (item.desc_en || item.desc) : (item.desc_ja || item.desc);
           const headerPath = (item.header || '').trim();
+          const videoPath = (item.video || '').trim();
           const iconPath = (item.image || '').trim();
           const hasHeader = Boolean(headerPath);
+          const hasVideo = Boolean(videoPath);
           const hasIcon = Boolean(iconPath);
-          const hasMedia = hasHeader || hasIcon;
+          const hasMedia = hasVideo || hasHeader || hasIcon;
 
           if (hasMedia) {
             const media = document.createElement('div');
             media.className = 'home-product-card__media';
 
-            if (hasHeader) {
+            if (hasVideo) {
+              const video = document.createElement('video');
+              video.src = `products/${item.dir || ''}${videoPath}`;
+              if (hasHeader) {
+                video.poster = `products/${item.dir || ''}${headerPath}`;
+              }
+              video.className = 'home-product-card__media-video';
+              video.muted = true;
+              video.loop = true;
+              video.autoplay = !reduceMotion.matches;
+              video.playsInline = true;
+              video.preload = 'metadata';
+              video.tabIndex = -1;
+              video.setAttribute('aria-hidden', 'true');
+              video.setAttribute('disablepictureinpicture', '');
+              video.setAttribute('disableremoteplayback', '');
+              media.appendChild(video);
+            } else if (hasHeader) {
               const image = document.createElement('img');
               image.src = `products/${item.dir || ''}${headerPath}`;
               image.alt = `${titleText} preview`;
@@ -589,6 +622,7 @@
           link.setAttribute('aria-hidden', 'true');
           link.tabIndex = -1;
         });
+        syncProductCardVideos();
       }
 
       function updateLanguage(locale) {

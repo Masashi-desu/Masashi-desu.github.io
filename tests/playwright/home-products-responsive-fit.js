@@ -6,8 +6,10 @@
  *  - 期待値: document/body に横スクロールが発生せず、CTA は viewport 内かつ carousel より下に表示され、
  *    表示中カードの下端は carousel のクリップ領域内に収まり、carousel と CTA の間隔は
  *    viewport 高に対して過大にならない。幅 36rem 以下ではコンテンツ上下の余白差が 2px 以内になる。
+ *    BarticalカードはIcon Composerから書き出した256pxの正式アプリアイコンをCSS filterなしで表示し、
+ *    圧縮済みMP4をミュート・インライン・自動ループで再生して、既存のスクリーンショットをposterとして使う。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium context で
- *    複数 viewport に切り替えながら Product セクションへ移動し、DOMRect と scrollWidth を取得する。
+ *    複数 viewport に切り替えながら Product セクションへ移動し、DOMRect、scrollWidth、Barticalアイコンの実体とcomputed styleを取得する。
  */
 const http = require('http');
 const fs = require('fs');
@@ -34,7 +36,8 @@ const VIEWPORTS = [
   { width: 667, height: 375, name: 'small-landscape' },
   { width: 444, height: 994, name: 'browser-comment-mobile' },
   { width: 393, height: 852, name: 'phone-portrait' },
-  { width: 320, height: 568, name: 'narrow-phone' }
+  { width: 320, height: 568, name: 'narrow-phone' },
+  { width: 393, height: 852, name: 'reduced-motion', reducedMotion: 'reduce' }
 ];
 
 function serveStatic(req, res) {
@@ -65,7 +68,8 @@ function serveStatic(req, res) {
       '.jpeg': 'image/jpeg',
       '.svg': 'image/svg+xml',
       '.gif': 'image/gif',
-      '.webp': 'image/webp'
+      '.webp': 'image/webp',
+      '.mp4': 'video/mp4'
     };
     res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
     res.end(data);
@@ -108,6 +112,8 @@ async function getProductLayoutState(page) {
     const visibleCards = Array.from(document.querySelectorAll('.home-product-card'))
       .map(roundRect)
       .filter((rect) => rect.right > gridRect.left + 8 && rect.left < gridRect.right - 8);
+    const barticalIcon = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__icon');
+    const barticalVideo = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__media-video');
 
     return {
       viewport: {
@@ -125,7 +131,27 @@ async function getProductLayoutState(page) {
       gridRect,
       footerRect: roundRect(document.querySelector('.home-products__footer')),
       ctaRect: roundRect(document.querySelector('.home-products__all-link')),
-      visibleCards
+      visibleCards,
+      barticalIcon: barticalIcon ? {
+        src: barticalIcon.getAttribute('src'),
+        naturalWidth: barticalIcon.naturalWidth,
+        naturalHeight: barticalIcon.naturalHeight,
+        filter: getComputedStyle(barticalIcon).filter
+      } : null,
+      barticalVideo: barticalVideo ? {
+        src: barticalVideo.getAttribute('src'),
+        poster: barticalVideo.getAttribute('poster'),
+        muted: barticalVideo.muted,
+        loop: barticalVideo.loop,
+        autoplay: barticalVideo.autoplay,
+        playsInline: barticalVideo.playsInline,
+        controls: barticalVideo.controls,
+        paused: barticalVideo.paused,
+        readyState: barticalVideo.readyState,
+        videoWidth: barticalVideo.videoWidth,
+        videoHeight: barticalVideo.videoHeight
+      } : null,
+      reduceMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
     };
   });
 }
@@ -134,6 +160,7 @@ async function assertProductsFitAtViewport(browser, serverPort, viewport) {
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
     colorScheme: 'dark',
+    reducedMotion: viewport.reducedMotion || 'no-preference',
     isMobile: viewport.width < 700,
     hasTouch: viewport.width < 900
   });
@@ -185,6 +212,29 @@ async function assertProductsFitAtViewport(browser, serverPort, viewport) {
     }
     if (state.visibleCards.length < 1) {
       throw new Error(`Expected at least one visible product card (${viewport.name}): ${JSON.stringify(state)}`);
+    }
+    if (
+      state.barticalIcon?.src !== 'products/Bartical/BarticalAppIcon.png'
+      || state.barticalIcon.naturalWidth !== 256
+      || state.barticalIcon.naturalHeight !== 256
+      || state.barticalIcon.filter !== 'none'
+    ) {
+      throw new Error(`Bartical card did not use the unmodified Icon Composer export (${viewport.name}): ${JSON.stringify(state.barticalIcon)}`);
+    }
+    if (
+      state.barticalVideo?.src !== 'products/Bartical/BarticalCardDemo.mp4'
+      || state.barticalVideo.poster !== 'products/Bartical/screenshot.png'
+      || !state.barticalVideo.muted
+      || !state.barticalVideo.loop
+      || state.barticalVideo.autoplay === state.reduceMotion
+      || !state.barticalVideo.playsInline
+      || state.barticalVideo.controls
+      || state.barticalVideo.readyState < 1
+      || state.barticalVideo.videoWidth !== 640
+      || state.barticalVideo.videoHeight !== 388
+      || (state.reduceMotion && !state.barticalVideo.paused)
+    ) {
+      throw new Error(`Bartical card did not use the compressed loop video (${viewport.name}): ${JSON.stringify(state.barticalVideo)}`);
     }
 
     assertRectWithinViewport(state.productsRect, state.viewport, `Product layout (${viewport.name})`);

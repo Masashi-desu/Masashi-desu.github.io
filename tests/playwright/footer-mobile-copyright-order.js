@@ -14,6 +14,7 @@ const MOBILE_VIEWPORT = { width: 393, height: 852 };
 const PAGES = [
   '/',
   '/products/index.html',
+  '/products/Bartical/index.html',
   '/products/TypeFetch/index.html',
   '/products/WinKinesis/index.html',
   '/products/Surround1x0-AKDK/index.html',

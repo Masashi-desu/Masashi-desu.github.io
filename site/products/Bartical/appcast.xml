@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"
+  xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Bartical</title>
+    <link>https://masashi-desu.github.io/products/Bartical/</link>
+    <description>Bartical appcast feed</description>
+    <language>ja</language>
+    <item>
+      <title>Version 1.0.0</title>
+      <link>https://masashi-desu.github.io/products/Bartical/</link>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+      <sparkle:version>1</sparkle:version>
+      <sparkle:releaseNotesLink>https://masashi-desu.github.io/products/Bartical/</sparkle:releaseNotesLink>
+      <sparkle:informationalUpdate/>
+    </item>
+  </channel>
+</rss>

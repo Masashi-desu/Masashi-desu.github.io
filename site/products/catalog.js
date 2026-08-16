@@ -2,6 +2,7 @@
   const STORAGE_KEY = 'mdw-lang';
   const PRODUCT_NAV_PAGE_SIZE = 5;
   const PRODUCT_SEGMENT_DESIGNS = {
+    Bartical: { className: 'catalog-product-section--center' },
     KeycapMaker: { className: 'catalog-product-section--right' },
     RetreatScreen: { className: 'catalog-product-section--left' },
     WinKinesis: { className: 'catalog-product-section--center' },
@@ -105,6 +106,7 @@
   let currentLocale = resolveLocale(readStoredLanguage() || 'ja');
   let activeCategory = 'all';
   let activeSort = 'date';
+  let currentProductPage = 1;
   let dataLoaded = false;
   let sectionNavigation = null;
 
@@ -457,6 +459,23 @@
     updatePaginationStatus(currentLocale);
   }
 
+  function syncProductSectionVideos() {
+    if (!grid) {
+      return;
+    }
+    grid.querySelectorAll('.catalog-product-section__video').forEach((video) => {
+      video.autoplay = !reduceMotion.matches;
+      if (reduceMotion.matches) {
+        video.pause();
+        return;
+      }
+      const playback = video.play();
+      if (playback && typeof playback.catch === 'function') {
+        playback.catch(() => {});
+      }
+    });
+  }
+
   function scrollToCatalogSection(section) {
     return Boolean(sectionNavigation && section && sectionNavigation.goTo(section.id, {
       source: 'section-control'
@@ -547,20 +566,21 @@
     sectionNavigation.mount();
   }
 
-  function renderNumberNav(entries, lang) {
+  function renderNumberNav(entries, lang, startIndex = 0) {
     if (!numberNav) {
       return;
     }
     numberNav.innerHTML = '';
     numberNav.style.setProperty('--catalog-product-page-count', String(Math.min(Math.max(entries.length, 1), 5)));
     entries.forEach((item, index) => {
+      const productIndex = startIndex + index;
       const title = getProductTitle(item, lang);
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'catalog-section-nav__number';
-      button.dataset.sectionTarget = getProductSectionId(item, index);
-      button.setAttribute('aria-label', localeConfig[lang].productNavLabel(index + 1, title));
-      button.textContent = String(index + 1);
+      button.dataset.sectionTarget = getProductSectionId(item, productIndex);
+      button.setAttribute('aria-label', localeConfig[lang].productNavLabel(productIndex + 1, title));
+      button.textContent = String(productIndex + 1);
       button.addEventListener('click', () => {
         const section = document.getElementById(button.dataset.sectionTarget);
         scrollToCatalogSection(section);
@@ -570,18 +590,11 @@
   }
 
   function getCurrentProductPage(total = getFilteredCatalog().length) {
-    if (total <= 0 || !sectionNavigation) {
+    if (total <= 0) {
       return 1;
     }
-    const state = sectionNavigation.getState();
-    const activeContent = sectionNavigation.index.getById(state.activeContentId);
-    const productIndex = activeContent && activeContent.meta
-      ? activeContent.meta.productIndex
-      : Number.NaN;
-    const current = Number.isFinite(productIndex) && productIndex >= 0
-      ? Math.min(productIndex + 1, total)
-      : 1;
-    return Math.max(1, Math.ceil(current / PRODUCT_NAV_PAGE_SIZE));
+    const pageCount = Math.max(1, Math.ceil(total / PRODUCT_NAV_PAGE_SIZE));
+    return Math.min(Math.max(currentProductPage, 1), pageCount);
   }
 
   function updatePaginationStatus(lang = currentLocale) {
@@ -592,6 +605,7 @@
     const total = getFilteredCatalog().length;
     const pageCount = Math.max(1, Math.ceil(total / PRODUCT_NAV_PAGE_SIZE));
     if (total <= 0) {
+      currentProductPage = 1;
       paginationStatus.textContent = '1';
       paginationStatus.setAttribute('aria-label', config.paginationCurrentLabel(1, 1));
       if (paginationPrev) {
@@ -603,6 +617,7 @@
       return;
     }
     const currentPage = getCurrentProductPage(total);
+    currentProductPage = currentPage;
     paginationStatus.textContent = String(currentPage);
     paginationStatus.setAttribute('aria-label', config.paginationCurrentLabel(currentPage, pageCount));
     if (paginationPrev) {
@@ -620,10 +635,9 @@
     }
     const pageCount = Math.max(1, Math.ceil(entries.length / PRODUCT_NAV_PAGE_SIZE));
     const targetPage = Math.min(Math.max(pageNumber, 1), pageCount);
-    const targetIndex = (targetPage - 1) * PRODUCT_NAV_PAGE_SIZE;
-    const targetButton = getNumberButtons()[targetIndex];
-    const targetId = targetButton ? targetButton.dataset.sectionTarget : '';
-    const targetSection = targetId ? document.getElementById(targetId) : null;
+    currentProductPage = targetPage;
+    renderCards(currentLocale);
+    const targetSection = grid.querySelector('[data-catalog-section="product"]');
     if (targetSection) {
       scrollToCatalogSection(targetSection);
     }
@@ -656,6 +670,7 @@
       controls.category.dataset.bound = 'true';
       controls.category.addEventListener('change', (event) => {
         activeCategory = event.target.value || 'all';
+        currentProductPage = 1;
         renderCards(currentLocale);
         scrollToCatalogSection(searchSection);
       });
@@ -664,6 +679,7 @@
       controls.sort.dataset.bound = 'true';
       controls.sort.addEventListener('change', (event) => {
         activeSort = event.target.value || 'date';
+        currentProductPage = 1;
         renderCards(currentLocale);
         scrollToCatalogSection(searchSection);
       });
@@ -681,6 +697,7 @@
     if (entries.length === 0) {
       if (dataLoaded) {
         appendNoticeSection(localeConfig[lang].emptyState, 'empty');
+        currentProductPage = 1;
         updateResultCount(lang, 0);
         renderNumberNav([], lang);
         updatePaginationStatus(lang);
@@ -689,19 +706,26 @@
       return;
     }
 
-    renderNumberNav(entries, lang);
-    entries.forEach((item, index) => {
-      const design = getProductSegmentDesign(item, index);
+    const pageCount = Math.max(1, Math.ceil(entries.length / PRODUCT_NAV_PAGE_SIZE));
+    currentProductPage = Math.min(Math.max(currentProductPage, 1), pageCount);
+    const startIndex = (currentProductPage - 1) * PRODUCT_NAV_PAGE_SIZE;
+    const pageEntries = entries.slice(startIndex, startIndex + PRODUCT_NAV_PAGE_SIZE);
+
+    renderNumberNav(pageEntries, lang, startIndex);
+    pageEntries.forEach((item, pageIndex) => {
+      const productIndex = startIndex + pageIndex;
+      const design = getProductSegmentDesign(item, productIndex);
       const linkInfo = buildProductHref(item);
       const titleText = getProductTitle(item, lang);
       const descText = getProductDescription(item, lang);
       const headerPath = buildAssetPath(item, item.header);
-      const iconPath = buildAssetPath(item, item.image);
+      const videoPath = buildAssetPath(item, item.video);
+      const iconPath = buildAssetPath(item, item.catalog_image || item.image);
       const section = document.createElement('section');
-      section.id = getProductSectionId(item, index);
+      section.id = getProductSectionId(item, productIndex);
       section.className = `catalog-section catalog-product-section ${design.className || ''}`.trim();
       section.dataset.catalogSection = 'product';
-      section.dataset.productIndex = String(index);
+      section.dataset.productIndex = String(productIndex);
       section.dataset.segmentVariant = design.className || 'default';
       section.setAttribute('aria-labelledby', `${section.id}-title`);
       section.setAttribute('data-transition-fade', 'true');
@@ -709,12 +733,29 @@
       const media = document.createElement('div');
       media.className = 'catalog-product-section__media';
       media.setAttribute('aria-hidden', 'true');
-      if (headerPath || iconPath) {
+      if (videoPath) {
+        const video = document.createElement('video');
+        video.src = videoPath;
+        if (headerPath) {
+          video.poster = headerPath;
+        }
+        video.className = 'catalog-product-section__video';
+        video.muted = true;
+        video.loop = true;
+        video.autoplay = !reduceMotion.matches;
+        video.playsInline = true;
+        video.preload = 'metadata';
+        video.tabIndex = -1;
+        video.setAttribute('aria-hidden', 'true');
+        video.setAttribute('disablepictureinpicture', '');
+        video.setAttribute('disableremoteplayback', '');
+        media.appendChild(video);
+      } else if (headerPath || iconPath) {
         const image = document.createElement('img');
         image.src = headerPath || iconPath;
         image.alt = '';
         image.className = 'catalog-product-section__image';
-        image.loading = index === 0 ? 'eager' : 'lazy';
+        image.loading = pageIndex === 0 ? 'eager' : 'lazy';
         image.decoding = 'async';
         media.appendChild(image);
       }
@@ -728,7 +769,7 @@
 
       const indexLabel = document.createElement('p');
       indexLabel.className = 'catalog-product-section__index';
-      indexLabel.textContent = `${String(index + 1).padStart(2, '0')} / ${String(entries.length).padStart(2, '0')}`;
+      indexLabel.textContent = `${String(productIndex + 1).padStart(2, '0')} / ${String(entries.length).padStart(2, '0')}`;
       indexLabel.dataset.catalogAnimate = 'true';
 
       const title = document.createElement('h2');
@@ -782,8 +823,9 @@
       grid.appendChild(section);
     });
 
-    updateResultCount(lang, entries.length);
+    updateResultCount(lang, pageEntries.length);
     updatePaginationStatus(lang);
+    syncProductSectionVideos();
 
     if (window.mdwTheme && typeof window.mdwTheme.focusPressables === 'function') {
       window.mdwTheme.focusPressables(grid);
@@ -873,6 +915,11 @@
 
   setupSectionViewportSizing();
   setupSectionNavigation();
+  if (typeof reduceMotion.addEventListener === 'function') {
+    reduceMotion.addEventListener('change', syncProductSectionVideos);
+  } else if (typeof reduceMotion.addListener === 'function') {
+    reduceMotion.addListener(syncProductSectionVideos);
+  }
   setupControls();
   applyLanguage(currentLocale);
   setupLanguageSelector();
