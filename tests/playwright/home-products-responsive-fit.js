@@ -8,6 +8,7 @@
  *    viewport 高に対して過大にならない。幅 36rem 以下ではコンテンツ上下の余白差が 2px 以内になる。
  *    BarticalカードはIcon Composerから書き出した256pxの正式アプリアイコンをCSS filterなしで表示し、
  *    圧縮済みMP4をミュート・インライン・自動ループで再生して、既存のスクリーンショットをposterとして使う。
+ *    Barticalの映像はすべてのviewportで上端を基準に切り抜く。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium context で
  *    複数 viewport に切り替えながら Product セクションへ移動し、DOMRect、scrollWidth、Barticalアイコンの実体とcomputed styleを取得する。
  */
@@ -114,6 +115,7 @@ async function getProductLayoutState(page) {
       .filter((rect) => rect.right > gridRect.left + 8 && rect.left < gridRect.right - 8);
     const barticalIcon = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__icon');
     const barticalVideo = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__media-video');
+    const barticalVideoStyle = barticalVideo ? getComputedStyle(barticalVideo) : null;
 
     return {
       viewport: {
@@ -149,7 +151,8 @@ async function getProductLayoutState(page) {
         paused: barticalVideo.paused,
         readyState: barticalVideo.readyState,
         videoWidth: barticalVideo.videoWidth,
-        videoHeight: barticalVideo.videoHeight
+        videoHeight: barticalVideo.videoHeight,
+        objectPosition: barticalVideoStyle.objectPosition
       } : null,
       reduceMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
     };
@@ -232,6 +235,7 @@ async function assertProductsFitAtViewport(browser, serverPort, viewport) {
       || state.barticalVideo.readyState < 1
       || state.barticalVideo.videoWidth !== 640
       || state.barticalVideo.videoHeight !== 388
+      || state.barticalVideo.objectPosition !== '50% 0%'
       || (state.reduceMotion && !state.barticalVideo.paused)
     ) {
       throw new Error(`Bartical card did not use the compressed loop video (${viewport.name}): ${JSON.stringify(state.barticalVideo)}`);

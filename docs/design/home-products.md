@@ -10,4 +10,5 @@
 
 - `products/index.json` に `video` があるプロダクトは、`header` の静止画をposterとして保ちながら、カードのメディア領域でミュート・インライン・自動ループ再生する。
 - Barticalカードは `.temp/bartical/demo.mov` を640×388、30fps、H.264 High Profile、YUV 4:2:0、音声なし、faststartで圧縮した `site/products/Bartical/BarticalCardDemo.mp4` を使用する。MOVは入力素材のまま `.temp/` に保持し、公開対象へ含めない。
+- Barticalカードの映像はレスポンシブ時も上端を基準に切り抜き、映像上端のメニューバーを優先して表示範囲へ収める。
 - `prefers-reduced-motion: reduce` ではカード映像を自動再生せず、posterの静止表示を維持する。設定が実行中に変わった場合も、映像とカルーセルの自動移動を同時に停止・再開する。

@@ -14,5 +14,6 @@
 - `header` は動画のposterとして使用し、動画はミュート・ループ・インラインで自動再生する。
 - `prefers-reduced-motion: reduce` では自動再生を停止し、posterを表示する。実行中の設定変更にも追従する。
 - Barticalは `site/products/Bartical/BarticalCardDemo.mp4` と `site/products/Bartical/screenshot.png` をホームカードと一覧で共有する。
+- 製品一覧のBartical背景動画はレスポンシブ時も上端を基準に切り抜き、拡大時を含めて映像上端のメニューバーが表示範囲から押し出されないようにする。
 - Barticalの一覧アイコンは、正式256pxアプリアイコンから透明な光学余白だけを除いた `BarticalCatalogIcon.png` を使う。表示領域内に余白を作らず、追加の角丸やボックスシャドウも重ねない。
 - Aboutとホームカードでは、macOS上の実アプリ表示を再現するため、光学余白を維持した `BarticalAppIcon.png` を引き続き使う。

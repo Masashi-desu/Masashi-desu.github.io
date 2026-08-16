@@ -1201,6 +1201,10 @@ body.page-product--surround .page-background {
   background: var(--surface-field-hover);
 }
 
+.home-product-card[href*="products/Bartical/"] .home-product-card__media-video {
+  object-position: center top;
+}
+
 .home-product-card__media-placeholder {
   width: 100%;
   height: 100%;
@@ -1892,6 +1896,11 @@ body.page-product--surround .site-footer__icon {
 
 .catalog-product-section__video {
   background: #171612;
+}
+
+#catalog-product-bartical .catalog-product-section__video {
+  object-position: center top;
+  transform-origin: center top;
 }
 
 .catalog-product-section__scrim {

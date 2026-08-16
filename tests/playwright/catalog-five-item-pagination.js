@@ -1,8 +1,8 @@
 /**
  * テスト概要:
  *  - 目的: 製品一覧が全件を同時描画せず5件単位でページ切り替えし、Bartical一覧背景にホームカードと同じ動画を使うことを確認する。
- *  - 期待値: 6件中1ページ目は1〜5の5section、2ページ目は6のみを描画する。前後ボタン・現在ページ・全体通番が同期し、Bartical背景はBarticalCardDemo.mp4をscreenshot.png poster付きでミュート・ループ・インライン再生する。2ページ目の実画像は読込完了後にページを戻し、画像取得を途中で中断しない。
- *  - 検証方法: ローカル静的サーバーで /products/ をChromiumまたはWebKitに開き、DOM数、ナビ番号、ページ状態、画像の読込完了、動画属性を取得して前後ボタンとカテゴリ変更を操作する。
+ *  - 期待値: 6件中1ページ目は1〜5の5section、2ページ目は6のみを描画する。前後ボタン・現在ページ・全体通番が同期し、Bartical背景はBarticalCardDemo.mp4をscreenshot.png poster付きでミュート・ループ・インライン再生する。背景動画は画面比率にかかわらず上端を基準に切り抜き、拡大によって上端を範囲外へ押し出さない。2ページ目の実画像は読込完了後にページを戻し、画像取得を途中で中断しない。
+ *  - 検証方法: ローカル静的サーバーで /products/ をChromiumまたはWebKitに開き、DOM数、ナビ番号、ページ状態、画像の読込完了、動画属性を取得する。横長画面と添付例相当のカード比率へviewportを切り替えてBartical動画の上端位置を確認した後、前後ボタンとカテゴリ変更を操作する。
  */
 const fs = require('fs');
 const http = require('http');
@@ -63,6 +63,9 @@ async function readState(page) {
   return page.evaluate(() => {
     const sections = Array.from(document.querySelectorAll('[data-catalog-section="product"]'));
     const video = document.querySelector('#catalog-product-bartical .catalog-product-section__video');
+    const videoStyle = video ? getComputedStyle(video) : null;
+    const videoRect = video?.getBoundingClientRect();
+    const videoMediaRect = video?.parentElement?.getBoundingClientRect();
     const barticalIcon = document.querySelector('#catalog-product-bartical .catalog-product-section__icon');
     const barticalIconStyle = barticalIcon ? getComputedStyle(barticalIcon) : null;
     const status = document.getElementById('catalog-pagination-status');
@@ -86,7 +89,9 @@ async function readState(page) {
         autoplay: video.autoplay,
         playsInline: video.playsInline,
         disablePictureInPicture: video.hasAttribute('disablepictureinpicture'),
-        disableRemotePlayback: video.hasAttribute('disableremoteplayback')
+        disableRemotePlayback: video.hasAttribute('disableremoteplayback'),
+        objectPosition: videoStyle?.objectPosition,
+        topEdgeOffset: videoRect && videoMediaRect ? videoRect.top - videoMediaRect.top : null
       } : null,
       barticalFallbackImageCount: document.querySelectorAll('#catalog-product-bartical .catalog-product-section__image').length,
       barticalIconStyle: barticalIconStyle ? {
@@ -167,6 +172,12 @@ async function main() {
       firstPage
     );
     assert(
+      firstPage.video?.objectPosition === '50% 0%'
+        && Math.abs(firstPage.video.topEdgeOffset) < 0.1,
+      'Bartical catalog background was not anchored to its top edge',
+      firstPage.video
+    );
+    assert(
       firstPage.barticalIconStyle?.src === 'Bartical/BarticalCatalogIcon.png'
         && firstPage.barticalIconStyle.naturalWidth === 222
         && firstPage.barticalIconStyle.naturalHeight === 222
@@ -176,6 +187,21 @@ async function main() {
       'Bartical catalog icon did not use the tightly cropped official icon asset',
       firstPage.barticalIconStyle
     );
+
+    for (const viewport of [
+      { width: 1278, height: 619 },
+      { width: 573, height: 550 }
+    ]) {
+      await page.setViewportSize(viewport);
+      const responsiveState = await readState(page);
+      assert(
+        responsiveState.video?.objectPosition === '50% 0%'
+          && Math.abs(responsiveState.video.topEdgeOffset) < 0.1,
+        'Bartical catalog background lost its top alignment after a viewport change',
+        { viewport, video: responsiveState.video }
+      );
+    }
+    await page.setViewportSize({ width: 1372, height: 994 });
 
     await page.locator('#catalog-pagination-next').click();
     await page.waitForFunction(() => {
