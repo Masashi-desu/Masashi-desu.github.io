@@ -2,7 +2,7 @@
  * テスト概要:
  *  - 目的: Bartical 製品ページのメニューバー型ランチャーが、初期表示・切り替え・セクション移動を実アプリ風に再現することを確認する。
  *  - 期待値: メインメニューは初期表示で展開され、縦型メニューから独立した実アプリ準拠のAboutにappcast.xmlから同期した1.0.0(1)と製品ページURLを表示する。AboutのアイコンとfaviconはBarticalのIcon Composer書類から書き出した正式PNGを使い、ライトテーマではmacOSのライト外観に合わせた明るい半透明ウィンドウと薄いMaterialカードへ切り替わる。Overviewの配置例は境界①・②を持ち、外部アイコンを⌘ドラッグすると右側で最初の境界から所属を再計算し、hover時に「①に所属しています」のような番号付きツールチップを表示する。縦型メニューにSparklesは置かず、所属項目の操作でAboutを閉じない。ヒーローは動的viewportからメニューバー高を引いた範囲へ収まり、Aboutと映像がviewport下へはみ出さない。背景はテーマ別MP4と指定ベース色を使い、縦メニュー末尾の設定も他の所属項目と同じアンカー展開を経て、元アイコン直下のメニューからライト／ダークを切り替える。元アプリメニューの左端は選択した元アイコンの左端へ揃え、狭い画面では8pxの安全余白へ収める。縦書きBARTICALは置かず、左端の戻る導線は矢印アイコンだけを表示する。正式SVGは通常時から右寄りへ固定し、所属項目の展開後も中心座標を変えない。展開した元項目は縦型メニューの上から下の順に対応して右から左へ並べ、選択中の背面だけを白い半透明の横長macOS風ピルとして表示する。右側の他アプリアイコンはアンカー展開中も消さない。
- *  - 検証方法: ローカル静的サーバーで Bartical ページを配信し、ChromiumまたはWebKitで1440×900、1372×619、393×852、320×568のviewportを開く。DOM属性、表示状態、フォーカス順、URL hash、アイコン実体、要素矩形、console/page errorを取得して検証する。
+ *  - 検証方法: ローカル静的サーバーで Bartical ページを配信し、ChromiumまたはWebKitで1440×900、1372×619、393×852、320×568のviewportを開く。DOM属性、表示状態、フォーカス順、URL hash、アイコン実体、要素矩形、console/page errorを取得して検証する。H.264デコーダーを同梱しないLinux版WebKitでは動画の設定とレイアウトを検証し、デコード完了はmacOS WebKitとChromiumで検証する。
  */
 const fs = require('fs');
 const http = require('http');
@@ -18,6 +18,9 @@ const BARTICAL_APPCAST = path.join(ROOT, 'products/Bartical/appcast.xml');
 const PRODUCT_INDEX = path.join(ROOT, 'products/index.json');
 const BROWSER_NAME = process.env.BARTICAL_BROWSER || 'chromium';
 const BROWSER_TYPES = { chromium, webkit };
+// Playwright's Linux WebKit build does not ship an H.264 decoder. The release
+// gate still validates the actual media in macOS WebKit and Mobile Safari.
+const HERO_VIDEO_DECODE_REQUIRED = !(BROWSER_NAME === 'webkit' && process.platform === 'linux');
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'desktop-short', width: 1372, height: 619 },
@@ -365,7 +368,9 @@ async function readInitialState(page) {
         muted: heroVideo.muted,
         loop: heroVideo.loop,
         paused: heroVideo.paused,
-        readyState: heroVideo.readyState
+        readyState: heroVideo.readyState,
+        h264Support: heroVideo.canPlayType('video/mp4; codecs="avc1"'),
+        errorCode: heroVideo.error?.code ?? null
       } : null,
       themeSettings: themeSettingsTrigger && themeSourceActions ? {
         controls: themeSettingsTrigger.getAttribute('aria-controls'),
@@ -663,12 +668,13 @@ function assertInitialState(state, viewport) {
       && state.heroVideo.muted
       && state.heroVideo.loop
       && state.heroVideo.paused
-      && state.heroVideo.readyState >= 1,
+      && (!HERO_VIDEO_DECODE_REQUIRED || state.heroVideo.readyState >= 1),
     `[${viewport.name}] Dark hero video and transparent hero base were not initialized correctly`,
     {
       pageBackgroundColor: state.pageBackgroundColor,
       heroBackgroundColor: state.heroBackgroundColor,
-      heroVideo: state.heroVideo
+      heroVideo: state.heroVideo,
+      decodeRequired: HERO_VIDEO_DECODE_REQUIRED
     }
   );
   assert(
