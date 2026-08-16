@@ -7,6 +7,7 @@
  *    表示中カードの下端は carousel のクリップ領域内に収まり、carousel と CTA の間隔は
  *    viewport 高に対して過大にならない。幅 36rem 以下ではコンテンツ上下の余白差が 2px 以内になる。
  *    BarticalカードはIcon Composerから書き出した256pxの正式アプリアイコンをCSS filterなしで表示し、
+ *    画像内の222pxの不透明領域が余白のない他アプリアイコンと同じ表示寸法になるよう光学補正する。
  *    圧縮済みMP4をミュート・インライン・自動ループで再生して、既存のスクリーンショットをposterとして使う。
  *    Barticalの映像はすべてのviewportで上端を基準に切り抜く。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium context で
@@ -114,8 +115,10 @@ async function getProductLayoutState(page) {
       .map(roundRect)
       .filter((rect) => rect.right > gridRect.left + 8 && rect.left < gridRect.right - 8);
     const barticalIcon = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__icon');
+    const referenceIcon = document.querySelector('.home-product-card[href*="products/RetreatScreen/"] .home-product-card__icon');
     const barticalVideo = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__media-video');
     const barticalVideoStyle = barticalVideo ? getComputedStyle(barticalVideo) : null;
+    const barticalIconStyle = barticalIcon ? getComputedStyle(barticalIcon) : null;
 
     return {
       viewport: {
@@ -138,7 +141,10 @@ async function getProductLayoutState(page) {
         src: barticalIcon.getAttribute('src'),
         naturalWidth: barticalIcon.naturalWidth,
         naturalHeight: barticalIcon.naturalHeight,
-        filter: getComputedStyle(barticalIcon).filter
+        filter: barticalIconStyle.filter,
+        scale: new DOMMatrix(barticalIconStyle.transform).a,
+        rect: roundRect(barticalIcon),
+        referenceRect: referenceIcon ? roundRect(referenceIcon) : null
       } : null,
       barticalVideo: barticalVideo ? {
         src: barticalVideo.getAttribute('src'),
@@ -221,8 +227,12 @@ async function assertProductsFitAtViewport(browser, serverPort, viewport) {
       || state.barticalIcon.naturalWidth !== 256
       || state.barticalIcon.naturalHeight !== 256
       || state.barticalIcon.filter !== 'none'
+      || Math.abs(state.barticalIcon.scale - (256 / 222)) > 0.001
+      || !state.barticalIcon.referenceRect
+      || Math.abs((state.barticalIcon.rect.width * 222 / 256) - state.barticalIcon.referenceRect.width) > 0.1
+      || Math.abs((state.barticalIcon.rect.height * 222 / 256) - state.barticalIcon.referenceRect.height) > 0.1
     ) {
-      throw new Error(`Bartical card did not use the unmodified Icon Composer export (${viewport.name}): ${JSON.stringify(state.barticalIcon)}`);
+      throw new Error(`Bartical card icon did not match the other app icons optically (${viewport.name}): ${JSON.stringify(state.barticalIcon)}`);
     }
     if (
       state.barticalVideo?.src !== 'products/Bartical/BarticalCardDemo.mp4'

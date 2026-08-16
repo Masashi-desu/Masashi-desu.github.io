@@ -1239,6 +1239,12 @@ body.page-product--surround .page-background {
   object-fit: cover;
 }
 
+/* Icon Composerの256px書き出しには周囲17px相当の光学余白がある。
+   余白付きの正式画像を維持したまま、不透明な222px部分を他のカードと同寸にする。 */
+.home-product-card[href*="products/Bartical/"] .home-product-card__icon {
+  transform: scale(1.153153);
+}
+
 .home-product-card__body {
   display: grid;
   gap: 0.65rem;
