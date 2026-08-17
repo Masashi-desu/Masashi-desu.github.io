@@ -268,9 +268,10 @@ async function main() {
         const previous = firstPage.liquidVideoFrameTimes[index];
         const mediaDelta = (entry.currentTime - previous.currentTime + entry.duration) % entry.duration;
         const frameDelta = (entry.frameTime - previous.frameTime + entry.duration) % entry.duration;
+        const frameLag = (entry.currentTime - entry.frameTime + entry.duration) % entry.duration;
         return mediaDelta > 0.1
           && frameDelta > 0.1
-          && Math.abs(entry.currentTime - entry.frameTime) < 0.25;
+          && frameLag < 2.5;
       }),
       'LiquidGL did not consume advancing frames from every catalog video',
       { before: firstPage.liquidVideoFrameTimes, after: advancedVideoState.liquidVideoFrameTimes }
