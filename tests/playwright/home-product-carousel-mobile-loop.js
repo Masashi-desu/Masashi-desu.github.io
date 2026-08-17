@@ -353,7 +353,18 @@ async function runCarouselAssertions(browserType, browserName, port) {
       throw new Error(`Expected auto-scroll to pause during drag: ${JSON.stringify(duringDrag)}`);
     }
     await page.mouse.up();
-    await page.waitForTimeout(320);
+    await page.waitForFunction((expectedCount) => {
+      const grid = document.querySelector('.home-product-grid');
+      const cards = Array.from(document.querySelectorAll('.home-product-card'));
+      if (!grid || cards.length !== expectedCount) {
+        return false;
+      }
+      const gridRect = grid.getBoundingClientRect();
+      return cards.some((card) => {
+        const rect = card.getBoundingClientRect();
+        return rect.right > gridRect.left + 24 && rect.left < gridRect.right - 24;
+      });
+    }, expectedCardCount, { timeout: 5000 }).catch(() => {});
     // ドラッグ終了時のクリックがカードリンクへのページ遷移として扱われないこと
     if (new URL(page.url()).pathname !== '/') {
       throw new Error(`Expected drag release not to navigate to a card link: ${page.url()}`);
