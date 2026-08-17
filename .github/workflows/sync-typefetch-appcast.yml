@@ -130,8 +130,8 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium webkit
 
-      - name: Run all automated tests before commit
-        run: npm test
+      - name: Run deterministic CI tests before commit
+        run: npm run test:ci
 
       - name: Commit synchronized appcast
         id: commit

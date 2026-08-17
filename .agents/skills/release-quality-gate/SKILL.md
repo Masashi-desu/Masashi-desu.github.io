@@ -11,7 +11,7 @@ Apply every gate below before pushing `main`. Treat any failure, skipped check, 
 
 1. Read `../../../README.md`, especially **リリース品質ゲート**, and `../../../AGENTS.md`.
 2. Fetch `origin/main`; confirm the local release is a fast-forward and review `git status --short` plus the complete diff.
-3. Run `npm test`. Confirm the grouped `test:pc-browser` and `test:webkit` suites both pass; do not substitute Chromium emulation for WebKit.
+3. On macOS, run `npm test` (`test:release-local`). Confirm its `test:ci` phase passes the grouped `test:pc-browser` and `test:webkit` suites, then confirm `test:local-environment` passes the native H.264, LiquidGL video-frame/texture, and WebGL context checks. Do not substitute CI, Chromium emulation, or Linux WebKit for the local environment-dependent phase.
 4. Run `npm run build`, then serve the production output with `npm run preview`.
 5. Before visual browser work, use `$browser-noninvasive-verification`. Use an isolated desktop browser at a normal PC viewport and inspect every affected page for layout, interaction, visual effects, horizontal overflow, and console errors.
 6. Use `$use-repo-temp-artifacts` and save browser evidence only under `.temp/<task-slug>/evidence/`.
@@ -22,4 +22,4 @@ Apply every gate below before pushing `main`. Treat any failure, skipped check, 
 
 ## CI Boundary
 
-Every workflow that updates `main` or deploys Pages must run `npm test` before mutation, build, and deploy. CI failure blocks the commit or publication. Linux workflows repeat Chromium and WebKit automation but cannot replace the mandatory local PC visual check or the `xcrun simctl boot` Mobile Safari check.
+Every workflow that updates `main` or deploys Pages must run `npm run test:ci` before mutation, build, and deploy. CI failure blocks the commit or publication. Linux workflows repeat deterministic Chromium and WebKit automation but intentionally exclude native H.264 decoding, GPU/WebGL implementation checks, and real-time video-frame assertions. CI cannot replace `test:local-environment`, the mandatory local PC visual check, or the `xcrun simctl boot` Mobile Safari check.

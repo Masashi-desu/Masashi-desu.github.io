@@ -9,7 +9,7 @@
 - 開発は原則としてローカルの `main` ブランチで行い、リモートの `main` ブランチへの push をもってリリースを開始すること。
 - 必要に応じて push 前にリモートの更新を取り込み、ローカルとリモートの `main` ブランチを同期すること。
 - リリース前に `.agents/skills/release-quality-gate/SKILL.md` を読み、その手順を省略せず実行すること。
-- `npm test`、PCブラウザ確認、Playwright WebKitテスト、`xcrun simctl boot` で起動したiPhone SimulatorのMobile Safari確認、本番ビルドをすべて成功させること。失敗、未実施、確認不能の項目がある場合は `main` へpushしないこと。
+- macOSでの `npm test`（`test:ci` と `test:local-environment`）、PCブラウザ確認、Playwright WebKitテスト、`xcrun simctl boot` で起動したiPhone SimulatorのMobile Safari確認、本番ビルドをすべて成功させること。codec・GPU・実時間動画frameに依存するローカルテストをCI結果で代替しないこと。失敗、未実施、確認不能の項目がある場合は `main` へpushしないこと。
 - 品質ゲート完了後に追跡対象ファイルを変更した場合は、全ゲートを最初から再実行すること。
 
 ## ディレクトリ責務
