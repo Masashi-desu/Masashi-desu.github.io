@@ -169,7 +169,7 @@
     if (initialized || targets.length === 0) {
       return;
     }
-    if (typeof window.html2canvas !== 'function' || typeof window.liquidGL !== 'function') {
+    if (typeof window.liquidGL !== 'function') {
       targets.forEach((target) => target.classList.add('is-liquidgl-fallback'));
       return;
     }
@@ -182,7 +182,6 @@
         target: TARGET_SELECTOR,
         snapshot: 'body',
         resolution: 1.25,
-        snapshotImageTimeout: 600,
         snapshotCaptureTimeout: getSnapshotCaptureTimeout(),
         refraction: readNumberOption(targetOptions, 'liquidRefraction', 0),
         bevelDepth: readNumberOption(targetOptions, 'liquidBevelDepth', 0.052),

@@ -624,6 +624,7 @@ body.page-product--surround {
   --home-line: rgba(245, 241, 232, 0.16);
   --home-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
   --catalog-panel-bg: rgba(27, 26, 22, 0.92);
+  --catalog-nav-glass-tint: rgba(5, 4, 14, 0.62);
   background: var(--home-section-bg);
 }
 
@@ -631,6 +632,7 @@ body.page-catalog {
   --radius-card-large: 0.5rem;
   --radius-card-medium: 0.5rem;
   --radius-card-small: 0.5rem;
+  --catalog-nav-glass-tint: rgba(255, 253, 247, 0.28);
   background: var(--home-section-bg);
 }
 
@@ -792,6 +794,22 @@ body.page-product--surround .page-background {
   border: 1px solid var(--home-line);
   border-radius: var(--radius-pill);
   pointer-events: auto;
+}
+
+.catalog-section-nav__track::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background-color: var(--catalog-nav-glass-tint);
+  pointer-events: none;
+  transition: background-color 640ms linear;
+  will-change: background-color;
+}
+
+.catalog-section-nav__track[data-glass-tone="dark"] {
+  --catalog-nav-glass-tint: rgba(5, 4, 14, 0.62);
 }
 
 .catalog-section-nav__indicator {
@@ -3431,6 +3449,10 @@ body.page-transition-visible .page-transition-target {
   .button__arrow,
   .catalog-card__cta-arrow {
     transition: none !important;
+  }
+
+  .catalog-section-nav__track::before {
+    transition: none;
   }
 
   body.page-transition-fade {

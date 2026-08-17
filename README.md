@@ -82,4 +82,4 @@ Playwright などで追加する自動テストスクリプトには、以下を
 
 X 内蔵ブラウザなどの `WKWebView` で履歴復帰時に `visualViewport` の古い offset が残る条件は、`npm run test:liquidgl-return-position` で再現し、LiquidGL の描画矩形が固定ナビの DOM 矩形と一致することを検証します。
 
-iOS Mobile Safari で未読込の lazy 画像が snapshot clone に残る条件と、ページ復帰時に WebGL context が破棄される条件は、`npm run test:liquidgl-segment-mobile` で再現し、セグメントが一時的な CSS fallback を経て LiquidGL 描画へ復帰することを検証します。
+iOS Mobile Safari で内蔵rasteriserの画像読込がsnapshot中に滞留する条件と、ページ復帰時に WebGL context が破棄される条件は、`npm run test:liquidgl-segment-mobile` で再現し、セグメントが一時的な CSS fallback を経て LiquidGL 描画へ復帰することを検証します。

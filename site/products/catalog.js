@@ -455,7 +455,13 @@
     });
   }
 
-  function handleCatalogActiveChange() {
+  function handleCatalogActiveChange({ stop, activeContentId } = {}) {
+    if (sectionNav) {
+      const activeContent = activeContentId ? document.getElementById(activeContentId) : null;
+      const productContext = stop?.meta?.type === 'product'
+        || activeContent?.dataset.catalogSection === 'product';
+      sectionNav.dataset.glassTone = productContext ? 'dark' : 'surface';
+    }
     updatePaginationStatus(currentLocale);
   }
 
@@ -499,6 +505,12 @@
   function refreshSectionObserver() {
     if (sectionNavigation) {
       sectionNavigation.refresh();
+    }
+  }
+
+  function refreshCatalogLiquidGlass() {
+    if (window.MDWLiquidGL && typeof window.MDWLiquidGL.refresh === 'function') {
+      window.MDWLiquidGL.refresh(0);
     }
   }
 
@@ -837,6 +849,7 @@
       updatedScope.appendChild(updated);
     }
     refreshSectionObserver();
+    refreshCatalogLiquidGlass();
   }
 
   function updateLanguage(locale) {

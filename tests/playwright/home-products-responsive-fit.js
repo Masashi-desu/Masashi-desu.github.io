@@ -8,7 +8,7 @@
  *    viewport 高に対して過大にならない。幅 36rem 以下ではコンテンツ上下の余白差が 2px 以内になる。
  *    BarticalカードはIcon Composerから書き出した256pxの正式アプリアイコンをCSS filterなしで表示し、
  *    画像内の222pxの不透明領域が余白のない他アプリアイコンと同じ表示寸法になるよう光学補正する。
- *    圧縮済みMP4をミュート・インライン・自動ループで再生して、既存のスクリーンショットをposterとして使う。
+ *    Bartical、TypeFetch、WinKinesisは圧縮済みMP4をミュート・インライン・自動ループで再生して、既存の画像をposterとして使う。
  *    Barticalの映像はすべてのviewportで上端を基準に切り抜く。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium context で
  *    複数 viewport に切り替えながら Product セクションへ移動し、DOMRect、scrollWidth、Barticalアイコンの実体とcomputed styleを取得する。
@@ -119,6 +119,10 @@ async function getProductLayoutState(page) {
     const barticalVideo = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__media-video');
     const barticalVideoStyle = barticalVideo ? getComputedStyle(barticalVideo) : null;
     const barticalIconStyle = barticalIcon ? getComputedStyle(barticalIcon) : null;
+    const productVideoSources = Array.from(new Set(
+      Array.from(document.querySelectorAll('.home-product-card__media-video'))
+        .map((video) => video.getAttribute('src'))
+    )).sort();
 
     return {
       viewport: {
@@ -160,6 +164,7 @@ async function getProductLayoutState(page) {
         videoHeight: barticalVideo.videoHeight,
         objectPosition: barticalVideoStyle.objectPosition
       } : null,
+      productVideoSources,
       reduceMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
     };
   });
@@ -249,6 +254,14 @@ async function assertProductsFitAtViewport(browser, serverPort, viewport) {
       || (state.reduceMotion && !state.barticalVideo.paused)
     ) {
       throw new Error(`Bartical card did not use the compressed loop video (${viewport.name}): ${JSON.stringify(state.barticalVideo)}`);
+    }
+    const expectedVideoSources = [
+      'products/Bartical/BarticalCardDemo.mp4',
+      'products/TypeFetch/TypeFetchCatalog.mp4',
+      'products/WinKinesis/winkinesis.mp4'
+    ];
+    if (JSON.stringify(state.productVideoSources) !== JSON.stringify(expectedVideoSources)) {
+      throw new Error(`Animated product cards did not use the H.264 video path (${viewport.name}): ${JSON.stringify(state.productVideoSources)}`);
     }
 
     assertRectWithinViewport(state.productsRect, state.viewport, `Product layout (${viewport.name})`);
