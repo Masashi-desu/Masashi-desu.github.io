@@ -1,8 +1,8 @@
 /**
  * テスト概要:
  *  - 目的: Bartical 製品ページのメニューバー型ランチャーが、初期表示・切り替え・セクション移動を実アプリ風に再現することを確認する。
- *  - 期待値: メインメニューは初期表示で展開され、縦型メニューから独立した実アプリ準拠のAboutにappcast.xmlから同期した1.0.0(1)と製品ページURLを表示する。AboutのアイコンとfaviconはBarticalのIcon Composer書類から書き出した正式PNGを使い、ライトテーマではmacOSのライト外観に合わせた明るい半透明ウィンドウと薄いMaterialカードへ切り替わる。Overviewの配置例は境界①・②を持ち、外部アイコンを⌘ドラッグすると右側で最初の境界から所属を再計算し、hover時に「①に所属しています」のような番号付きツールチップを表示する。縦型メニューにSparklesは置かず、所属項目の操作でAboutを閉じない。ヒーローは動的viewportからメニューバー高を引いた範囲へ収まり、Aboutと映像がviewport下へはみ出さない。背景はテーマ別MP4と指定ベース色を使い、縦メニュー末尾の設定も他の所属項目と同じアンカー展開を経て、元アイコン直下のメニューからライト／ダークを切り替える。元アプリメニューの左端は選択した元アイコンの左端へ揃え、狭い画面では8pxの安全余白へ収める。縦書きBARTICALは置かず、左端の戻る導線は矢印アイコンだけを表示する。正式SVGは通常時から右寄りへ固定し、所属項目の展開後も中心座標を変えない。展開した元項目は縦型メニューの上から下の順に対応して右から左へ並べ、選択中はフォーカス中でも青い円形アウトラインを重ねず、背面の白い半透明の横長macOS風ピルだけを表示する。右側の他アプリアイコンはアンカー展開中も消さず、画面外へ続く分をメニューバー内でクリップしてページ全体の横スクロールを発生させない。
- *  - 検証方法: ローカル静的サーバーで Bartical ページを配信し、ChromiumまたはWebKitで1440×900、1372×619、393×852、320×568のviewportを開く。DOM属性、表示状態、フォーカス順、URL hash、アイコン実体、要素矩形、console/page errorを取得して検証する。codecに依存しない動画設定とレイアウトを対象とし、H.264の実デコードはmacOS専用のnative-media-liquidgl.jsで検証する。
+ *  - 期待値: メインメニューは初期表示で展開され、縦型メニューから独立した実アプリ準拠のAboutにappcast.xmlから同期した1.0.0(1)と製品ページURLを表示する。AboutのアイコンとfaviconはBarticalのIcon Composer書類から書き出した正式PNGを使い、ライトテーマではmacOSのライト外観に合わせた明るい半透明ウィンドウと薄いMaterialカードへ切り替わる。Overviewの配置例は境界①・②を持ち、外部アイコンを⌘ドラッグすると右側で最初の境界から所属を再計算し、hover時に「①に所属しています」のような番号付きツールチップを表示する。縦型メニューにSparklesは置かず、所属項目の操作でAboutを閉じない。ヒーローは動的viewportからメニューバー高を引いた範囲へ収まり、Aboutと映像がviewport下へはみ出さない。背景はテーマ別MP4と指定ベース色を使い、縦メニュー末尾の設定も他の所属項目と同じアンカー展開を経て、元アイコン直下のメニューからライト／ダークを切り替える。元アプリメニューの左端は選択した元アイコンの左端へ揃え、狭い画面では8pxの安全余白へ収める。縦書きBARTICALは置かず、左端の戻る導線は矢印アイコンだけを表示する。正式SVGは通常時から右寄りへ固定し、viewport幅に応じた共通倍率でヘッダー・アイコン・操作領域・余白・中心間隔を一体調整する。所属項目の展開前後では倍率、中心座標、寸法、余白を変えない。モバイルではアイコン中心間隔を60pxに揃え、選択ランチャーの元項目を全件復元し、展開列がviewport左端からはみ出すことを許容して元アプリメニューを左8pxへ吸着する。展開した元項目は縦型メニューの上から下の順に対応して右から左へ並べ、選択中はフォーカス中でも青い円形アウトラインを重ねず、隣接アイコンの中心間隔より狭い白い半透明のmacOS風ピルだけを背面へ表示する。右側の他アプリアイコンはアンカー展開中も消さず、画面外へ続く分をメニューバー内でクリップしてページ全体の横スクロールを発生させない。
+ *  - 検証方法: ローカル静的サーバーで Bartical ページを配信し、ChromiumまたはWebKitで1440×900、1372×619、811×891、393×852、320×568のviewportを開く。DOM属性、表示状態、フォーカス順、URL hash、アイコン実体、要素矩形、console/page errorを取得して検証する。codecに依存しない動画設定とレイアウトを対象とし、H.264の実デコードはmacOS専用のnative-media-liquidgl.jsで検証する。
  */
 const fs = require('fs');
 const http = require('http');
@@ -21,6 +21,7 @@ const BROWSER_TYPES = { chromium, webkit };
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'desktop-short', width: 1372, height: 619 },
+  { name: 'tablet-comment', width: 811, height: 891 },
   { name: 'mobile', width: 393, height: 852 },
   { name: 'mobile-minimum', width: 320, height: 568 }
 ];
@@ -293,6 +294,9 @@ async function readInitialState(page) {
         };
       }),
       menubarHeight: Number(document.querySelector('.bt-menubar')?.getBoundingClientRect().height.toFixed(2) || 0),
+      responsiveScale: Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--bt-responsive-scale')
+      ) || 1,
       heroRailCount: document.querySelectorAll('.bt-hero__rail').length,
       aboutVisible: Boolean(aboutWindow && !aboutWindow.hidden && aboutWindow.getClientRects().length > 0),
       aboutRect: aboutWindowRect ? {
@@ -504,7 +508,9 @@ function assertInitialState(state, viewport) {
     state.launcherSurfaces
   );
   assert(
-    viewport.width <= 760 ? state.menubarHeight === 80 : state.menubarHeight === 120,
+    Math.abs(
+      state.menubarHeight - ((viewport.width <= 760 ? 80 : 120) * state.responsiveScale)
+    ) <= LAYOUT_TOLERANCE,
     `[${viewport.name}] Menu bar height did not match the enlarged responsive specification`,
     { menubarHeight: state.menubarHeight }
   );
@@ -757,9 +763,9 @@ function assertInitialState(state, viewport) {
     state.primarySurface
   );
   const compactMenubar = viewport.width <= 760;
-  const expectedLauncherCenterGap = compactMenubar ? 48 : 94;
-  const expectedMainToSystemCenterGap = compactMenubar ? 48 : 86;
-  const expectedMainToSystemEdgeGap = compactMenubar ? 0 : 18;
+  const expectedLauncherCenterGap = (compactMenubar ? 60 : 94) * state.responsiveScale;
+  const expectedMainToSystemCenterGap = (compactMenubar ? 60 : 86) * state.responsiveScale;
+  const expectedMainToSystemEdgeGap = (compactMenubar ? 6 : 18) * state.responsiveScale;
   assert(
     state.launcherCenterGaps.length === 2
       && state.launcherCenterGaps.every((gap) => Math.abs(gap - expectedLauncherCenterGap) <= LAYOUT_TOLERANCE),
@@ -779,7 +785,9 @@ function assertInitialState(state, viewport) {
     { mainToSystemEdgeGap: state.mainToSystemEdgeGap, expectedMainToSystemEdgeGap }
   );
   assert(
-    state.systemCenterGaps.every((gap) => Math.abs(gap - (compactMenubar ? 48 : 72)) <= LAYOUT_TOLERANCE),
+    state.systemCenterGaps.every((gap) => Math.abs(
+      gap - ((compactMenubar ? 60 : 72) * state.responsiveScale)
+    ) <= LAYOUT_TOLERANCE),
     `[${viewport.name}] Other menu-bar apps did not keep consistent icon spacing`,
     { systemCenterGaps: state.systemCenterGaps }
   );
@@ -846,6 +854,43 @@ async function verifyInteractions(page, viewport) {
   const themeSettingsTrigger = page.locator('[data-theme-settings-trigger]');
   const themeSourceActions = page.locator('[data-theme-source-actions]');
   const sourceSectionActions = page.locator('[data-source-section-actions]');
+  const storedIconMetrics = await page.evaluate(() => {
+    const centerGaps = (rects) => rects.slice(1).map((rect, index) => (
+      (rect.left + (rect.width / 2))
+        - (rects[index].left + (rects[index].width / 2))
+    ));
+    const launcherRects = Array.from(document.querySelectorAll('[data-launcher]'))
+      .map((item) => item.getBoundingClientRect());
+    const menuItemRects = Array.from(document.querySelectorAll(
+      '#bt-menu-main [data-section-link]'
+    )).map((item) => item.getBoundingClientRect());
+    const activationStripStyle = getComputedStyle(document.querySelector('[data-activation-strip]'));
+    return {
+      headerHeight: document.querySelector('.bt-menubar')?.getBoundingClientRect().height || 0,
+      launcherIconSize: document.querySelector('[data-launcher="main"] img')?.getBoundingClientRect().width || 0,
+      menuItemIconSize: document.querySelector('[data-theme-settings-trigger] svg.lucide')?.getBoundingClientRect().width || 0,
+      responsiveScale: Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--bt-responsive-scale')
+      ) || 1,
+      activationSpacing: [
+        '--bt-activation-leading-gap',
+        '--bt-activation-leading-margin',
+        '--bt-activation-original-gap',
+        '--bt-activation-original-margin',
+        '--bt-activation-current-margin',
+        '--bt-activation-launcher-gap'
+      ].map((property) => Number.parseFloat(activationStripStyle.getPropertyValue(property)) || 0),
+      launcherCenterGaps: centerGaps(launcherRects),
+      menuItemCenterGap: menuItemRects.length > 1
+        ? (menuItemRects[1].top + (menuItemRects[1].height / 2))
+          - (menuItemRects[0].top + (menuItemRects[0].height / 2))
+        : 0,
+      mainLauncherCenter: (() => {
+        const rect = document.querySelector('[data-launcher="main"]')?.getBoundingClientRect();
+        return rect ? rect.left + (rect.width / 2) : null;
+      })()
+    };
+  });
 
   await themeSettingsTrigger.click();
   await page.waitForFunction(() => document.documentElement.dataset.barticalActivation === 'revealed');
@@ -856,6 +901,24 @@ async function verifyInteractions(page, viewport) {
     const originalThemeRect = originalTheme?.getBoundingClientRect();
     const visibleOriginalItems = Array.from(document.querySelectorAll('[data-original-section]'))
       .filter((item) => item.getClientRects().length > 0);
+    const activationStrip = document.querySelector('[data-activation-strip]');
+    const activationStripRect = activationStrip?.getBoundingClientRect();
+    const centerGaps = (rects) => rects.slice(1).map((rect, index) => (
+      (rect.left + (rect.width / 2))
+        - (rects[index].left + (rects[index].width / 2))
+    ));
+    const activationLauncherRects = Array.from(document.querySelectorAll(
+      '[data-activation-launcher]'
+    )).map((item) => item.getBoundingClientRect());
+    const originalItemRects = visibleOriginalItems
+      .map((item) => item.getBoundingClientRect())
+      .sort((left, right) => left.left - right.left);
+    const activationControlRects = Array.from(document.querySelectorAll(
+      '.bt-activation-anchor, [data-original-section], [data-activation-launcher]'
+    )).filter((item) => item.getClientRects().length > 0)
+      .map((item) => item.getBoundingClientRect())
+      .sort((left, right) => left.left - right.left);
+    const activationStripStyle = activationStrip ? getComputedStyle(activationStrip) : null;
     return {
       activationVisible: !document.querySelector('[data-activation-strip]')?.hidden,
       selectedOriginal: document.querySelector('[data-original-section][aria-pressed="true"]')?.dataset.originalSection,
@@ -882,6 +945,36 @@ async function verifyInteractions(page, viewport) {
         right: originalThemeRect.right,
         bottom: originalThemeRect.bottom
       } : null,
+      headerHeight: document.querySelector('.bt-menubar')?.getBoundingClientRect().height || 0,
+      activationStripRect: activationStripRect ? {
+        left: activationStripRect.left,
+        right: activationStripRect.right,
+        width: activationStripRect.width
+      } : null,
+      activationIconSizes: Array.from(document.querySelectorAll(
+        '.bt-activation-anchor img, [data-activation-launcher] img'
+      )).filter((item) => item.getClientRects().length > 0)
+        .map((item) => item.getBoundingClientRect().width),
+      originalItemIconSizes: visibleOriginalItems
+        .map((item) => item.querySelector('svg.lucide')?.getBoundingClientRect().width || 0),
+      responsiveScale: Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--bt-responsive-scale')
+      ) || 1,
+      activationSpacing: activationStripStyle ? [
+        '--bt-activation-leading-gap',
+        '--bt-activation-leading-margin',
+        '--bt-activation-original-gap',
+        '--bt-activation-original-margin',
+        '--bt-activation-current-margin',
+        '--bt-activation-launcher-gap'
+      ].map((property) => Number.parseFloat(activationStripStyle.getPropertyValue(property)) || 0) : [],
+      activationLauncherCenterGaps: centerGaps(activationLauncherRects),
+      originalItemCenterGaps: centerGaps(originalItemRects),
+      activationControlCenterGaps: centerGaps(activationControlRects),
+      revealedMainLauncherCenter: (() => {
+        const rect = document.querySelector('[data-activation-launcher="main"]')?.getBoundingClientRect();
+        return rect ? rect.left + (rect.width / 2) : null;
+      })(),
       aboutVisible: !document.querySelector('[data-about-window]')?.hidden,
       viewport: { width: innerWidth, height: innerHeight }
     };
@@ -897,9 +990,8 @@ async function verifyInteractions(page, viewport) {
     themeActivationState
   );
   assert(
-    JSON.stringify(themeActivationState.originalSectionsRightToLeft) === JSON.stringify(
-      viewport.width <= 760 ? ['theme'] : MAIN_GROUPED_ITEM_ORDER
-    ),
+    JSON.stringify(themeActivationState.originalSectionsRightToLeft)
+      === JSON.stringify(MAIN_GROUPED_ITEM_ORDER),
     `[${viewport.name}] Restored main items did not follow the vertical menu from right to left`,
     themeActivationState.originalSectionsRightToLeft
   );
@@ -908,10 +1000,66 @@ async function verifyInteractions(page, viewport) {
     `[${viewport.name}] Opening display settings hid the independent About window`
   );
   assert(
+    Math.abs(themeActivationState.headerHeight - storedIconMetrics.headerHeight) <= LAYOUT_TOLERANCE
+      && Math.abs(
+        themeActivationState.responsiveScale - storedIconMetrics.responsiveScale
+      ) <= 0.001
+      && themeActivationState.activationIconSizes.every((size) => (
+        Math.abs(size - storedIconMetrics.launcherIconSize) <= LAYOUT_TOLERANCE
+      ))
+      && themeActivationState.originalItemIconSizes.every((size) => (
+        Math.abs(size - storedIconMetrics.menuItemIconSize) <= LAYOUT_TOLERANCE
+      )),
+    `[${viewport.name}] Header or icon dimensions changed while revealing grouped items`,
+    { storedIconMetrics, themeActivationState }
+  );
+  assert(
+    themeActivationState.activationSpacing.length === storedIconMetrics.activationSpacing.length
+      && themeActivationState.activationSpacing.every((spacing, index) => (
+        Math.abs(spacing - storedIconMetrics.activationSpacing[index]) <= LAYOUT_TOLERANCE
+      ))
+      && themeActivationState.activationLauncherCenterGaps.length
+        === storedIconMetrics.launcherCenterGaps.length
+      && themeActivationState.activationLauncherCenterGaps.every((gap, index) => (
+        Math.abs(gap - storedIconMetrics.launcherCenterGaps[index]) <= LAYOUT_TOLERANCE
+      ))
+      && themeActivationState.originalItemCenterGaps.every((gap) => (
+        Math.abs(gap - storedIconMetrics.menuItemCenterGap) <= LAYOUT_TOLERANCE
+      ))
+      && (
+        viewport.width > 760
+        || themeActivationState.activationControlCenterGaps.every((gap) => (
+          Math.abs(gap - 60) <= LAYOUT_TOLERANCE
+        ))
+      ),
+    `[${viewport.name}] Icon margins changed while revealing grouped items`,
+    { storedIconMetrics, themeActivationState }
+  );
+  assert(
+    themeActivationState.activationStripRect
+      && (
+        viewport.width <= 760
+          ? themeActivationState.activationStripRect.left < -LAYOUT_TOLERANCE
+          : themeActivationState.activationStripRect.left >= -LAYOUT_TOLERANCE
+      )
+      && themeActivationState.activationStripRect.right <= themeActivationState.viewport.width + LAYOUT_TOLERANCE
+      && themeActivationState.revealedMainLauncherCenter !== null
+      && storedIconMetrics.mainLauncherCenter !== null
+      && Math.abs(
+        themeActivationState.revealedMainLauncherCenter - storedIconMetrics.mainLauncherCenter
+      ) <= LAYOUT_TOLERANCE,
+    `[${viewport.name}] Responsive reveal spacing did not fit the viewport at the stored launcher position`,
+    { storedIconMetrics, themeActivationState }
+  );
+  assert(
     themeActivationState.sourceMenuRect
       && themeActivationState.originalThemeRect
       && themeActivationState.sourceMenuRect.top >= themeActivationState.originalThemeRect.bottom
-      && themeActivationState.sourceMenuRect.left >= -LAYOUT_TOLERANCE
+      && (
+        viewport.width <= 760
+          ? Math.abs(themeActivationState.sourceMenuRect.left - 8) <= LAYOUT_TOLERANCE
+          : themeActivationState.sourceMenuRect.left >= -LAYOUT_TOLERANCE
+      )
       && themeActivationState.sourceMenuRect.right <= themeActivationState.viewport.width + LAYOUT_TOLERANCE
       && themeActivationState.sourceMenuRect.bottom <= themeActivationState.viewport.height + LAYOUT_TOLERANCE,
     `[${viewport.name}] Theme menu did not open below the restored original icon`,
@@ -1099,6 +1247,9 @@ async function verifyInteractions(page, viewport) {
           outlineWidth: itemStyle.outlineWidth,
           pillWidth: Number.parseFloat(pillStyle.width),
           pillHeight: Number.parseFloat(pillStyle.height),
+          neighborCenterGap: itemRect.width + (
+            Number.parseFloat(getComputedStyle(item.parentElement).columnGap) || 0
+          ),
           pillBorderRadius: pillStyle.borderRadius,
           pillBackgroundColor: pillStyle.backgroundColor,
           pillOpacity: pillStyle.opacity
@@ -1137,7 +1288,7 @@ async function verifyInteractions(page, viewport) {
   assert(activationState.aboutVisible, `[${viewport.name}] Opening another grouped item hid the independent About window`, activationState);
   assert(activationState.visibleAnchors === 3, `[${viewport.name}] All configuration anchors were not temporarily shown`, activationState);
   assert(
-    activationState.visibleOriginalItems === (viewport.width <= 760 ? 1 : 3),
+    activationState.visibleOriginalItems === 3,
     `[${viewport.name}] Anchor reveal included items outside the selected launcher's vertical menu`,
     activationState
   );
@@ -1161,8 +1312,12 @@ async function verifyInteractions(page, viewport) {
         > activationState.selectedOriginalPresentation.pillHeight
       && activationState.selectedOriginalPresentation.pillWidth
         > activationState.selectedOriginalPresentation.itemWidth
-      && activationState.selectedOriginalPresentation.pillHeight
-        === activationState.selectedOriginalPresentation.itemHeight
+      && activationState.selectedOriginalPresentation.pillWidth
+        <= activationState.selectedOriginalPresentation.neighborCenterGap - 1
+      && Math.abs(
+        activationState.selectedOriginalPresentation.pillHeight
+          - activationState.selectedOriginalPresentation.itemHeight
+      ) <= LAYOUT_TOLERANCE
       && activationState.selectedOriginalPresentation.focusVisible
       && activationState.selectedOriginalPresentation.outlineStyle === 'none'
       && activationState.selectedOriginalPresentation.outlineWidth === '0px'
@@ -1174,7 +1329,9 @@ async function verifyInteractions(page, viewport) {
   );
   assert(activationState.visibleActivationLaunchers === 3, `[${viewport.name}] Launchers were not kept available during activation`, activationState);
   assert(
-    activationState.visibleSystemItems === (viewport.width <= 760 ? 1 : 5),
+    activationState.visibleSystemItems === (
+      viewport.width <= 760 ? 1 : (viewport.width <= 980 ? 3 : 5)
+    ),
     `[${viewport.name}] Right-side menu-bar app icons disappeared during anchor reveal`,
     activationState
   );
@@ -1296,17 +1453,22 @@ async function verifySourceMenuAlignment(page, viewport) {
         `[data-original-section="${activeSection}"]`
       )?.getBoundingClientRect();
       const menuRect = document.querySelector('[data-source-menu]')?.getBoundingClientRect();
+      const activationRect = document.querySelector('[data-activation-strip]')?.getBoundingClientRect();
       if (!itemRect || !menuRect) {
         return null;
       }
-      const expectedLeft = Math.min(
-        Math.max(itemRect.left, 8),
-        document.documentElement.clientWidth - menuRect.width - 8
-      );
+      const pinsToMobileLeft = innerWidth <= 760 && activationRect?.left < 0;
+      const expectedLeft = pinsToMobileLeft
+        ? 8
+        : Math.min(
+          Math.max(itemRect.left, 8),
+          document.documentElement.clientWidth - menuRect.width - 8
+        );
       return {
         itemLeft: itemRect.left,
         menuLeft: menuRect.left,
         expectedLeft,
+        pinsToMobileLeft,
         offset: Math.abs(menuRect.left - expectedLeft)
       };
     }, section);

@@ -1,8 +1,28 @@
 :root {
-  --bt-menubar-height: 120px;
+  --bt-responsive-scale: 1;
+  --bt-menubar-control-size: 64px;
+  --bt-menubar-icon-size: 52px;
+  --bt-menu-item-icon-size: 34px;
+  --bt-menubar-vertical-room: 56px;
+  --bt-menubar-height: calc(var(--bt-menubar-control-size) + var(--bt-menubar-vertical-room));
   --bt-main-launcher-center: clamp(640px, 78vw, calc(100vw - 68px));
+  --bt-launcher-gap: 30px;
   --bt-launcher-main-offset: -220px;
   --bt-activation-main-offset: -932px;
+  --bt-activation-leading-gap: 42px;
+  --bt-activation-leading-margin: 32px;
+  --bt-activation-original-gap: 12px;
+  --bt-activation-original-margin: 34px;
+  --bt-activation-current-margin: 42px;
+  --bt-activation-launcher-gap: 42px;
+  --bt-system-leading-offset: 50px;
+  --bt-system-item-width: 72px;
+  --bt-vertical-menu-width: 76px;
+  --bt-vertical-menu-padding-inline: 5px;
+  --bt-vertical-menu-padding-top: 7px;
+  --bt-vertical-menu-padding-bottom: 8px;
+  --bt-vertical-menu-control-size: 64px;
+  --bt-original-pill-inline-offset: -5px;
   --bt-purple: #6155f5;
   --bt-purple-dark: #29227f;
   --bt-indigo: #17157c;
@@ -153,7 +173,7 @@ html {
   left: var(--bt-main-launcher-center);
   align-self: stretch;
   justify-content: center;
-  gap: 30px;
+  gap: var(--bt-launcher-gap);
   height: 100%;
   transform: translateX(var(--bt-launcher-main-offset));
 }
@@ -168,8 +188,8 @@ html {
 .bt-launcher {
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 64px;
+  width: var(--bt-menubar-control-size);
+  height: var(--bt-menubar-control-size);
   margin: 0;
   padding: 0;
   color: #fff;
@@ -184,23 +204,23 @@ html {
 }
 
 .bt-launcher--number img {
-  width: 52px;
-  height: 52px;
+  width: var(--bt-menubar-icon-size);
+  height: var(--bt-menubar-icon-size);
   object-fit: contain;
   filter: brightness(0) invert(1);
 }
 
 .bt-launcher--primary {
-  width: 64px;
-  height: 64px;
+  width: var(--bt-menubar-control-size);
+  height: var(--bt-menubar-control-size);
   background: transparent;
   border: 0;
   border-radius: 0;
 }
 
 .bt-launcher--primary img {
-  width: 52px;
-  height: 52px;
+  width: var(--bt-menubar-icon-size);
+  height: var(--bt-menubar-icon-size);
   object-fit: contain;
   filter: brightness(0) invert(1);
 }
@@ -243,8 +263,8 @@ html {
   z-index: 140;
   top: 100%;
   left: 50%;
-  width: 76px;
-  padding: 7px 5px 8px;
+  width: var(--bt-vertical-menu-width);
+  padding: var(--bt-vertical-menu-padding-top) var(--bt-vertical-menu-padding-inline) var(--bt-vertical-menu-padding-bottom);
   color: #f6f7fb;
   background: rgb(13 16 38 / 48%);
   border: 1px solid rgb(255 255 255 / 10%);
@@ -260,8 +280,8 @@ html {
   position: relative;
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 64px;
+  width: var(--bt-vertical-menu-control-size);
+  height: var(--bt-vertical-menu-control-size);
   margin: 0;
   padding: 0;
   color: #f4f5f8;
@@ -283,8 +303,8 @@ html {
 }
 
 .bt-vertical-menu .lucide {
-  width: 34px;
-  height: 34px;
+  width: var(--bt-menu-item-icon-size);
+  height: var(--bt-menu-item-icon-size);
   stroke-width: 1.8;
 }
 
@@ -337,22 +357,22 @@ html {
 }
 
 .bt-activation-anchors--leading {
-  gap: 42px;
-  margin-right: 32px;
+  gap: var(--bt-activation-leading-gap);
+  margin-right: var(--bt-activation-leading-margin);
 }
 
 .bt-original-items {
   flex-direction: row-reverse;
-  gap: 20px;
-  margin-right: 34px;
+  gap: var(--bt-activation-original-gap);
+  margin-right: var(--bt-activation-original-margin);
 }
 
 .bt-activation-anchors--current {
-  margin-right: 42px;
+  margin-right: var(--bt-activation-current-margin);
 }
 
 .bt-activation-launchers {
-  gap: 42px;
+  gap: var(--bt-activation-launcher-gap);
 }
 
 .bt-activation-anchor,
@@ -361,8 +381,8 @@ html {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  width: 52px;
-  height: 52px;
+  width: var(--bt-menubar-icon-size);
+  height: var(--bt-menubar-icon-size);
   margin: 0;
   padding: 0;
   color: #fff;
@@ -384,7 +404,7 @@ html {
 .bt-original-item::before {
   position: absolute;
   z-index: 0;
-  inset: 0 -14px;
+  inset: 0 var(--bt-original-pill-inline-offset);
   background: rgb(255 255 255 / 18%);
   border-radius: 999px;
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 12%);
@@ -396,8 +416,8 @@ html {
 
 .bt-activation-anchor img,
 .bt-activation-launchers img {
-  width: 52px;
-  height: 52px;
+  width: var(--bt-menubar-icon-size);
+  height: var(--bt-menubar-icon-size);
   object-fit: contain;
   filter: brightness(0) invert(1);
 }
@@ -405,8 +425,8 @@ html {
 .bt-original-item .lucide {
   position: relative;
   z-index: 1;
-  width: 38px;
-  height: 38px;
+  width: var(--bt-menu-item-icon-size);
+  height: var(--bt-menu-item-icon-size);
   stroke-width: 1.7;
 }
 
@@ -482,7 +502,7 @@ html[data-bartical-activation="revealed"] .bt-launchers {
 .bt-menubar__system {
   position: absolute;
   top: 0;
-  left: calc(var(--bt-main-launcher-center) + 50px);
+  left: calc(var(--bt-main-launcher-center) + var(--bt-system-leading-offset));
   justify-content: flex-start;
   min-width: 0;
   height: 100%;
@@ -493,50 +513,18 @@ html[data-bartical-activation="revealed"] .bt-launchers {
   :root {
     --bt-activation-main-offset: -728px;
   }
-
-  .bt-activation-anchors--leading {
-    gap: 30px;
-    margin-right: 20px;
-  }
-
-  .bt-original-items {
-    gap: 12px;
-    margin-right: 22px;
-  }
-
-  .bt-activation-anchors--current {
-    margin-right: 30px;
-  }
-
-  .bt-activation-launchers {
-    gap: 30px;
-  }
-
-  .bt-activation-anchor,
-  .bt-original-item,
-  .bt-activation-launchers button,
-  .bt-activation-anchor img,
-  .bt-activation-launchers img {
-    width: 44px;
-    height: 44px;
-  }
-
-  .bt-original-item .lucide {
-    width: 32px;
-    height: 32px;
-  }
 }
 
 .bt-menubar__system > span {
   display: grid;
   place-items: center;
-  width: 72px;
+  width: var(--bt-system-item-width);
   height: 100%;
 }
 
 .bt-menubar__system .lucide {
-  width: 52px;
-  height: 52px;
+  width: var(--bt-menubar-icon-size);
+  height: var(--bt-menubar-icon-size);
   stroke-width: 1.65;
 }
 
@@ -1447,38 +1435,6 @@ html[data-theme="light"] .bt-about__website a {
 }
 
 @media (max-width: 980px) {
-  .bt-activation-anchors--leading {
-    gap: 30px;
-    margin-right: 20px;
-  }
-
-  .bt-original-items {
-    gap: 12px;
-    margin-right: 22px;
-  }
-
-  .bt-activation-anchors--current {
-    margin-right: 30px;
-  }
-
-  .bt-activation-launchers {
-    gap: 30px;
-  }
-
-  .bt-activation-anchor,
-  .bt-original-item,
-  .bt-activation-launchers button,
-  .bt-activation-anchor img,
-  .bt-activation-launchers img {
-    width: 44px;
-    height: 44px;
-  }
-
-  .bt-original-item .lucide {
-    width: 32px;
-    height: 32px;
-  }
-
   .bt-menubar__system > .bt-menubar__optional {
     display: none;
   }
@@ -1518,10 +1474,28 @@ html[data-theme="light"] .bt-about__website a {
 
 @media (max-width: 760px) {
   :root {
-    --bt-menubar-height: 80px;
+    --bt-menubar-control-size: 48px;
+    --bt-menubar-icon-size: 36px;
+    --bt-menu-item-icon-size: 27px;
+    --bt-menubar-vertical-room: 32px;
     --bt-main-launcher-center: calc(100vw - 38px);
-    --bt-launcher-main-offset: -120px;
+    --bt-launcher-gap: 12px;
+    --bt-launcher-main-offset: -144px;
     --bt-activation-main-offset: -282px;
+    --bt-activation-leading-gap: 24px;
+    --bt-activation-leading-margin: 24px;
+    --bt-activation-original-gap: 24px;
+    --bt-activation-original-margin: 24px;
+    --bt-activation-current-margin: 24px;
+    --bt-activation-launcher-gap: 24px;
+    --bt-system-leading-offset: 30px;
+    --bt-system-item-width: 60px;
+    --bt-vertical-menu-width: 70px;
+    --bt-vertical-menu-padding-inline: 4px;
+    --bt-vertical-menu-padding-top: 6px;
+    --bt-vertical-menu-padding-bottom: 7px;
+    --bt-vertical-menu-control-size: 60px;
+    --bt-original-pill-inline-offset: -7px;
   }
 
   .bt-menubar {
@@ -1538,85 +1512,12 @@ html[data-theme="light"] .bt-about__website a {
     justify-content: center;
   }
 
-  .bt-launchers {
-    gap: 0;
-  }
-
-  .bt-launcher {
-    width: 48px;
-    height: 48px;
-  }
-
-  .bt-launcher--number img,
-  .bt-launcher--primary img {
-    width: 36px;
-    height: 36px;
-  }
-
   .bt-menubar__system {
-    left: calc(var(--bt-main-launcher-center) + 24px);
     gap: 0;
-  }
-
-  .bt-menubar__system > span {
-    width: 48px;
-  }
-
-  .bt-menubar__system .lucide {
-    width: 36px;
-    height: 36px;
   }
 
   .bt-menubar__system > .bt-menubar__optional {
     display: none;
-  }
-
-  .bt-vertical-menu {
-    width: 62px;
-    padding: 6px 4px 7px;
-  }
-
-  .bt-vertical-menu button {
-    width: 52px;
-    height: 52px;
-  }
-
-  .bt-vertical-menu .lucide {
-    width: 27px;
-    height: 27px;
-  }
-
-  .bt-activation-anchors--leading,
-  .bt-original-items,
-  .bt-activation-anchors--current {
-    margin-right: 8px;
-  }
-
-  .bt-activation-anchors--leading,
-  .bt-activation-launchers {
-    gap: 8px;
-  }
-
-  .bt-original-items {
-    gap: 0;
-  }
-
-  .bt-original-item:not([aria-pressed="true"]) {
-    display: none;
-  }
-
-  .bt-activation-anchor,
-  .bt-original-item,
-  .bt-activation-launchers button,
-  .bt-activation-anchor img,
-  .bt-activation-launchers img {
-    width: 36px;
-    height: 36px;
-  }
-
-  .bt-original-item .lucide {
-    width: 27px;
-    height: 27px;
   }
 
   .bt-source-menu {

@@ -166,6 +166,28 @@ const reduceMotionMedia = window.matchMedia('(prefers-reduced-motion: reduce)');
 const placementBar = document.querySelector('[data-placement-bar]');
 const placementItems = Array.from(document.querySelectorAll('[data-placement-item]'));
 const placementStatus = document.querySelector('[data-placement-status]');
+const responsiveMenubarProperties = [
+  '--bt-menubar-control-size',
+  '--bt-menubar-icon-size',
+  '--bt-menu-item-icon-size',
+  '--bt-menubar-vertical-room',
+  '--bt-launcher-gap',
+  '--bt-launcher-main-offset',
+  '--bt-activation-leading-gap',
+  '--bt-activation-leading-margin',
+  '--bt-activation-original-gap',
+  '--bt-activation-original-margin',
+  '--bt-activation-current-margin',
+  '--bt-activation-launcher-gap',
+  '--bt-system-leading-offset',
+  '--bt-system-item-width',
+  '--bt-vertical-menu-width',
+  '--bt-vertical-menu-padding-inline',
+  '--bt-vertical-menu-padding-top',
+  '--bt-vertical-menu-padding-bottom',
+  '--bt-vertical-menu-control-size',
+  '--bt-original-pill-inline-offset'
+];
 
 function groupedItemOrder(section) {
   const index = GROUPED_ITEM_ORDER.indexOf(section);
@@ -665,10 +687,16 @@ function positionSourceMenu() {
   const menubarRect = menubar.getBoundingClientRect();
   const viewportWidth = document.documentElement.clientWidth;
   const preferredLeft = itemRect.left;
-  const left = Math.min(
-    Math.max(preferredLeft, 8),
-    viewportWidth - menuRect.width - 8
-  );
+  const activationRect = activationStrip?.getBoundingClientRect();
+  const pinsToMobileLeft = window.matchMedia('(max-width: 760px)').matches
+    && activationRect
+    && activationRect.left < 0;
+  const left = pinsToMobileLeft
+    ? 8
+    : Math.min(
+      Math.max(preferredLeft, 8),
+      viewportWidth - menuRect.width - 8
+    );
   sourceMenu.style.left = `${left - menubarRect.left}px`;
 }
 
@@ -681,6 +709,58 @@ function syncRevealedOriginalItems(launcher) {
   originalItems.forEach((item) => {
     item.hidden = !groupedSections.has(item.dataset.originalSection);
   });
+}
+
+function syncResponsiveMenubarLayout() {
+  if (!menubar || !activationStrip) {
+    return;
+  }
+  const root = document.documentElement;
+  responsiveMenubarProperties.forEach((property) => {
+    root.style.removeProperty(property);
+  });
+  root.style.removeProperty('--bt-responsive-scale');
+  const storedMainLauncher = launcherButtons.find((button) => button.dataset.launcher === 'main');
+  if (!storedMainLauncher) {
+    return;
+  }
+  const baseValues = Object.fromEntries(responsiveMenubarProperties.map((property) => [
+    property,
+    Number.parseFloat(getComputedStyle(root).getPropertyValue(property)) || 0
+  ]));
+  const storedRect = storedMainLauncher.getBoundingClientRect();
+  const storedMainCenter = storedRect.left + (storedRect.width / 2);
+  const allowsMobileLeftOverflow = window.matchMedia('(max-width: 760px)').matches;
+  const originalItemCount = originalItems.length;
+  const leadingAnchorCount = activationStrip.querySelectorAll(
+    '.bt-activation-anchors--leading .bt-activation-anchor'
+  ).length;
+  const currentAnchorCount = activationStrip.querySelectorAll(
+    '.bt-activation-anchors--current .bt-activation-anchor'
+  ).length;
+  const activationLauncherCount = activationLauncherButtons.length;
+  const controlCount = leadingAnchorCount
+    + originalItemCount
+    + currentAnchorCount
+    + activationLauncherCount;
+  const compactWidth = controlCount * baseValues['--bt-menubar-icon-size'];
+  const spacingWidth = (
+    Math.max(leadingAnchorCount - 1, 0) * baseValues['--bt-activation-leading-gap']
+    + baseValues['--bt-activation-leading-margin']
+    + Math.max(originalItemCount - 1, 0) * baseValues['--bt-activation-original-gap']
+    + baseValues['--bt-activation-original-margin']
+    + baseValues['--bt-activation-current-margin']
+    + Math.max(activationLauncherCount - 1, 0) * baseValues['--bt-activation-launcher-gap']
+  );
+  const requiredWidth = compactWidth + spacingWidth;
+  const requiredLeftSpan = requiredWidth - (baseValues['--bt-menubar-icon-size'] / 2);
+  const responsiveScale = allowsMobileLeftOverflow || requiredLeftSpan <= 0
+    ? 1
+    : Math.min(Math.max(storedMainCenter / requiredLeftSpan, 0), 1);
+  responsiveMenubarProperties.forEach((property) => {
+    root.style.setProperty(property, `${baseValues[property] * responsiveScale}px`);
+  });
+  root.style.setProperty('--bt-responsive-scale', String(responsiveScale));
 }
 
 function alignRevealedMainLauncher() {
@@ -933,6 +1013,7 @@ document.addEventListener('keydown', (event) => {
 
 window.addEventListener('resize', () => {
   window.requestAnimationFrame(() => {
+    syncResponsiveMenubarLayout();
     alignRevealedMainLauncher();
     positionSourceMenu();
   });
@@ -998,6 +1079,7 @@ setupLanguageSelectors();
 setupPlacementSimulation();
 applyLanguage(currentLocale);
 syncThemePresentation();
+syncResponsiveMenubarLayout();
 openLauncher('main');
 openAbout({ scroll: false });
 syncAboutVersionFromAppcast();
