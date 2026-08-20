@@ -1,7 +1,7 @@
 /**
  * テスト概要:
  *  - 目的: Bartical 製品ページのメニューバー型ランチャーが、初期表示・切り替え・セクション移動を実アプリ風に再現することを確認する。
- *  - 期待値: メインメニューは初期表示で展開され、縦型メニューから独立した実アプリ準拠のAboutにappcast.xmlから同期した1.0.0(1)と製品ページURLを表示する。AboutのアイコンとfaviconはBarticalのIcon Composer書類から書き出した正式PNGを使い、ライトテーマではmacOSのライト外観に合わせた明るい半透明ウィンドウと薄いMaterialカードへ切り替わる。Overviewの配置例は境界①・②を持ち、外部アイコンを⌘ドラッグすると右側で最初の境界から所属を再計算し、hover時に「①に所属しています」のような番号付きツールチップを表示する。縦型メニューにSparklesは置かず、所属項目の操作でAboutを閉じない。ヒーローは動的viewportからメニューバー高を引いた範囲へ収まり、Aboutと映像がviewport下へはみ出さない。背景はテーマ別MP4と指定ベース色を使い、縦メニュー末尾の設定も他の所属項目と同じアンカー展開を経て、元アイコン直下のメニューからライト／ダークを切り替える。元アプリメニューの左端は選択した元アイコンの左端へ揃え、狭い画面では8pxの安全余白へ収める。縦書きBARTICALは置かず、左端の戻る導線は矢印アイコンだけを表示する。正式SVGは通常時から右寄りへ固定し、viewport幅に応じた共通倍率でヘッダー・アイコン・操作領域・余白・中心間隔を一体調整する。所属項目の展開前後では倍率、中心座標、寸法、余白を変えない。モバイルではアイコン中心間隔を60pxに揃え、選択ランチャーの元項目を全件復元し、展開列がviewport左端からはみ出すことを許容して元アプリメニューを左8pxへ吸着する。展開した元項目は縦型メニューの上から下の順に対応して右から左へ並べ、選択中はフォーカス中でも青い円形アウトラインを重ねず、隣接アイコンの中心間隔より狭い白い半透明のmacOS風ピルだけを背面へ表示する。右側の他アプリアイコンはアンカー展開中も消さず、画面外へ続く分をメニューバー内でクリップしてページ全体の横スクロールを発生させない。
+ *  - 期待値: メインメニューは初期表示で展開され、縦型メニューから独立した実アプリ準拠のAboutにappcast.xmlから同期した1.0.0(1)と製品ページURLを表示する。AboutのアイコンとfaviconはBarticalのIcon Composer書類から書き出した正式PNGを使い、ライトテーマではmacOSのライト外観に合わせた明るい半透明ウィンドウと薄いMaterialカードへ切り替わる。Overviewの配置例は境界①・②を持ち、外部アイコンを⌘ドラッグすると右側で最初の境界から所属を再計算し、hover時に所属先と同じ番号アンカーアイコンと、番号を重ねない所属文言を表示する。縦型メニューにSparklesは置かず、所属項目の操作でAboutを閉じない。ヒーローは動的viewportからメニューバー高を引いた範囲へ収まり、Aboutと映像がviewport下へはみ出さない。背景はテーマ別MP4と指定ベース色を使い、縦メニュー末尾の設定も他の所属項目と同じアンカー展開を経て、元アイコン直下のメニューからライト／ダークを切り替える。元アプリメニューの左端は選択した元アイコンの左端へ揃え、狭い画面では8pxの安全余白へ収める。縦書きBARTICALは置かず、左端の戻る導線は矢印アイコンだけを表示する。正式SVGは通常時から右寄りへ固定し、viewport幅に応じた共通倍率でヘッダー・アイコン・操作領域・余白・中心間隔を一体調整する。所属項目の展開前後では倍率、中心座標、寸法、余白を変えない。モバイルではアイコン中心間隔を60pxに揃え、選択ランチャーの元項目を全件復元し、展開列がviewport左端からはみ出すことを許容して元アプリメニューを左8pxへ吸着する。展開した元項目は縦型メニューの上から下の順に対応して右から左へ並べ、選択中はフォーカス中でも青い円形アウトラインを重ねず、隣接アイコンの中心間隔より狭い白い半透明のmacOS風ピルだけを背面へ表示する。右側の他アプリアイコンはアンカー展開中も消さず、画面外へ続く分をメニューバー内でクリップしてページ全体の横スクロールを発生させない。
  *  - 検証方法: ローカル静的サーバーで Bartical ページを配信し、ChromiumまたはWebKitで1440×900、1372×619、811×891、393×852、320×568のviewportを開く。DOM属性、表示状態、フォーカス順、URL hash、アイコン実体、要素矩形、console/page errorを取得して検証する。codecに依存しない動画設定とレイアウトを対象とし、H.264の実デコードはmacOS専用のnative-media-liquidgl.jsで検証する。
  */
 const fs = require('fs');
@@ -1527,15 +1527,28 @@ async function verifyPlacementSimulation(page, viewport) {
   await bell.hover();
   const initialTooltip = await bell.evaluate((item) => {
     const tooltip = item.querySelector('.bt-placement__membership');
+    const anchor = tooltip?.querySelector('.bt-placement__membership-anchor');
+    const anchorRect = anchor?.getBoundingClientRect();
+    const textRange = anchor ? document.createRange() : null;
+    textRange?.selectNodeContents(anchor);
+    const textRect = textRange?.getBoundingClientRect();
     return {
       text: tooltip?.textContent.trim() || '',
+      anchorText: anchor?.textContent.trim() || '',
+      usesPlacementAnchor: anchor?.classList.contains('bt-placement__boundary') || false,
+      anchorTextCenterDelta: anchorRect && textRect
+        ? Math.abs((anchorRect.top + anchorRect.height / 2) - (textRect.top + textRect.height / 2))
+        : null,
       visibility: tooltip ? getComputedStyle(tooltip).visibility : null,
       opacity: tooltip ? getComputedStyle(tooltip).opacity : null,
       ariaLabel: item.getAttribute('aria-label')
     };
   });
   assert(
-    initialTooltip.text === '①①に所属しています'
+    initialTooltip.text === '1に所属しています'
+      && initialTooltip.anchorText === '1'
+      && initialTooltip.usesPlacementAnchor
+      && initialTooltip.anchorTextCenterDelta <= 1
       && initialTooltip.visibility === 'visible'
       && initialTooltip.opacity === '1'
       && initialTooltip.ariaLabel.includes('①に所属しています'),
@@ -1590,7 +1603,7 @@ async function verifyPlacementSimulation(page, viewport) {
   await bell.hover();
   const regroupedTooltip = await bell.locator('.bt-placement__membership').textContent();
   assert(
-    regroupedTooltip.trim() === '②②に所属しています',
+    regroupedTooltip.trim() === '2に所属しています',
     `[${viewport.name}] Membership tooltip did not update after Command-drag`,
     regroupedTooltip
   );

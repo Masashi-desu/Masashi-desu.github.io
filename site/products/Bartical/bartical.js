@@ -20,6 +20,7 @@ const translations = {
     placementBell: '通知',
     placementWifi: 'Wi-Fi',
     placementMembership: '{boundary}に所属しています',
+    placementMembershipTooltip: 'に所属しています',
     placementUnassigned: 'どの境界にも所属していません',
     placementItemDescription: '{item}。{membership}。⌘ドラッグで移動できます。',
     placementMoved: '{item}を移動しました。{membership}。'
@@ -87,6 +88,7 @@ const translations = {
     placementBell: 'Notifications',
     placementWifi: 'Wi-Fi',
     placementMembership: 'Grouped in {boundary}',
+    placementMembershipTooltip: 'Grouped in this boundary',
     placementUnassigned: 'Not grouped in any boundary',
     placementItemDescription: '{item}. {membership}. Command-drag to move it.',
     placementMoved: 'Moved {item}. {membership}.',
@@ -350,6 +352,23 @@ function ensurePlacementTooltip(item) {
   return tooltip;
 }
 
+function placementBoundaryIcon(boundary) {
+  if (!boundary || !placementBar) {
+    return null;
+  }
+  const source = placementBar.querySelector(`[data-placement-boundary="${boundary}"]`);
+  if (!source) {
+    return null;
+  }
+  const icon = source.cloneNode(true);
+  icon.classList.add('bt-placement__membership-anchor');
+  icon.removeAttribute('data-placement-boundary');
+  icon.removeAttribute('data-i18n-aria-label');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.removeAttribute('aria-label');
+  return icon;
+}
+
 function positionPlacementTooltip(item) {
   const tooltip = item.querySelector('.bt-placement__membership');
   if (!tooltip) {
@@ -375,9 +394,13 @@ function updatePlacementMembership() {
     const membership = placementMembershipCopy(boundary);
     const itemLabel = resolveCopy(item.dataset.placementLabelKey) || item.dataset.placementItem;
     const tooltip = ensurePlacementTooltip(item);
+    const badge = tooltip.querySelector('[data-placement-membership-badge]');
+    const boundaryIcon = placementBoundaryIcon(boundary);
     item.dataset.placementMembership = boundary || 'none';
-    tooltip.querySelector('[data-placement-membership-badge]').textContent = placementBoundaryGlyph(boundary) || '–';
-    tooltip.querySelector('[data-placement-membership-label]').textContent = membership;
+    badge.replaceChildren(...(boundaryIcon ? [boundaryIcon] : []));
+    tooltip.querySelector('[data-placement-membership-label]').textContent = boundary
+      ? resolveCopy('placementMembershipTooltip')
+      : membership;
     item.setAttribute('aria-label', formatCopy(resolveCopy('placementItemDescription'), {
       item: itemLabel,
       membership

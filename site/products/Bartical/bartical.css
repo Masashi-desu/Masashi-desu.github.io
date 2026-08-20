@@ -1031,10 +1031,20 @@ html[data-theme="light"] .bt-about__website a {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  min-width: 20px;
-  min-height: 20px;
-  color: #fff;
-  font-size: 0.76rem;
+}
+
+.bt-placement__membership-badge:empty {
+  display: none;
+}
+
+.bt-placement__boundary.bt-placement__membership-anchor {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  line-height: 1;
 }
 
 .bt-placement__drag-ghost {
