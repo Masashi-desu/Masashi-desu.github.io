@@ -1,7 +1,7 @@
 /**
  * テスト概要:
  *  - 目的: CIから分離したmacOS固有のH.264デコードとLiquidGL動画テクスチャ更新を、ローカルのリリース前ゲートで検証する。
- *  - 期待値: ChromiumとmacOS WebKitの両方で製品一覧の3本のMP4がデコード・再生され、LiquidGLが各video要素をtextureへ登録して実時間frameを更新する。Bartical詳細ではダーク／ライト両MP4がデコードされ、再生時刻が進む。
+ *  - 期待値: ChromiumとmacOS WebKitの両方で製品一覧の3本のMP4がデコード・再生され、LiquidGLが各video要素をtextureへ登録して実時間frameを更新する。Bartical詳細ではダーク／ライト両MP4がデコードされ、MP4内へ焼き込んだ1.4秒のクロスフェード境界を単一videoのネイティブループで途切れず再生する。
  *  - 検証方法: macOS上のPlaywright Chromium／WebKitからローカル静的サーバーを開く。videoのcodec対応、readyState、currentTime、LiquidGLのtexture・video frame stateを条件待ちで取得し、固定sleepに依存せず進行を確認する。
  */
 const fs = require('fs');
@@ -178,9 +178,102 @@ async function verifyBarticalThemeVideo(page, baseUrl, browserName, theme, expec
     src: video.getAttribute('src'),
     readyState: video.readyState,
     currentTime: video.currentTime,
+    duration: video.duration,
+    loop: video.loop,
+    loopFadeMs: video.dataset.loopFadeMs,
     errorCode: video.error?.code ?? null
   }));
-  assert(state.src === expectedSource && state.errorCode === null, `[${browserName}] Bartical ${theme} video failed`, state);
+  assert(
+    state.src === expectedSource
+      && state.errorCode === null
+      && state.loop
+      && state.loopFadeMs === '1400'
+      && state.duration >= 2.55
+      && state.duration <= 2.65,
+    `[${browserName}] Bartical ${theme} video failed`,
+    state
+  );
+
+  const seamlessLoop = await page.locator('[data-hero-video]').evaluate(async (video) => {
+    const seek = (targetTime) => new Promise((resolve, reject) => {
+      const timer = window.setTimeout(() => reject(new Error(`Timed out seeking to ${targetTime}`)), 3000);
+      const finish = () => {
+        window.clearTimeout(timer);
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      };
+      if (Math.abs(video.currentTime - targetTime) < 0.001 && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        finish();
+        return;
+      }
+      video.addEventListener('seeked', finish, { once: true });
+      video.currentTime = targetTime;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = 96;
+    canvas.height = 54;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    const sample = () => {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return context.getImageData(0, 0, canvas.width, canvas.height).data;
+    };
+
+    video.pause();
+    await seek(0);
+    const firstFrame = sample();
+    await seek(Math.max(0, video.duration - (1 / 30)));
+    const lastFrame = sample();
+    let absoluteDifference = 0;
+    let comparedChannels = 0;
+    for (let index = 0; index < firstFrame.length; index += 4) {
+      absoluteDifference += Math.abs(firstFrame[index] - lastFrame[index]);
+      absoluteDifference += Math.abs(firstFrame[index + 1] - lastFrame[index + 1]);
+      absoluteDifference += Math.abs(firstFrame[index + 2] - lastFrame[index + 2]);
+      comparedChannels += 3;
+    }
+
+    await seek(Math.max(0, video.duration - 0.12));
+    const loopStartTime = video.currentTime;
+    const wrap = await new Promise((resolve, reject) => {
+      let maximumTime = video.currentTime;
+      let animationFrame = 0;
+      const cleanup = () => {
+        window.clearTimeout(timer);
+        cancelAnimationFrame(animationFrame);
+      };
+      const timer = window.setTimeout(() => {
+        cleanup();
+        reject(new Error('Timed out waiting for the native loop boundary'));
+      }, 4000);
+      const observe = () => {
+        maximumTime = Math.max(maximumTime, video.currentTime);
+        if (maximumTime > video.duration - 0.15 && video.currentTime < 0.5) {
+          cleanup();
+          resolve({ maximumTime, currentTime: video.currentTime });
+          return;
+        }
+        animationFrame = requestAnimationFrame(observe);
+      };
+      video.play().then(() => {
+        animationFrame = requestAnimationFrame(observe);
+      }).catch((error) => {
+        cleanup();
+        reject(error);
+      });
+    });
+
+    return {
+      meanAbsoluteDifference: absoluteDifference / comparedChannels,
+      loopStartTime,
+      wrap
+    };
+  });
+  assert(
+    seamlessLoop.meanAbsoluteDifference < 12
+      && seamlessLoop.wrap.maximumTime > state.duration - 0.15
+      && seamlessLoop.wrap.currentTime < 0.5,
+    `[${browserName}] Bartical ${theme} native loop was not visually seamless`,
+    seamlessLoop
+  );
 }
 
 async function main() {
