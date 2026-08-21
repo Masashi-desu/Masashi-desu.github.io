@@ -999,8 +999,7 @@ body.page-product--surround .page-background {
   white-space: nowrap;
 }
 
-.home-catch__body,
-.home-products__body {
+.home-catch__body {
   width: max-content;
   max-width: 100%;
   color: var(--text-muted);
@@ -1066,8 +1065,7 @@ body.page-product--surround .page-background {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     "label"
-    "title"
-    "body";
+    "title";
   align-items: start;
   gap: clamp(0.35rem, 1vh, 0.75rem);
 }
@@ -1087,10 +1085,6 @@ body.page-product--surround .page-background {
   letter-spacing: 0;
   color: var(--home-ink);
   white-space: nowrap;
-}
-
-.home-products__body {
-  grid-area: body;
 }
 
 .home-products__all-link {
@@ -1603,8 +1597,7 @@ body.page-product--surround .site-footer__icon {
     grid-template-columns: 1fr;
     grid-template-areas:
       "label"
-      "title"
-      "body";
+      "title";
     align-items: start;
     gap: 0.55rem;
   }
@@ -1663,8 +1656,7 @@ body.page-product--surround .site-footer__icon {
     font-size: clamp(3rem, min(10.8vw, calc(var(--home-section-height, 100vh) * 0.2)), 8rem);
   }
 
-  .home-catch__body,
-  .home-products__body {
+  .home-catch__body {
     font-size: 0.86rem;
     line-height: 1.6;
   }
@@ -1686,7 +1678,7 @@ body.page-product--surround .site-footer__icon {
   }
 
   .home-product-card {
-    min-height: clamp(14rem, calc(var(--home-section-height, 100vh) * 0.43), 16rem);
+    min-height: clamp(15.75rem, calc(var(--home-section-height, 100vh) * 0.48), 18rem);
   }
 
   .home-product-card__media {
@@ -1698,12 +1690,6 @@ body.page-product--surround .site-footer__icon {
     padding: 0.875rem;
   }
 
-  .home-product-card__description {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-  }
 }
 
 @media (max-height: 37rem) {
@@ -1762,12 +1748,6 @@ body.page-product--surround .site-footer__icon {
   .home-products__title {
     font-size: clamp(1.9rem, min(5.2vw, calc(var(--home-section-height, 100vh) * 0.105)), 3.6rem);
     line-height: 0.95;
-  }
-
-  .home-products__body {
-    font-size: 0.8rem;
-    line-height: 1.35;
-    white-space: normal;
   }
 
   .home-products__all-link {

@@ -5,7 +5,8 @@
  *    CTA がカード群から不自然に分断されず、セクション内のコンテンツが縦中央に配置されることを確認する。
  *  - 期待値: document/body に横スクロールが発生せず、CTA は viewport 内かつ carousel より下に表示され、
  *    表示中カードの下端は carousel のクリップ領域内に収まり、carousel と CTA の間隔は
- *    viewport 高に対して過大にならない。幅 36rem 以下ではコンテンツ上下の余白差が 2px 以内になる。
+ *    viewport 高に対して過大にならない。見出し下の説明キャプションは存在せず、カード説明は2行まで表示する。
+ *    543×619と1282×619ではカード高を18rem確保し、幅 36rem 以下ではコンテンツ上下の余白差が 2px 以内になる。
  *    BarticalカードはIcon Composerから書き出した256pxの正式アプリアイコンをCSS filterなしで表示し、
  *    画像内の222pxの不透明領域が余白のない他アプリアイコンと同じ表示寸法になるよう光学補正する。
  *    Bartical、TypeFetch、WinKinesisは圧縮済みMP4をミュート・インライン・自動ループで再生して、既存の画像をposterとして使う。
@@ -33,6 +34,7 @@ const RESET_CSS = `
 const VIEWPORTS = [
   { width: 1205, height: 1323, name: 'tall-browser-comment' },
   { width: 1282, height: 619, name: 'browser-comment' },
+  { width: 543, height: 619, name: 'browser-comment-narrow' },
   { width: 1280, height: 545, name: 'desktop-short-boundary' },
   { width: 852, height: 393, name: 'phone-landscape' },
   { width: 667, height: 375, name: 'small-landscape' },
@@ -114,6 +116,11 @@ async function getProductLayoutState(page) {
     const visibleCards = Array.from(document.querySelectorAll('.home-product-card'))
       .map(roundRect)
       .filter((rect) => rect.right > gridRect.left + 8 && rect.left < gridRect.right - 8);
+    const visibleDescriptions = Array.from(document.querySelectorAll('.home-product-card__description'))
+      .filter((description) => {
+        const rect = description.getBoundingClientRect();
+        return rect.right > gridRect.left + 8 && rect.left < gridRect.right - 8;
+      });
     const barticalIcon = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__icon');
     const referenceIcon = document.querySelector('.home-product-card[href*="products/RetreatScreen/"] .home-product-card__icon');
     const barticalVideo = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__media-video');
@@ -137,10 +144,12 @@ async function getProductLayoutState(page) {
       sectionRect: roundRect(document.getElementById('products-section')),
       productsRect: roundRect(document.querySelector('.home-products')),
       headerRect: roundRect(document.querySelector('.home-products__header')),
+      hasHeaderCaption: Boolean(document.querySelector('.home-products__body')),
       gridRect,
       footerRect: roundRect(document.querySelector('.home-products__footer')),
       ctaRect: roundRect(document.querySelector('.home-products__all-link')),
       visibleCards,
+      visibleDescriptionLineClamps: visibleDescriptions.map((description) => getComputedStyle(description).webkitLineClamp),
       barticalIcon: barticalIcon ? {
         src: barticalIcon.getAttribute('src'),
         naturalWidth: barticalIcon.naturalWidth,
@@ -226,6 +235,21 @@ async function assertProductsFitAtViewport(browser, serverPort, viewport) {
     }
     if (state.visibleCards.length < 1) {
       throw new Error(`Expected at least one visible product card (${viewport.name}): ${JSON.stringify(state)}`);
+    }
+    if (state.hasHeaderCaption) {
+      throw new Error(`Expected the Product heading caption to be removed (${viewport.name}): ${JSON.stringify(state)}`);
+    }
+    if (
+      state.visibleDescriptionLineClamps.length < 1
+      || state.visibleDescriptionLineClamps.some((lineClamp) => lineClamp !== '2')
+    ) {
+      throw new Error(`Expected product card descriptions to allow two lines (${viewport.name}): ${JSON.stringify(state)}`);
+    }
+    if (
+      state.viewport.height === 619
+      && state.visibleCards.some((rect) => rect.height < (18 * 16) - OVERFLOW_TOLERANCE)
+    ) {
+      throw new Error(`Expected browser-comment cards to reserve 18rem of height (${viewport.name}): ${JSON.stringify(state)}`);
     }
     if (
       state.barticalIcon?.src !== 'products/Bartical/BarticalAppIcon.png'
