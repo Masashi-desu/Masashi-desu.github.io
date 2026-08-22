@@ -17,7 +17,7 @@ description: Route generated local-only artifacts into the repository's ignored 
 
 ## Procedure
 
-1. Read `README.md` and `AGENTS.md` and classify the output as tracked project content or local-only evidence.
+1. Read `CONTRIBUTING.md` and `AGENTS.md` and classify the output as tracked project content or local-only evidence.
 2. Choose a stable kebab-case task slug, for example `.temp/retreatscreen-design-qa/`.
 3. Create the task directory and write all generated reports and evidence beneath it.
 4. Verify ignore coverage with `git check-ignore -v .temp/<task-slug>/<artifact>`.
@@ -33,6 +33,6 @@ description: Route generated local-only artifacts into the repository's ignored 
 
 ## References
 
-- `../../../README.md`
+- `../../../CONTRIBUTING.md`
 - `../../../AGENTS.md`
 - `../../../.gitignore`

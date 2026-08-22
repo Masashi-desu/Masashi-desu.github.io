@@ -11,7 +11,7 @@
 
 ## 製品メディア
 
-- `products/index.json` に `video` がある製品は、ホームの製品カードと同じ動画を一覧sectionの背景にも使用する。
+- `site/products/index.json`（公開URLは `/products/index.json`）に `video` がある製品は、ホームの製品カードと同じ動画を一覧sectionの背景にも使用する。
 - `header` は動画のposterとして使用し、動画はミュート・ループ・インラインで自動再生する。
 - 一覧でアニメーションを使うBartical、TypeFetch、WinKinesisはH.264 MP4を動画経路へ統一する。元GIFは各製品の既存用途とposterに残し、LiquidGL内ではvideo frameをリアルタイム合成する。
 - `prefers-reduced-motion: reduce` では自動再生を停止し、posterを表示する。実行中の設定変更にも追従する。
@@ -26,3 +26,9 @@
 - リポジトリ固有差分として、Mobile SafariのWebGL context復帰、snapshot timeout、WKWebView履歴復帰時の座標補正、DOM差し替え後のvideo再検出、`object-fit: cover` / `object-position`同期を維持する。
 - 一覧のLiquidGLセグメントパネルは屈折像の上に現在のcontent stopとテーマに応じたtintを重ねる。製品section上と、その製品を `contentAnchor` とするページネーション／フッター、および暗色テーマでは `rgba(5, 4, 14, 0.62)` を維持する。明色テーマの検索sectionだけは `rgba(255, 253, 247, 0.28)` とし、補助stopへ到達しただけで白いパネルへ切り替わらないようにする。
 - 検索sectionと製品content間でtintが切り替わる場合は、segmented scrollの `settleMs` と同じ640ms linearの `background-color` transitionで補間する。短時間にstopが切り替わった場合も現在の中間色から次の色へ連続させ、`prefers-reduced-motion: reduce` では補間を無効にする。
+
+## 回帰テスト
+
+- `npm run test:liquidgl-return-position`: X内蔵ブラウザなどの `WKWebView` で履歴復帰後も古い `visualViewport` offsetへ引きずられず、LiquidGLの描画矩形が固定ナビのDOM矩形と一致することを検証する。
+- `npm run test:liquidgl-segment-mobile`: iOS Mobile Safari相当のWebKitで、内蔵NaughtyDOM rasteriserの画像読込がsnapshot中に滞留する条件とWebGL context破棄を再現し、CSS fallbackからLiquidGL描画へ復帰することを検証する。
+- `npm run test:native-media`: macOS Chromium／WebKitで実MP4をデコードし、一覧の3動画がLiquidGL textureへ登録されて実時間frameを更新することと、Barticalのテーマ別動画が再生されることを検証する。Linux WebKitのcodecや仮想GPUでは代替しない。

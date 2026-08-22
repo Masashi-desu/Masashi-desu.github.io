@@ -89,6 +89,6 @@ Sparkleの公開URLは `https://masashi-desu.github.io/products/Bartical/appcast
 
 - 中央ランチャーは実アプリのメニューバー項目と同じ `site/products/Bartical/BarticalIconBody.svg` を参照する。製品カード、About、faviconはIcon Composerの正式書き出しを参照し、テンプレートSVGからWeb独自のアプリアイコンを合成しない。
 - 番号ランチャーは Bartical 本体の `IconRenderer.numberedImage` と同じ式で高密度 PNG を生成し、`site/products/Bartical/BarticalNumber2.png` / `BarticalNumber3.png` を実行時資産として保守する。
-- 製品カードでは、黒一色の正式 SVG をブランドグラデーション上の白いglyphとして表示し、ライト・ダーク両テーマで判読できる状態を維持する。
+- ホームの製品カードとAboutでは、実アプリと同じ光学余白を持つ `site/products/Bartical/BarticalAppIcon.png` を使用する。製品一覧では、同じ正式画像から透明余白だけを除いた `site/products/Bartical/BarticalCatalogIcon.png` を使用する。
 - Bartical 以外のUIアイコンは、`tools/bartical-lucide-entry.mjs` に列挙した Lucide subset から `npm run build:bartical-icons` で再生成する。
 - 生成物は `site/vendor/bartical-lucide.min.js`、ライセンス表記は `site/vendor/lucide.LICENSE.txt` に置く。

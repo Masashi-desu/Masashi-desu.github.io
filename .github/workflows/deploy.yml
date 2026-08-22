@@ -3,20 +3,56 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    paths:
+      - "site/**"
+      - "!site/products/TypeFetch/appcast.xml"
+      - "tests/**"
+      - "tools/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.mjs"
+      - ".github/workflows/deploy.yml"
+      - ".github/workflows/sync-typefetch-appcast.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
+  changes:
+    name: Classify the pushed changes
+    runs-on: ubuntu-latest
+    outputs:
+      test: ${{ steps.scope.outputs.test }}
+      deploy: ${{ steps.scope.outputs.deploy }}
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether the Pages artifact can change
+        id: scope
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            echo "test=true" >> "${GITHUB_OUTPUT}"
+            echo "deploy=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          node tools/classify-pages-change.mjs "${BEFORE_SHA}" "${CURRENT_SHA}" >> "${GITHUB_OUTPUT}"
+
   quality-gate:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.test == 'true' }}
     timeout-minutes: 30
     steps:
       - name: Checkout repository
@@ -38,7 +74,13 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: quality-gate
+    needs:
+      - changes
+      - quality-gate
+    if: ${{ needs.changes.outputs.deploy == 'true' }}
+    permissions:
+      contents: read
+      pages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -73,6 +115,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      pages: write
+      id-token: write
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

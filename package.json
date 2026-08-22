@@ -1,7 +1,7 @@
 {
   "name": "masashi-desu.github.io",
   "version": "1.0.0",
-  "description": "製品ページなどの長文説明では、HTML の `<br>` ではなく改行コード (`\\n`) と `white-space: pre-line;` を組み合わせて改行を表現します。",
+  "description": "Masahi Desu の製品情報を公開する GitHub Pages ユーザーサイト。",
   "main": "site/footer.js",
   "directories": {
     "doc": "docs"
@@ -19,7 +19,9 @@
     "test:local-environment": "node tools/require-macos-test-runtime.js && npm run test:liquidgl-native && npm run test:native-media",
     "test:liquidgl-native": "npm run test:liquidgl-return-position && npm run test:home-reload-liquidgl && npm run test:liquidgl-segment-mobile",
     "test:native-media": "node tests/playwright/native-media-liquidgl.js",
-    "test:non-browser": "npm run test:typefetch-appcast && npm run test:segmented-scroll-core",
+    "test:docs": "node tests/documentation-integrity.mjs",
+    "test:release-scope": "node --test tests/release-scope-classifier.mjs",
+    "test:non-browser": "npm run test:docs && npm run test:release-scope && npm run test:typefetch-appcast && npm run test:segmented-scroll-core",
     "test:pc-browser": "npm run test:page-transitions && npm run test:product-backlink-source && npm run test:home-philosophy-tiles && npm run test:home-products-responsive && npm run test:catalog-pagination && npm run test:surround-segments && npm run test:retreatscreen-edit-mode-actions && npm run test:typefetch-scroll-story && npm run test:typefetch-theme && npm run test:bartical-page",
     "test:mobile-chromium": "npm run test:home-mobile-swipe && npm run test:catalog-mobile-overflow && npm run test:retreatscreen-mobile-panel-fit && npm run test:footer-mobile-order",
     "test:webkit": "npm run test:retreatscreen-mobile-panel-fit:webkit && npm run test:retreatscreen-edit-mode-actions:webkit && npm run test:home-ios-safari-swipe && npm run test:catalog-mobile-scroll && npm run test:catalog-pagination:webkit && npm run test:home-product-carousel && npm run test:typefetch-theme:webkit && npm run test:bartical-page:webkit",

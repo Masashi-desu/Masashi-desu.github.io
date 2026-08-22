@@ -1,6 +1,9 @@
 name: Sync TypeFetch Sparkle appcast
 run-name: "TypeFetch appcast ${{ inputs.operation }} ${{ inputs.version }} (${{ inputs.build }}) @ ${{ inputs.source_sha }} #${{ inputs.request_id }}"
 
+# deploy.yml excludes appcast-only pushes because this workflow already tests,
+# builds, and deploys the synchronized commit.
+
 on:
   workflow_dispatch:
     inputs:
