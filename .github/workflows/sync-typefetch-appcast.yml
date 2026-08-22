@@ -48,7 +48,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout website main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -101,7 +101,7 @@ jobs:
       commit_sha: ${{ steps.commit.outputs.commit_sha }}
     steps:
       - name: Checkout website main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -123,7 +123,7 @@ jobs:
         run: ruby tests/typefetch-appcast-sync.rb
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -174,12 +174,12 @@ jobs:
       pages: write
     steps:
       - name: Checkout synchronized website commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.sync.outputs.commit_sha }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
