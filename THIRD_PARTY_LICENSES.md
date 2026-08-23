@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-Masahi Desu User Site が公開物、ビルド、テストで直接または間接的に利用する第三者ソフトウェアとWebフォントを記載します。バージョンは、配信ファイルのヘッダー、`package.json`、`package-lock.json` に基づく2026-08-22時点の値です。
+Masahi Desu User Site が公開物、ビルド、テストで直接または間接的に利用する第三者ソフトウェアとWebフォントを記載します。バージョンは、配信ファイルのヘッダー、`package.json`、`package-lock.json` に基づく2026-08-23時点の値です。
 
 各ライセンス名は SPDX のライセンス本文へ、各コンポーネント名は公式サイト、公式リポジトリ、またはnpmパッケージページへリンクしています。配信ファイルに個別のライセンス通知がある場合は、その通知を優先して参照してください。
 
@@ -17,6 +17,7 @@ Masahi Desu User Site が公開物、ビルド、テストで直接または間�
 | [liquidGL](https://github.com/naughtyduk/liquidGL) | 2.0.1<br>upstream `28e7c1a64a96c46449e9f494acee98c8490d9824` | WebGLによるガラス表現。`site/vendor/liquidGL.js` はローカル統合変更を含む | [MIT](https://spdx.org/licenses/MIT.html)（[同梱通知](./site/vendor/liquidGL.LICENSE.txt)） |
 | [Lucide](https://lucide.dev/) | 1.31.0 | Barticalページのアイコンsubset。`site/vendor/bartical-lucide.min.js` として配信 | [ISC](https://spdx.org/licenses/ISC.html)。Feather由来アイコンは[MIT](https://spdx.org/licenses/MIT.html)（[同梱通知](./site/vendor/lucide.LICENSE.txt)） |
 | [Feather Icons](https://github.com/feathericons/feather) | Lucide 1.31.0の由来通知に準拠 | Lucide subsetに含まれる一部アイコンの原著作物 | [MIT](https://spdx.org/licenses/MIT.html)（[同梱通知](./site/vendor/lucide.LICENSE.txt)） |
+| [Simple Icons](https://simpleicons.org/) | 16 | Barticalのitch.ioアイコンとSurround1x0-AKDKのGitHubアイコン。jsDelivr CDNからSVGを読み込み | [CC0-1.0](https://spdx.org/licenses/CC0-1.0.html) |
 | [three.js](https://threejs.org/) | 0.180.0 | Surround1x0-AKDKページの3D表示。Viteが配信用JavaScriptへbundle | [MIT](https://spdx.org/licenses/MIT.html) |
 
 ## Google Fontsから読み込むWebフォント

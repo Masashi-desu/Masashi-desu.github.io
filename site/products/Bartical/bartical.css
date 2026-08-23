@@ -1389,7 +1389,7 @@ html[data-theme="light"] .bt-about__website a {
   margin: 34px auto 0;
 }
 
-.bt-coming__button {
+.bt-page .bt-coming__button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1398,21 +1398,42 @@ html[data-theme="light"] .bt-about__website a {
   min-height: 58px;
   margin-top: 46px;
   padding: 0 28px;
-  color: rgb(255 255 255 / 74%);
-  background: rgb(255 255 255 / 10%);
-  border: 1px solid rgb(255 255 255 / 24%);
+  color: var(--bt-indigo);
+  background: #fff;
+  border: 1px solid #fff;
   border-radius: 999px;
-  cursor: not-allowed;
+  cursor: pointer;
   font: inherit;
   font-size: 0.84rem;
   font-weight: 730;
   letter-spacing: 0.16em;
+  text-decoration: none;
   text-transform: uppercase;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
-.bt-coming__button .lucide {
+.bt-coming__button:hover {
+  color: #fff;
+  background: transparent;
+}
+
+.bt-coming__button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 5px;
+}
+
+.bt-coming__button:active {
+  transform: translateY(1px);
+}
+
+.bt-coming__button-icon {
+  display: block;
+  flex: 0 0 auto;
   width: 18px;
   height: 18px;
+  background: currentColor;
+  -webkit-mask: url("https://cdn.jsdelivr.net/npm/simple-icons@v16/icons/itchdotio.svg") center / contain no-repeat;
+  mask: url("https://cdn.jsdelivr.net/npm/simple-icons@v16/icons/itchdotio.svg") center / contain no-repeat;
 }
 
 .bt-footer {
@@ -1777,7 +1798,8 @@ html[data-theme="light"] .bt-about__website a {
   .bt-vertical-menu a,
   .bt-vertical-menu__label,
   .bt-placement__item,
-  .bt-placement__membership {
+  .bt-placement__membership,
+  .bt-page .bt-coming__button {
     transition: none;
   }
 
