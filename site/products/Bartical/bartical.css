@@ -53,6 +53,7 @@ html {
 }
 
 .bt-landing {
+  --accent-color: var(--bt-purple);
   margin: 0;
   background: var(--bt-ink);
   color: #f8f7fb;

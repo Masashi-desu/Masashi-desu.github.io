@@ -2259,15 +2259,21 @@ body.page-catalog .section-copy {
 }
 
 .select-field:focus,
-.lang-select:focus,
-.theme-select:focus,
-.select-field:focus-visible,
-.lang-select:focus-visible,
-.theme-select:focus-visible {
+.select-field:focus-visible {
   outline: none;
   border-color: var(--border-focus) !important;
   background: var(--surface-field-hover);
   box-shadow: 0 0 0 2px var(--focus-ring-color) !important;
+}
+
+.lang-select:focus,
+.theme-select:focus,
+.lang-select:focus-visible,
+.theme-select:focus-visible {
+  outline: none;
+  border-color: var(--accent-color) !important;
+  background: var(--surface-field-hover);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 32%, transparent) !important;
 }
 
 .catalog-grid {
@@ -2854,6 +2860,10 @@ body.page-catalog .section-copy {
   width: min(100%, var(--page-width-standard));
   margin: 0 auto;
   padding: 2rem var(--page-gutter) 4rem;
+}
+
+.document-shell > .page-backlink {
+  align-self: flex-start;
 }
 
 .document-main {

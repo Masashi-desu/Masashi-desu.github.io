@@ -4,7 +4,7 @@
  *  - 期待値: ライト時は背景 #f4f7fb、本文 #192231、前面アプリのデモ面 #ffffff、各セクション固有の明るい背景が適用される。
  *    TypeFetch入力パネル自体は実アプリと同じ固定ダーク配色を維持し、itch.io 埋め込みはライト配色URLへ切り替わる。
  *    フッターは共通デザインの寸法・配置を使い、角丸selectの外側に矩形背景を描画せず、TypeFetch固有色を適用する。
- *    フッターselectのフォーカス境界線とリングは、ライト／ダーク双方でTypeFetchアプリアイコン由来の紫色を使う。
+ *    フッターselectのフォーカス境界線とリングは、ライト／ダーク双方でTypeFetchのページアクセントである青色を使う。
  *    選択は再読み込み後も保持され、system選択はOS配色へ追従する。
  *    ライト／ダークのどちらでもデスクトップと390px幅に横方向のオーバーフローがない。
  *  - 検証方法: 一時ポートのVite開発サーバーを起動し、隔離したPlaywrightブラウザでテーマselectを操作する。
@@ -209,22 +209,25 @@ function assertMobileFooterDesign(state) {
   assert(footer.shellBackground === 'rgba(0, 0, 0, 0)', 'Mobile footer select shell rendered a rectangular background', footer);
 }
 
-function getExpectedFooterFocus(theme) {
-  return theme === 'light'
-    ? {
-        border: 'rgb(77, 70, 178)',
-        background: 'rgba(255, 255, 255, 0.72)',
-        ring: 'rgba(113, 112, 204, 0.24)'
-      }
-    : {
-        border: 'rgb(157, 159, 220)',
-        background: 'rgba(255, 255, 255, 0.05)',
-        ring: 'rgba(113, 112, 204, 0.32)'
-      };
+async function readExpectedFooterFocus(page, theme) {
+  return page.evaluate((background) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--accent-color)';
+    probe.style.boxShadow = '0 0 0 2px color-mix(in srgb, var(--accent-color) 32%, transparent)';
+    document.body.appendChild(probe);
+    const style = getComputedStyle(probe);
+    const result = {
+      border: style.color,
+      background,
+      ring: style.boxShadow
+    };
+    probe.remove();
+    return result;
+  }, theme === 'light' ? 'rgba(255, 255, 255, 0.72)' : 'rgba(255, 255, 255, 0.05)');
 }
 
 async function readFooterFocusStates(page, theme) {
-  const expected = getExpectedFooterFocus(theme);
+  const expected = await readExpectedFooterFocus(page, theme);
   const states = {};
   for (const selector of ['.lang-select', '.theme-select']) {
     const locator = page.locator(selector);
@@ -279,12 +282,12 @@ async function readFooterFocusStates(page, theme) {
   return states;
 }
 
-function assertFooterFocus(states, theme) {
-  const expected = getExpectedFooterFocus(theme);
+async function assertFooterFocus(page, states, theme) {
+  const expected = await readExpectedFooterFocus(page, theme);
   for (const [selector, state] of Object.entries(states)) {
-    assert(state.border === expected.border, `${selector} did not use the icon-derived focus border`, state);
+    assert(state.border === expected.border, `${selector} did not use the page accent focus border`, state);
     assert(state.background === expected.background, `${selector} focus background changed unexpectedly`, state);
-    assert(state.ring.includes(expected.ring), `${selector} did not use the icon-derived focus ring`, state);
+    assert(state.ring === expected.ring, `${selector} did not use the page accent focus ring`, state);
   }
 }
 
@@ -339,7 +342,7 @@ async function run() {
     assert(state.callout.cancelText === 'rgba(255, 255, 255, 0.85)', 'TypeFetch cancel text did not match the app', state);
     assert(state.callout.confirm.includes('rgb(74, 145, 255)') && state.callout.confirm.includes('rgb(46, 115, 245)'), 'TypeFetch confirm gradient did not match the app', state);
     assertDesktopFooterDesign(state, 'dark');
-    assertFooterFocus(await readFooterFocusStates(page, 'dark'), 'dark');
+    await assertFooterFocus(page, await readFooterFocusStates(page, 'dark'), 'dark');
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} dark desktop`);
 
     await page.locator('.theme-select').selectOption('light');
@@ -360,7 +363,7 @@ async function run() {
     assert(state.footer === 'rgb(244, 247, 251)', 'Light footer background was not applied', state);
     assert(state.iframe.includes('bg_color=ffffff') && state.iframe.includes('fg_color=192231'), 'Light itch.io embed URL was not applied', state);
     assertDesktopFooterDesign(state, 'light');
-    assertFooterFocus(await readFooterFocusStates(page, 'light'), 'light');
+    await assertFooterFocus(page, await readFooterFocusStates(page, 'light'), 'light');
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} light desktop`);
 
     await page.reload({ waitUntil: 'domcontentloaded' });

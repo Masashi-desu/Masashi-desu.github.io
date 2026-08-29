@@ -40,6 +40,14 @@ body.retreat-landing,
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }
 
+:root[data-theme="light"] body.retreat-landing {
+  --accent-color: #a3e5e6;
+}
+
+:root[data-theme="dark"] body.retreat-landing {
+  --accent-color: #ac7be0;
+}
+
 .retreat-page-background {
   position: fixed;
   z-index: 0;
@@ -841,7 +849,7 @@ body.is-retreat-icon-editor-open {
 
 .retreat-info-card {
   position: relative;
-  min-height: 24rem;
+  min-height: 0;
   padding: clamp(1.5rem, 3vw, 3rem);
   overflow: hidden;
   border: 1px solid var(--retreat-line-soft);
@@ -849,17 +857,16 @@ body.is-retreat-icon-editor-open {
   background: var(--retreat-surface-raised);
 }
 
-.retreat-info-card__number {
-  display: block;
-  margin-bottom: clamp(3rem, 6vw, 6rem);
-  color: var(--retreat-faint);
-  font-size: 0.75rem;
-  font-weight: 650;
-  letter-spacing: 0.16em;
+.retreat-info-card__header,
+.retreat-care-card__header {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.85rem, 1.4vw, 1.25rem);
 }
 
-.retreat-info-card__icon {
-  margin-bottom: 1.5rem;
+.retreat-info-card__icon,
+.retreat-care-card__header > i {
+  flex: 0 0 auto;
   color: var(--retreat-white);
   font-size: clamp(2rem, 3vw, 3rem);
 }
@@ -904,6 +911,9 @@ body.is-retreat-icon-editor-open {
 }
 
 .retreat-flow-list > li > span {
+  display: grid;
+  align-self: stretch;
+  place-items: center;
   color: var(--retreat-faint);
   font-size: 0.75rem;
   font-weight: 650;
@@ -916,7 +926,7 @@ body.is-retreat-icon-editor-open {
 
 .retreat-spec-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(18rem, 0.7fr);
+  grid-template-columns: minmax(0, 1fr) minmax(31rem, 1.1fr);
   gap: 1rem;
 }
 
@@ -953,13 +963,6 @@ body.is-retreat-icon-editor-open {
   font-size: clamp(0.95rem, 1.2vw, 1.12rem);
   font-weight: 620;
   text-align: right;
-}
-
-.retreat-care-card > i {
-  display: block;
-  margin-bottom: clamp(4rem, 8vw, 8rem);
-  color: var(--retreat-white);
-  font-size: clamp(2.2rem, 4vw, 4rem);
 }
 
 .retreat-cta-window {
@@ -1142,6 +1145,12 @@ body.is-retreat-icon-editor-open {
   }
 }
 
+@media (max-width: 70rem) {
+  .retreat-spec-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 64rem) {
   .retreat-launcher-header {
     right: 4rem;
@@ -1161,24 +1170,8 @@ body.is-retreat-icon-editor-open {
     grid-template-columns: 1fr;
   }
 
-  .retreat-info-card {
-    min-height: 18rem;
-  }
-
-  .retreat-info-card__number {
-    margin-bottom: 3rem;
-  }
-
   .retreat-section-header--stacked {
     flex-direction: column;
-  }
-
-  .retreat-spec-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .retreat-care-card > i {
-    margin-bottom: 3.5rem;
   }
 }
 
@@ -1533,14 +1526,6 @@ body.is-retreat-icon-editor-open {
   .retreat-info-card {
     min-height: 0;
     padding: 1.35rem;
-  }
-
-  .retreat-info-card__number {
-    margin-bottom: 1.75rem;
-  }
-
-  .retreat-info-card__icon {
-    margin-bottom: 1rem;
   }
 
   .retreat-preview-frame {

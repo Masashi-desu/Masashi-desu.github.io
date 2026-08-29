@@ -64,8 +64,6 @@
   --tf-embed-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.25);
   --tf-footer: #070910;
   --tf-footer-control: rgba(255, 255, 255, 0.05);
-  --tf-footer-focus: #9d9fdc;
-  --tf-footer-focus-ring: rgba(113, 112, 204, 0.32);
   --tf-flash-color: #ffffff;
   --tf-flash-glow: 0 0 2.2rem rgba(74, 145, 255, 0.8);
   --tf-mono: "Geist Mono", "SFMono-Regular", Consolas, monospace;
@@ -123,8 +121,6 @@
   --tf-embed-shadow: 0 1.5rem 4rem rgba(40, 58, 82, 0.14);
   --tf-footer: #f4f7fb;
   --tf-footer-control: rgba(255, 255, 255, 0.72);
-  --tf-footer-focus: #4d46b2;
-  --tf-footer-focus-ring: rgba(113, 112, 204, 0.24);
   --tf-flash-color: #0d58c5;
   --tf-flash-glow: 0 0 2.2rem rgba(23, 105, 223, 0.35);
   color-scheme: light;
@@ -139,6 +135,7 @@ html {
 body.typefetch-landing,
 :root[data-theme="light"] body.typefetch-landing,
 :root[data-theme="dark"] body.typefetch-landing {
+  --accent-color: var(--tf-blue);
   overflow-x: clip;
   margin: 0;
   background: var(--tf-page);
@@ -1181,9 +1178,9 @@ body.typefetch-landing,
 .tf-footer .theme-select:focus,
 .tf-footer .lang-select:focus-visible,
 .tf-footer .theme-select:focus-visible {
-  border-color: var(--tf-footer-focus) !important;
+  border-color: var(--accent-color) !important;
   background: var(--tf-footer-control);
-  box-shadow: 0 0 0 2px var(--tf-footer-focus-ring) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 32%, transparent) !important;
 }
 
 .tf-footer .site-footer__icon {
