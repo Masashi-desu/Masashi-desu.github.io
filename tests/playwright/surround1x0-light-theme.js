@@ -6,8 +6,16 @@
  *    先行するlead-followとsmootherstep減速になり、スケールのオーバーシュートは発生しない。
  *    透明で駐機中のユニットは画面端付近のステージング姿勢からフェードインしながら再入場し、
  *    退場側が消える前に画面内へ入るため移動中に両ユニットが同時に画面から消えない。
- *    ダーク時はBlack GLBと赤いアクセント、ライト時はWhite GLBと
- *    グレーのアクセントが選択される。全セグメントの文字レイヤーは3D canvasより手前に置く。
+ *    ダーク時は黒＋ワインレッドのBlack GLB、ライト時は白＋アイボリーのWhite GLBが選択される。
+ *    04ではGLBの18個の分解レイヤーを順序メタデータどおり位相差付きの波で展開し、
+ *    キーキャップ・スイッチ・ソケットは各個体にも位置順の位相差を付ける。
+ *    通常のセグメント移動は分解レイヤーへ波を適用せず、組み立てた左右ユニットのまま行う。
+ *    04へ入る非表示ユニットは目的地スケールで再入場し、移動開始と同時に分解を開始する。
+ *    キーキャップとソケットは早期に離脱し、PCB／コンスルー類は移動中も上部ケースより下へ保つ。
+ *    04から離れるときは即時復元せず、ユニット移動と並行して逆順の波で組み立てる。
+ *    分解状態で半体を捻る間は、部品ごとに小さな回転追従差を付け、終端では追加回転を0へ戻す。
+ *    モバイル04では左右間にマージンを残して平行配置し、手前へ寄せて拡大しながら上下左右の余白を抑える。
+ *    全セグメントの文字レイヤーは3D canvasより手前に置く。
  *    第1セグメントは中間幅で左右ユニットの距離を縮め、
  *    390px幅でも横スクロールや主要導線の欠けが発生しない。歯車セグメントはフッタを文書末尾に表示し、
  *    04のGitHub導線はSimple Icons CDNのGitHubアイコンを文字の左側に表示する。
@@ -21,6 +29,7 @@ const net = require('net');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const { chromium } = require('playwright');
+const THREE_DEGREES_3_2 = 3.2 * Math.PI / 180;
 
 const ROOT = path.resolve(__dirname, '../..');
 const VITE_PACKAGE = require.resolve('vite/package.json');
@@ -272,6 +281,10 @@ async function main() {
     await context.addInitScript(() => {
       localStorage.setItem('mdw-theme', 'dark');
       localStorage.setItem('mdw-lang', 'ja');
+      // Keep Three.js motion deterministic when headless Chromium does not issue compositor frames.
+      window.requestAnimationFrame = (callback) => window.setTimeout(() => callback(performance.now()), 16);
+      window.cancelAnimationFrame = (handle) => window.clearTimeout(handle);
+      window.__SURROUND_TEST_SKIP_RENDER__ = true;
     });
     const page = await context.newPage();
     await page.goto(pageUrl, { waitUntil: 'load' });
@@ -280,6 +293,68 @@ async function main() {
     let rendererState = await page.evaluate(() => window.__SURROUND_3D__);
     assert(rendererState.theme === 'dark', 'Dark theme did not select the black renderer state', rendererState);
     assert(rendererState.modelUrls.dark.endsWith('Surround1x0-AKDK-Black.glb'), 'Black GLB URL is incorrect', rendererState);
+    assert(
+      rendererState.modelHierarchy === 'half-roots-with-exploded-layers' &&
+      rendererState.modelUnitScale === 0.001 &&
+      rendererState.modelMetadata?.roots?.left === 'Left_Half_Root' &&
+      rendererState.modelMetadata?.roots?.right === 'Right_Half_Root',
+      'Updated millimeter GLB half-root hierarchy was not prepared for page rendering',
+      rendererState
+    );
+    assert(
+      rendererState.modelMetadata?.colorways?.dark === 'black' &&
+      rendererState.modelMetadata?.colorways?.light === 'white',
+      'Black/white exported colorway metadata was not preserved',
+      rendererState.modelMetadata
+    );
+    assert(
+      rendererState.explodedLayerCount === 18 &&
+      JSON.stringify(rendererState.explodedLayerOrders) === JSON.stringify([0, 1, 2, 3, 4, 5, 6, 7]) &&
+      Math.abs(rendererState.explosionMaxOffset - 0.21) < 0.0001,
+      'Exploded-view layers or spacing did not match the updated GLB metadata',
+      rendererState
+    );
+    assert(
+      rendererState.explodedItemCount === 147 &&
+      JSON.stringify(rendererState.itemizedExplodedLayers) === JSON.stringify(['keycaps', 'sockets', 'switches']) &&
+      rendererState.explodedItemMetadata.filter((item) => item.layer === 'keycaps').length === 45 &&
+      rendererState.explodedItemMetadata.filter((item) => item.layer === 'switches').length === 45 &&
+      rendererState.explodedItemMetadata.filter((item) => item.layer === 'sockets').length === 45,
+      'Repeated exploded-view parts were not promoted to individual wave units',
+      {
+        itemCount: rendererState.explodedItemCount,
+        itemizedLayers: rendererState.itemizedExplodedLayers
+      }
+    );
+    assert(
+      rendererState.explosionWave === 'ordered-layer-ripple' &&
+      rendererState.assembledTransit === 'rigid-half-root' &&
+      rendererState.collisionAvoidance === 'side-locked-and-top-case-clearance' &&
+      rendererState.explosionTiming === 'at-segment-motion-start' &&
+      rendererState.reassemblyTiming === 'during-segment-motion' &&
+      rendererState.explodedPartRotation === 'motion-lagged-per-item' &&
+      Math.abs(rendererState.explodedPartRotationMax - THREE_DEGREES_3_2) < 0.0001 &&
+      JSON.stringify(rendererState.mobileExplosionSpacingRange) === JSON.stringify([2.45, 2.85]) &&
+      rendererState.topCaseClearanceRatio === 0.78,
+      'Exploded-only wave, rigid transit, and collision avoidance modes were not exposed by the renderer',
+      rendererState
+    );
+    const waveDelays = (side, layer) => rendererState.explodedItemMetadata
+      .filter((item) => item.side === side && item.layer === layer)
+      .map((item) => item.waveDelay);
+    ['left', 'right'].forEach((side) => {
+      assert(
+        Math.max(...waveDelays(side, 'keycaps')) < Math.min(...waveDelays(side, 'top_case')) &&
+        Math.min(...waveDelays(side, 'sockets')) < Math.min(...waveDelays(side, 'pcb')),
+        `Early keycap/socket departure order was not preserved on the ${side} half`,
+        {
+          keycaps: waveDelays(side, 'keycaps'),
+          topCase: waveDelays(side, 'top_case'),
+          sockets: waveDelays(side, 'sockets'),
+          pcb: waveDelays(side, 'pcb')
+        }
+      );
+    });
     assert(rendererState.exitMotion === 'cubic-diagonal-forward-twist', 'Exit motion did not use the cubic diagonal forward twist', rendererState);
     assert(rendererState.exitCurve === 'cubic-bezier', 'Exit motion did not use its dedicated cubic curve', rendererState);
     assert(rendererState.exitCorner === 'outer-back', 'Exit twist was not anchored to the outer-back corner direction', rendererState);
@@ -328,7 +403,17 @@ async function main() {
     await page.waitForFunction(() => {
       const pose = window.__SURROUND_3D__?.currentPoses?.right;
       return pose && pose.cornerTwist > 0.1;
-    }, null, { timeout: 2500 });
+    }, null, { timeout: 5000, polling: 25 });
+    const assembledTransitState = await page.evaluate(() => ({
+      amounts: window.__SURROUND_3D__.explosionLayerAmounts,
+      target: window.__SURROUND_3D__.explosionTarget
+    }));
+    assert(
+      assembledTransitState.target === 0 &&
+      assembledTransitState.amounts.every((amount) => amount === 0),
+      'Normal segment transit separated layers instead of preserving the assembled model',
+      assembledTransitState
+    );
     await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
     const settledFeatured = await page.evaluate(() => window.__SURROUND_3D__.currentPoses.right);
     assert(
@@ -349,16 +434,25 @@ async function main() {
     assert(motionState.motionEasing === 'smootherstep', 'Segment 02 did not use zero-velocity easing', motionState);
     assert(motionState.scaleOvershoot === false, 'Segment 02 still used scale overshoot', motionState);
     assert(motionState.settling === 'zero-velocity', 'Segment 02 did not expose seamless settling', motionState);
-    await page.waitForTimeout(1420);
+    await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
     await page.evaluate(() => {
       window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 2, source: 'test' } }));
     });
-    await page.waitForFunction(() => {
-      const pose = window.__SURROUND_3D__?.currentPoses?.right;
-      return pose && pose.x > 0.105 && pose.y > 0.1 && pose.z > 0.14 &&
-        pose.scale > 1.86 && pose.cornerTwist > 0.4 && pose.foreground > 0.95;
-    }, null, { timeout: 1000 });
-    const rightExitPose = await page.evaluate(() => window.__SURROUND_3D__.currentPoses.right);
+    const [rightExitHandle] = await Promise.all([
+      page.waitForFunction(() => {
+        const pose = window.__SURROUND_3D__?.currentPoses?.right;
+        return pose && pose.x > 0.105 && pose.y > 0.1 && pose.z > 0.14 &&
+          pose.scale > 1.86 && pose.cornerTwist > 0.4 && pose.foreground > 0.95
+          ? { ...pose }
+          : false;
+      }, null, { timeout: 1800 }),
+      page.waitForFunction(() => {
+        const poses = window.__SURROUND_3D__?.currentPoses;
+        return poses && poses.left.x >= -0.36 && poses.left.opacity > 0.4 && poses.right.opacity > 0.9;
+      }, null, { timeout: 1800 })
+    ]);
+    const rightExitPose = await rightExitHandle.jsonValue();
+    await rightExitHandle.dispose();
     assert(
       rightExitPose.x > 0.105 && rightExitPose.y > 0.1 && rightExitPose.z > 0.14 &&
       rightExitPose.scale > 1.86 && rightExitPose.cornerTwist > 0.4 &&
@@ -366,10 +460,6 @@ async function main() {
       'Right unit did not visibly rise, advance, enlarge, and twist while exiting',
       rightExitPose
     );
-    await page.waitForFunction(() => {
-      const poses = window.__SURROUND_3D__?.currentPoses;
-      return poses && poses.left.x >= -0.36 && poses.left.opacity > 0.4 && poses.right.opacity > 0.9;
-    }, null, { timeout: 1500 });
     const stackingState = await page.evaluate(() => ({
       content: Number.parseInt(getComputedStyle(document.querySelector('.surround-segments')).zIndex, 10),
       canvas: Number.parseInt(getComputedStyle(document.querySelector('.surround-visual')).zIndex, 10)
@@ -383,16 +473,25 @@ async function main() {
     motionState = await page.evaluate(() => window.__SURROUND_3D__);
     assert(motionState.activeScene === 2, 'Segment 03 did not activate left-unit scene', motionState);
     assert(motionState.foregroundSide === 'left', 'Segment 03 did not feature the left unit', motionState);
-    await page.waitForTimeout(1420);
+    await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
     await page.evaluate(() => {
       window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 1, source: 'test' } }));
     });
-    await page.waitForFunction(() => {
-      const pose = window.__SURROUND_3D__?.currentPoses?.left;
-      return pose && pose.x < -0.105 && pose.y > 0.1 && pose.z > 0.14 &&
-        pose.scale > 1.86 && pose.cornerTwist > 0.4 && pose.foreground > 0.95;
-    }, null, { timeout: 1000 });
-    const leftExitPose = await page.evaluate(() => window.__SURROUND_3D__.currentPoses.left);
+    const [leftExitHandle] = await Promise.all([
+      page.waitForFunction(() => {
+        const pose = window.__SURROUND_3D__?.currentPoses?.left;
+        return pose && pose.x < -0.105 && pose.y > 0.1 && pose.z > 0.14 &&
+          pose.scale > 1.86 && pose.cornerTwist > 0.4 && pose.foreground > 0.95
+          ? { ...pose }
+          : false;
+      }, null, { timeout: 1800 }),
+      page.waitForFunction(() => {
+        const poses = window.__SURROUND_3D__?.currentPoses;
+        return poses && poses.right.x <= 0.36 && poses.right.opacity > 0.4 && poses.left.opacity > 0.9;
+      }, null, { timeout: 1800 })
+    ]);
+    const leftExitPose = await leftExitHandle.jsonValue();
+    await leftExitHandle.dispose();
     assert(
       leftExitPose.x < -0.105 && leftExitPose.y > 0.1 && leftExitPose.z > 0.14 &&
       leftExitPose.scale > 1.86 && leftExitPose.cornerTwist > 0.4 &&
@@ -400,15 +499,139 @@ async function main() {
       'Left unit exit did not mirror the right unit toward the upper-left camera side',
       leftExitPose
     );
-    await page.waitForFunction(() => {
-      const poses = window.__SURROUND_3D__?.currentPoses;
-      return poses && poses.right.x <= 0.36 && poses.right.opacity > 0.4 && poses.left.opacity > 0.9;
-    }, null, { timeout: 1500 });
     await page.evaluate(() => {
       window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 2, source: 'test-restore' } }));
     });
-    await page.waitForTimeout(1420);
+    await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
+    const collisionSafeEntryHandlePromise = page.waitForFunction(() => {
+      const state = window.__SURROUND_3D__;
+      const right = state?.currentPoses?.right;
+      return state?.activeScene === 3 && state.motionActive && right?.opacity > 0.2
+        ? { right: { ...right }, left: { ...state.currentPoses.left }, amounts: [...state.explosionLayerAmounts] }
+        : false;
+    });
+    const explosionWaveHandlePromise = page.waitForFunction(() => {
+      const amounts = window.__SURROUND_3D__?.explosionLayerAmounts || [];
+      return amounts.length === 18 && Math.max(...amounts) - Math.min(...amounts) > 0.15
+        ? {
+          amounts: [...amounts],
+          target: window.__SURROUND_3D__.explosionTarget,
+          poses: structuredClone(window.__SURROUND_3D__.currentPoses)
+        }
+        : false;
+    });
+    await page.evaluate(() => {
+      window.__SURROUND_ITEM_WAVE_OBSERVED__ = { keycaps: 0, switches: 0, sockets: 0 };
+    });
+    const itemWaveHandlePromise = page.waitForFunction(() => {
+      const state = window.__SURROUND_3D__;
+      const metadata = state?.explodedItemMetadata || [];
+      const amounts = state?.explosionItemAmounts || [];
+      const observed = window.__SURROUND_ITEM_WAVE_OBSERVED__;
+      ['keycaps', 'switches', 'sockets'].forEach((layer) => {
+        const layerAmounts = amounts.filter((_, index) => metadata[index]?.layer === layer);
+        const spread = layerAmounts.length ? Math.max(...layerAmounts) - Math.min(...layerAmounts) : 0;
+        observed[layer] = Math.max(observed[layer], spread);
+      });
+      return Object.values(observed).every((spread) => spread > 0.08)
+        ? {
+          spreads: { ...observed },
+          amounts: [...amounts],
+          offsets: [...state.explosionItemOffsets],
+          metadata: state.explodedItemMetadata
+        }
+        : false;
+    });
+    const partRotationHandlePromise = page.waitForFunction(() => {
+      const rotations = window.__SURROUND_3D__?.explosionItemRotations || [];
+      const maximum = rotations.length ? Math.max(...rotations) : 0;
+      const spread = rotations.length ? maximum - Math.min(...rotations) : 0;
+      return maximum > 0.004 && spread > 0.002
+        ? { rotations: [...rotations], maximum, spread }
+        : false;
+    });
     await clickSegment(page, 4);
+    const collisionSafeEntryHandle = await collisionSafeEntryHandlePromise;
+    const collisionSafeEntry = await collisionSafeEntryHandle.jsonValue();
+    await collisionSafeEntryHandle.dispose();
+    assert(
+      collisionSafeEntry.right.scale <= 0.93 &&
+      collisionSafeEntry.right.x > collisionSafeEntry.left.x &&
+      Math.max(...collisionSafeEntry.amounts) > 0,
+      'Segment 04 did not combine collision-safe re-entry with immediate exploded motion',
+      collisionSafeEntry
+    );
+    const explosionWaveHandle = await explosionWaveHandlePromise;
+    const explosionWaveState = await explosionWaveHandle.jsonValue();
+    await explosionWaveHandle.dispose();
+    assert(
+      explosionWaveState.target === 1 &&
+      Math.max(...explosionWaveState.amounts) - Math.min(...explosionWaveState.amounts) > 0.15 &&
+      explosionWaveState.poses.right.scale <= 0.93 &&
+      explosionWaveState.poses.right.x > explosionWaveState.poses.left.x,
+      'Segment 04 did not propagate the explosion wave with collision-safe re-entry',
+      explosionWaveState
+    );
+    const itemWaveHandle = await itemWaveHandlePromise;
+    const itemWaveState = await itemWaveHandle.jsonValue();
+    await itemWaveHandle.dispose();
+    assert(
+      itemWaveState.spreads.keycaps > 0.08 &&
+      itemWaveState.spreads.switches > 0.08 &&
+      itemWaveState.spreads.sockets > 0.08,
+      'Repeated keycaps, switches, or sockets still moved in sync within their layer',
+      itemWaveState.spreads
+    );
+    const partRotationHandle = await partRotationHandlePromise;
+    const partRotationState = await partRotationHandle.jsonValue();
+    await partRotationHandle.dispose();
+    assert(
+      partRotationState.maximum > 0.004 &&
+      partRotationState.maximum <= THREE_DEGREES_3_2 + 0.0001 &&
+      partRotationState.spread > 0.002,
+      'Exploded parts stayed angle-locked to the half root during the twist motion',
+      partRotationState
+    );
+    const constrainedLayers = new Set(['controller', 'mouse_sensor', 'conthrough', 'sockets', 'pcb']);
+    itemWaveState.metadata.forEach((item, index) => {
+      if (!constrainedLayers.has(item.layer)) {
+        return;
+      }
+      const topCaseIndex = itemWaveState.metadata.findIndex((candidate) => (
+        candidate.side === item.side && candidate.layer === 'top_case'
+      ));
+      assert(
+        itemWaveState.offsets[index] <= itemWaveState.offsets[topCaseIndex] * 0.78 + 0.000001,
+        `${item.name} rose above the top-case clearance envelope`,
+        {
+          item,
+          itemOffset: itemWaveState.offsets[index],
+          topCaseOffset: itemWaveState.offsets[topCaseIndex]
+        }
+      );
+    });
+    await page.waitForFunction(() => (
+      window.__SURROUND_3D__?.motionActive === false &&
+      window.__SURROUND_3D__?.explosionAmount === 1
+    ));
+    const explodedState = await page.evaluate(() => ({
+      scene: window.__SURROUND_3D__.activeScene,
+      amount: window.__SURROUND_3D__.explosionAmount,
+      target: window.__SURROUND_3D__.explosionTarget,
+      layerCount: window.__SURROUND_3D__.explodedLayerCount,
+      rotations: [...window.__SURROUND_3D__.explosionItemRotations]
+    }));
+    assert(
+      explodedState.scene === 3 && explodedState.amount === 1 &&
+      explodedState.target === 1 && explodedState.layerCount === 18,
+      'Segment 04 did not settle into the GLB-backed exploded view',
+      explodedState
+    );
+    assert(
+      explodedState.rotations.every((angle) => angle < 0.00001),
+      'Exploded parts did not smoothly settle back to their exact authored angles',
+      explodedState.rotations
+    );
     const actionOrder = await page.locator('.surround-actions .surround-action').evaluateAll((elements) => (
       elements.map((element) => ({
         primary: element.classList.contains('surround-action--primary'),
@@ -434,6 +657,40 @@ async function main() {
       'Repository action did not render the Simple Icons CDN GitHub icon on its left side',
       actionOrder
     );
+
+    const reassemblyHandlePromise = page.waitForFunction(() => {
+      const state = window.__SURROUND_3D__;
+      const amounts = state?.explosionItemAmounts || [];
+      const spread = amounts.length ? Math.max(...amounts) - Math.min(...amounts) : 0;
+      return state?.explosionTarget === 0 && state.motionActive &&
+        Math.max(...amounts) > 0.1 && Math.min(...amounts) < 0.9 && spread > 0.08
+        ? {
+          amounts: [...amounts],
+          offsets: [...state.explosionItemOffsets],
+          target: state.explosionTarget,
+          scene: state.activeScene
+        }
+        : false;
+    });
+    await clickSegment(page, 3);
+    const reassemblyHandle = await reassemblyHandlePromise;
+    const reassemblyState = await reassemblyHandle.jsonValue();
+    await reassemblyHandle.dispose();
+    assert(
+      reassemblyState.scene === 2 && reassemblyState.target === 0 &&
+      Math.max(...reassemblyState.amounts) > 0.1 && Math.min(...reassemblyState.amounts) < 0.9,
+      'Leaving segment 04 snapped the exploded view together instead of reassembling during transit',
+      reassemblyState
+    );
+    await page.waitForFunction(() => (
+      window.__SURROUND_3D__?.motionActive === false &&
+      window.__SURROUND_3D__?.explosionItemAmounts?.every((amount) => amount === 0)
+    ));
+    await clickSegment(page, 4);
+    await page.waitForFunction(() => (
+      window.__SURROUND_3D__?.motionActive === false &&
+      window.__SURROUND_3D__?.explosionAmount === 1
+    ));
 
     await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
     const posesBeforeFooter = await page.evaluate(() => window.__SURROUND_3D__.currentPoses);
@@ -525,6 +782,33 @@ async function main() {
           featuredPose
         );
       }
+      if (number === 4) {
+        await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
+        const mobileExplosionState = await page.evaluate(() => ({
+          poses: structuredClone(window.__SURROUND_3D__.currentPoses),
+          offsets: [...window.__SURROUND_3D__.explosionItemOffsets],
+          desktopMaxOffset: window.__SURROUND_3D__.explosionMaxOffset,
+          spacingScale: window.__SURROUND_3D__.explosionSpacingScale
+        }));
+        const { left, right } = mobileExplosionState.poses;
+        assert(
+          left.x === -right.x && Math.abs(left.x) >= 0.064 && Math.abs(left.x) <= 0.066 &&
+          left.y <= -0.26 && right.y === left.y &&
+          left.z === 0.035 && right.z === left.z &&
+          left.scale >= 0.84 && right.scale === left.scale &&
+          left.rotationX <= -0.27 && right.rotationX === left.rotationX &&
+          left.rotationY === 0 && right.rotationY === 0 &&
+          left.rotationZ === 0 && right.rotationZ === 0,
+          'Mobile segment 04 did not use the closer parallel exploded layout',
+          mobileExplosionState
+        );
+        assert(
+          mobileExplosionState.spacingScale >= 2.84 &&
+          Math.max(...mobileExplosionState.offsets) >= mobileExplosionState.desktopMaxOffset * 2.84,
+          'Mobile segment 04 did not extend the exploded layers into the vertical space',
+          mobileExplosionState
+        );
+      }
     }
     await clickFooter(page);
     layout = await readLayout(page);
@@ -595,6 +879,26 @@ async function main() {
       narrowHeroState.poses.left.y >= -0.07 && narrowHeroState.poses.right.y >= -0.07,
       'Mobile 338x619 hero did not close the copy-to-model gap around the viewport center',
       narrowHeroState
+    );
+    await clickSegment(page, 4);
+    await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
+    const narrowExplosionState = await page.evaluate(() => ({
+      poses: structuredClone(window.__SURROUND_3D__.currentPoses),
+      spacingScale: window.__SURROUND_3D__.explosionSpacingScale
+    }));
+    assert(
+      narrowExplosionState.poses.left.x === -narrowExplosionState.poses.right.x &&
+      Math.abs(narrowExplosionState.poses.left.x) >= 0.061 &&
+      narrowExplosionState.poses.left.y <= -0.22 &&
+      narrowExplosionState.poses.left.z === 0.035 &&
+      narrowExplosionState.poses.left.scale >= 0.81 &&
+      narrowExplosionState.poses.left.rotationY === 0 &&
+      narrowExplosionState.poses.right.rotationY === 0 &&
+      narrowExplosionState.poses.left.rotationZ === 0 &&
+      narrowExplosionState.poses.right.rotationZ === 0 &&
+      narrowExplosionState.spacingScale >= 2.44,
+      'Mobile 338x619 segment 04 did not preserve the compact parallel vertical layout',
+      narrowExplosionState
     );
 
     await context.close();

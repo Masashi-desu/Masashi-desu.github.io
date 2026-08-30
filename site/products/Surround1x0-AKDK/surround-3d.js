@@ -6,6 +6,52 @@ const canvas = document.getElementById('surround-canvas');
 const fallback = document.querySelector('.surround-visual__fallback');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const compactLayout = window.matchMedia('(max-width: 42rem)');
+const MODEL_UNIT_SCALE = 0.001;
+const EXPLOSION_SIDE_DELAY = 20;
+const EXPLOSION_LAYER_DELAYS = Object.freeze({
+  bottom_case: 0,
+  keycaps: 0,
+  trackball: 0,
+  switches: 24,
+  top_case: 100,
+  sockets: 100,
+  conthrough: 160,
+  pcb: 160,
+  controller: 180,
+  mouse_sensor: 180
+});
+const EXPLOSION_ITEM_DELAYS = Object.freeze({
+  keycaps: 80,
+  switches: 56,
+  sockets: 100
+});
+const EXPLOSION_WAVE_DURATION = 720;
+const COMPACT_DESTINATION_SCALE = 1.1;
+const TOP_CASE_CLEARANCE_RATIO = 0.78;
+const MOBILE_EXPLOSION_SPACING_MIN = 2.45;
+const MOBILE_EXPLOSION_SPACING_MAX = 2.85;
+const PART_ROTATION_MAX = THREE.MathUtils.degToRad(3.2);
+const PART_ROTATION_STAGGER = 0.14;
+const PART_ROTATION_LAYER_WEIGHTS = Object.freeze({
+  bottom_case: 0.24,
+  controller: 0.42,
+  mouse_sensor: 0.42,
+  conthrough: 0.56,
+  sockets: 0.78,
+  pcb: 0.32,
+  top_case: 0.46,
+  switches: 0.88,
+  keycaps: 1,
+  trackball: 0.58
+});
+const ITEMIZED_EXPLOSION_LAYERS = new Set(['keycaps', 'switches', 'sockets']);
+const TOP_CASE_CONSTRAINED_LAYERS = new Set([
+  'controller',
+  'mouse_sensor',
+  'conthrough',
+  'sockets',
+  'pcb'
+]);
 const MODEL_URLS = {
   dark: './assets/Surround1x0-AKDK-Black.glb',
   light: './assets/Surround1x0-AKDK-White.glb'
@@ -54,6 +100,32 @@ const publicState = {
   reentryStaging: 'near-frustum',
   materialFade: true,
   foregroundRendering: 'single-canvas',
+  modelHierarchy: 'half-roots-with-exploded-layers',
+  modelUnitScale: MODEL_UNIT_SCALE,
+  explodedView: 'glb-layer-metadata',
+  explosionWave: 'ordered-layer-ripple',
+  assembledTransit: 'rigid-half-root',
+  collisionAvoidance: 'side-locked-and-top-case-clearance',
+  explosionTiming: 'at-segment-motion-start',
+  reassemblyTiming: 'during-segment-motion',
+  explodedPartRotation: 'motion-lagged-per-item',
+  explodedPartRotationMax: PART_ROTATION_MAX,
+  topCaseClearanceRatio: TOP_CASE_CLEARANCE_RATIO,
+  mobileExplosionSpacingRange: [MOBILE_EXPLOSION_SPACING_MIN, MOBILE_EXPLOSION_SPACING_MAX],
+  explosionSpacingScale: 1,
+  explodedLayerCount: 0,
+  explodedLayerOrders: [],
+  explosionAmount: 0,
+  explosionTarget: 0,
+  explosionLayerAmounts: [],
+  explosionItemAmounts: [],
+  explosionItemOffsets: [],
+  explosionItemRotations: [],
+  explosionMaxOffset: 0,
+  explodedItemCount: 0,
+  explodedItemMetadata: [],
+  itemizedExplodedLayers: [],
+  modelMetadata: null,
   exitTargets: EXIT_TARGETS,
   stagingTargets: STAGING_TARGETS,
   currentPoses: null,
@@ -124,6 +196,32 @@ async function start() {
     light: prepareModel(lightModel.scene, 'White')
   };
   rig.add(models.dark.group, models.light.group);
+  publicState.explodedLayerCount = models.dark.explosion.layers.length;
+  publicState.explodedLayerOrders = [...new Set(
+    models.dark.explosion.layers.map((layer) => layer.order)
+  )].sort((a, b) => a - b);
+  publicState.explodedItemCount = models.dark.explosion.units.length;
+  publicState.explodedItemMetadata = models.dark.explosion.units.map((unit) => ({
+    side: unit.side,
+    layer: unit.layer.name,
+    name: unit.name,
+    itemized: unit.layer.itemized,
+    waveDelay: unit.waveDelay,
+    rotationPhase: unit.rotationPhase,
+    rotationWeight: unit.rotationWeight
+  }));
+  publicState.itemizedExplodedLayers = [...new Set(
+    models.dark.explosion.layers.filter((layer) => layer.itemized).map((layer) => layer.name)
+  )].sort();
+  publicState.explosionMaxOffset = models.dark.explosion.maxOffset;
+  publicState.modelMetadata = {
+    roots: { left: models.dark.halves.left.sourceName, right: models.dark.halves.right.sourceName },
+    colorways: {
+      dark: models.dark.metadata.exportedColorway,
+      light: models.light.metadata.exportedColorway
+    },
+    explodedRevision: models.dark.metadata.explodedRevision
+  };
 
   const motion = {
     pointerX: 0,
@@ -148,11 +246,18 @@ async function start() {
     if (!immediate && normalized === publicState.activeScene) {
       return false;
     }
+    const previous = publicState.activeScene;
+    const waveDirection = normalized >= previous ? 1 : -1;
     publicState.activeScene = normalized;
     publicState.foregroundSide = normalized === 1 ? 'right' : (normalized === 2 ? 'left' : null);
-    const state = getLayoutState(normalized, compactLayout.matches, window.innerWidth);
+    const state = getLayoutState(
+      normalized,
+      compactLayout.matches,
+      window.innerWidth,
+      window.visualViewport?.height || window.innerHeight
+    );
     publicState.heroSpread = normalized === 0 ? Math.abs(state.left.x) : null;
-    Object.values(models).forEach((model) => setModelTarget(model, state, immediate));
+    Object.values(models).forEach((model) => setModelTarget(model, state, immediate, waveDirection));
     publicState.motionActive = !immediate;
     return true;
   }
@@ -191,7 +296,8 @@ async function start() {
 
     Object.values(models).forEach((model) => updateModel(model, time));
     publicState.motionActive = Object.values(models).some((model) => (
-      Object.values(model.halves).some((half) => Boolean(half.motion))
+      Object.values(model.halves).some((half) => Boolean(half.motion)) ||
+      Boolean(model.explosion.motion)
     ));
 
     const compact = compactLayout.matches;
@@ -201,7 +307,7 @@ async function start() {
     camera.position.y = baseY - motion.pointerY * (compact ? 0.005 : 0.009);
     camera.lookAt(motion.pointerX * -0.008, compact ? 0.045 : 0, 0);
 
-    if (!document.hidden) {
+    if (!document.hidden && !window.__SURROUND_TEST_SKIP_RENDER__) {
       renderer.render(scene, camera);
     }
     publishPoseSnapshot(models[publicState.theme]);
@@ -240,11 +346,15 @@ async function start() {
 
 function prepareModel(group, colorName) {
   group.name = `Surround1x0-AKDK-${colorName}`;
-  const left = group.getObjectByName(`Surround1x0-AKDK-${colorName}_Left`);
-  const right = group.getObjectByName(`Surround1x0-AKDK-${colorName}_Right`);
-  if (!left || !right) {
+  const keyboardRoot = group.getObjectByName('Keyboard_Root');
+  const leftSource = group.getObjectByName('Left_Half_Root');
+  const rightSource = group.getObjectByName('Right_Half_Root');
+  if (!keyboardRoot || !leftSource || !rightSource) {
     throw new Error(`The ${colorName} GLB does not contain separate left and right keyboard roots.`);
   }
+
+  const left = createModelControl(group, leftSource, 'left');
+  const right = createModelControl(group, rightSource, 'right');
 
   group.traverse((object) => {
     if (!object.isMesh) {
@@ -258,37 +368,72 @@ function prepareModel(group, colorName) {
     });
   });
 
+  const halves = {
+    left: createHalfState(left.control, 'left', leftSource.name),
+    right: createHalfState(right.control, 'right', rightSource.name)
+  };
+  const explosion = createExplosionState(halves, keyboardRoot.userData);
   return {
     group,
-    halves: {
-      left: createHalfState(left, 'left'),
-      right: createHalfState(right, 'right')
+    halves,
+    explosion,
+    metadata: {
+      exportedColorway: keyboardRoot.userData.exported_colorway,
+      explodedRevision: keyboardRoot.userData.exploded_view_revision
     }
   };
 }
 
-function createHalfState(object, side) {
+function createModelControl(group, source, side) {
+  const sourcePosition = source.position.clone();
+  source.removeFromParent();
+  source.position.set(0, 0, 0);
+
+  const modelSpace = new THREE.Group();
+  modelSpace.name = `${side}-model-space`;
+  modelSpace.rotation.x = -Math.PI / 2;
+  modelSpace.scale.setScalar(MODEL_UNIT_SCALE);
+  modelSpace.add(source);
+
+  const control = new THREE.Group();
+  control.name = `${side}-display-control`;
+  control.position.copy(
+    sourcePosition
+      .applyEuler(new THREE.Euler(-Math.PI / 2, 0, 0))
+      .multiplyScalar(MODEL_UNIT_SCALE)
+  );
+  control.add(modelSpace);
+  group.add(control);
+  return { control, source };
+}
+
+function createHalfState(object, side, sourceName) {
   const direction = side === 'left' ? -1 : 1;
   const materialStates = [];
+  const clonedMaterials = new Map();
   object.traverse((child) => {
     if (!child.isMesh || !child.material) {
       return;
     }
     const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
-    const clonedMaterials = sourceMaterials.map((source) => {
-      const material = source.clone();
-      materialStates.push({
-        material,
-        baseOpacity: source.opacity,
-        baseTransparent: source.transparent,
-        baseDepthWrite: source.depthWrite
-      });
-      return material;
+    const childMaterials = sourceMaterials.map((source) => {
+      if (!clonedMaterials.has(source)) {
+        const material = source.clone();
+        clonedMaterials.set(source, material);
+        materialStates.push({
+          material,
+          baseOpacity: source.opacity,
+          baseTransparent: source.transparent,
+          baseDepthWrite: source.depthWrite
+        });
+      }
+      return clonedMaterials.get(source);
     });
-    child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0];
+    child.material = Array.isArray(child.material) ? childMaterials : childMaterials[0];
   });
   return {
     side,
+    sourceName,
     object,
     materialStates,
     baseScale: object.scale.clone(),
@@ -298,6 +443,9 @@ function createHalfState(object, side) {
     cornerTwistAxis: new THREE.Vector3(direction, 0, 1).normalize(),
     cornerTwistQuaternion: new THREE.Quaternion(),
     cornerTwistDirection: direction,
+    partMotionProgress: 1,
+    partMotionAmplitude: 0,
+    partMotionAxis: new THREE.Vector3(0, direction, 0),
     motion: null,
     current: {
       x: object.position.x,
@@ -326,7 +474,113 @@ function createHalfState(object, side) {
   };
 }
 
-function getLayoutState(index, compact, viewportWidth = window.innerWidth) {
+function createExplosionState(halves, metadata) {
+  const spacing = Number(metadata.site_exploded_spacing_mm || metadata.exploded_view_spacing_mm || 30);
+  const layers = [];
+  Object.values(halves).forEach((half) => {
+    half.object.traverse((object) => {
+      const order = Number(object.userData?.exploded_view_order);
+      if (!object.userData?.exploded_view_layer || !Number.isFinite(order)) {
+        return;
+      }
+      layers.push({
+        object,
+        half,
+        side: half.side,
+        name: object.userData.exploded_view_layer,
+        order,
+        basePosition: object.position.clone(),
+        explosionAmount: 0,
+        itemized: false,
+        units: []
+      });
+    });
+  });
+  if (!layers.length) {
+    throw new Error('The GLB does not contain exploded-view layer metadata.');
+  }
+  layers.sort((a, b) => a.order - b.order || a.side.localeCompare(b.side) || a.name.localeCompare(b.name));
+  const units = [];
+  layers.forEach((layer) => {
+    const itemObjects = collectExplosionItemObjects(layer)
+      .sort(compareExplosionItemPositions);
+    layer.itemized = itemObjects.length > 1;
+    layer.units = itemObjects.map((object, index) => {
+      const itemPhase = itemObjects.length > 1 ? index / (itemObjects.length - 1) : 0;
+      const unit = {
+        object,
+        layer,
+        side: layer.side,
+        name: object.name || `${layer.name}-${index + 1}`,
+        basePosition: object.position.clone(),
+        baseQuaternion: object.quaternion.clone(),
+        partRotationAxis: new THREE.Vector3(),
+        partRotationQuaternion: new THREE.Quaternion(),
+        partRotationAmount: 0,
+        explosionAmount: 0,
+        appliedOffset: 0,
+        waveDelay: (EXPLOSION_LAYER_DELAYS[layer.name] ?? layer.order * 40) +
+          (layer.side === 'right' ? EXPLOSION_SIDE_DELAY : 0) +
+          itemPhase * (EXPLOSION_ITEM_DELAYS[layer.name] ?? 0)
+      };
+      units.push(unit);
+      return unit;
+    });
+  });
+  const minWaveDelay = Math.min(...units.map((unit) => unit.waveDelay));
+  const maxWaveDelay = Math.max(...units.map((unit) => unit.waveDelay));
+  const waveDelaySpan = Math.max(1, maxWaveDelay - minWaveDelay);
+  units.forEach((unit, index) => {
+    const sequence = ((index + 1) * 0.61803398875) % 1;
+    unit.rotationPhase = (unit.waveDelay - minWaveDelay) / waveDelaySpan;
+    unit.rotationWeight = (PART_ROTATION_LAYER_WEIGHTS[unit.layer.name] ?? 0.5) *
+      (0.82 + sequence * 0.18);
+    unit.rotationAxisJitter = new THREE.Vector3(
+      sequence - 0.5,
+      ((sequence * 1.7) % 1) - 0.5,
+      ((sequence * 2.3) % 1) - 0.5
+    );
+  });
+  return {
+    layers,
+    units,
+    spacing,
+    current: 0,
+    target: 0,
+    motion: null,
+    maxWaveDelay,
+    maxOffset: Math.max(...layers.map((layer) => layer.order * spacing)) * MODEL_UNIT_SCALE
+  };
+}
+
+function collectExplosionItemObjects(layer) {
+  if (!ITEMIZED_EXPLOSION_LAYERS.has(layer.name)) {
+    return [layer.object];
+  }
+  if (layer.name === 'sockets') {
+    const assembly = layer.object.children.find((child) => /_Sockets_Assembly$/u.test(child.name));
+    return assembly?.children.length ? [...assembly.children] : [layer.object];
+  }
+  return layer.object.children.length ? [...layer.object.children] : [layer.object];
+}
+
+function compareExplosionItemPositions(left, right) {
+  const rowDifference = right.position.y - left.position.y;
+  if (Math.abs(rowDifference) > 0.001) {
+    return rowDifference;
+  }
+  const columnDifference = left.position.x - right.position.x;
+  return Math.abs(columnDifference) > 0.001
+    ? columnDifference
+    : left.name.localeCompare(right.name);
+}
+
+function getLayoutState(
+  index,
+  compact,
+  viewportWidth = window.innerWidth,
+  viewportHeight = window.visualViewport?.height || window.innerHeight
+) {
   const heroSpread = compact
     ? 0.105
     : THREE.MathUtils.lerp(
@@ -334,40 +588,54 @@ function getLayoutState(index, compact, viewportWidth = window.innerWidth) {
       0.205,
       THREE.MathUtils.clamp((viewportWidth - 672) / (1065 - 672), 0, 1)
     );
+  const mobileWidthProgress = THREE.MathUtils.clamp((viewportWidth - 338) / (446 - 338), 0, 1);
+  const mobileHeightProgress = THREE.MathUtils.clamp((viewportHeight - 619) / (844 - 619), 0, 1);
+  const mobileExplosionX = THREE.MathUtils.lerp(0.062, 0.068, mobileWidthProgress);
+  const mobileExplosionY = THREE.MathUtils.lerp(-0.23, -0.27, mobileHeightProgress);
+  const mobileExplosionScale = THREE.MathUtils.lerp(0.82, 0.88, mobileWidthProgress);
+  const mobileExplosionPitch = THREE.MathUtils.lerp(-0.22, -0.28, mobileHeightProgress);
   const desktop = [
     {
+      explosion: 0,
       left: createPose({ x: -heroSpread, y: 0.035, z: 0.045, scale: 1.32, rotationX: 0.38 }),
       right: createPose({ x: heroSpread, y: 0.035, z: 0.045, scale: 1.32, rotationX: 0.38 })
     },
     {
+      explosion: 0,
       left: createPose(EXIT_TARGETS.desktop.left),
       right: createPose({ x: 0.095, y: 0.018, z: 0.105, scale: 1.86, rotationX: -0.12, rotationY: -0.44, rotationZ: -0.13, foreground: 1 })
     },
     {
+      explosion: 0,
       left: createPose({ x: -0.095, y: 0.018, z: 0.105, scale: 1.86, rotationX: -0.12, rotationY: 0.44, rotationZ: 0.13, foreground: 1 }),
       right: createPose(EXIT_TARGETS.desktop.right)
     },
     {
-      left: createPose({ x: -0.165, y: 0.025, z: 0.015, scale: 1.08 }),
-      right: createPose({ x: 0.165, y: 0.025, z: 0.015, scale: 1.08 })
+      explosion: 1,
+      left: createPose({ x: -0.15, y: -0.09, z: 0.02, scale: 0.92, rotationX: 0.16 }),
+      right: createPose({ x: 0.15, y: -0.09, z: 0.02, scale: 0.92, rotationX: 0.16 })
     }
   ];
   const mobile = [
     {
+      explosion: 0,
       left: createPose({ x: -0.105, y: -0.06, z: 0.02, scale: 0.82, rotationX: 0.24 }),
       right: createPose({ x: 0.105, y: -0.06, z: 0.02, scale: 0.82, rotationX: 0.24 })
     },
     {
+      explosion: 0,
       left: createPose(EXIT_TARGETS.mobile.left),
       right: createPose({ x: 0.014, y: 0.105, z: 0.035, scale: 2.2, rotationX: -0.05, rotationY: -0.26, rotationZ: -0.08 })
     },
     {
+      explosion: 0,
       left: createPose({ x: -0.014, y: 0.105, z: 0.035, scale: 2.2, rotationX: -0.05, rotationY: 0.26, rotationZ: 0.08 }),
       right: createPose(EXIT_TARGETS.mobile.right)
     },
     {
-      left: createPose({ x: -0.09, y: 0.155, z: 0, scale: 0.72 }),
-      right: createPose({ x: 0.09, y: 0.155, z: 0, scale: 0.72 })
+      explosion: 1,
+      left: createPose({ x: -mobileExplosionX, y: mobileExplosionY, z: 0.035, scale: mobileExplosionScale, rotationX: mobileExplosionPitch }),
+      right: createPose({ x: mobileExplosionX, y: mobileExplosionY, z: 0.035, scale: mobileExplosionScale, rotationX: mobileExplosionPitch })
     }
   ];
   return (compact ? mobile : desktop)[index] || (compact ? mobile[0] : desktop[0]);
@@ -419,14 +687,30 @@ function createStagingPose(side, compact = false) {
   });
 }
 
-function setModelTarget(model, state, immediate) {
+function createCollisionSafeStagingPose(side, target, compact = false) {
+  const direction = side === 'left' ? -1 : 1;
+  return createPose({
+    ...target,
+    x: target.x + direction * (compact ? 0.045 : 0.1),
+    y: target.y + (compact ? 0.035 : 0.07),
+    z: target.z + (compact ? 0.025 : 0.04),
+    scale: target.scale,
+    opacity: 0,
+    foreground: 0
+  });
+}
+
+function setModelTarget(model, state, immediate, waveDirection = 1) {
+  const explosionTarget = state.explosion || 0;
   if (immediate) {
     Object.entries(model.halves).forEach(([side, half]) => {
       Object.assign(half.target, state[side]);
       Object.assign(half.current, half.target);
       half.motion = null;
+      resetPartMotion(half);
       applyHalfState(half);
     });
+    setExplosionTarget(model.explosion, explosionTarget, true, waveDirection);
     return;
   }
   const delays = planMotionDelays(model, state);
@@ -435,6 +719,44 @@ function setModelTarget(model, state, immediate) {
     Object.assign(half.target, state[side]);
     half.motion = createCurvedMotion(half, half.target, now + delays[side]);
   });
+  if (explosionTarget > 0) {
+    setExplosionTarget(model.explosion, explosionTarget, false, waveDirection, now);
+  } else if (model.explosion.current > 0 || model.explosion.target > 0 || model.explosion.motion) {
+    setExplosionTarget(model.explosion, explosionTarget, false, waveDirection, now);
+  } else {
+    // Ordinary scenes stay assembled without starting another exploded-view wave.
+    setExplosionTarget(model.explosion, explosionTarget, true, waveDirection, now);
+  }
+}
+
+function setExplosionTarget(explosion, target, immediate, waveDirection, now = performance.now()) {
+  if (immediate || reduceMotion.matches) {
+    explosion.target = target;
+    explosion.current = target;
+    explosion.motion = null;
+    explosion.units.forEach((unit) => {
+      unit.explosionAmount = target;
+    });
+    syncExplosionAmounts(explosion);
+    applyExplosionState(explosion);
+    return;
+  }
+  if (target === explosion.target && !explosion.motion) {
+    return;
+  }
+  if (target === explosion.target && explosion.motion) {
+    return;
+  }
+  explosion.target = target;
+  explosion.motion = {
+    start: now,
+    target,
+    units: explosion.units.map((unit) => ({
+      unit,
+      from: unit.explosionAmount,
+      delay: waveDirection >= 0 ? unit.waveDelay : explosion.maxWaveDelay - unit.waveDelay
+    }))
+  };
 }
 
 function planMotionDelays(model, state) {
@@ -460,6 +782,28 @@ function motionEnergy(from, to) {
     Math.abs(to.scale - from.scale) * 0.12;
 }
 
+function createPartMotion(from, to, direction, swing) {
+  const cornerDelta = to.cornerTwist - from.cornerTwist;
+  const axis = new THREE.Vector3(
+    to.rotationX - from.rotationX + cornerDelta * 0.45,
+    to.rotationY - from.rotationY - direction * swing * 0.14,
+    to.rotationZ - from.rotationZ + direction * cornerDelta * 0.45
+  );
+  const angularTravel = axis.length();
+  if (angularTravel < 0.001) {
+    axis.set(0.35, -direction, 0.45);
+  }
+  return {
+    axis: axis.normalize(),
+    amplitude: Math.min(PART_ROTATION_MAX, 0.012 + angularTravel * 0.025 + swing * 0.016)
+  };
+}
+
+function resetPartMotion(half) {
+  half.partMotionProgress = 1;
+  half.partMotionAmplitude = 0;
+}
+
 function createCurvedMotion(half, target, start = performance.now()) {
   const from = { ...half.current };
   const to = { ...target };
@@ -467,7 +811,10 @@ function createCurvedMotion(half, target, start = performance.now()) {
   const exiting = from.opacity > 0.5 && to.opacity < 0.5;
   const entering = !exiting && from.opacity < 0.2 && to.opacity > 0.5;
   if (entering) {
-    Object.assign(from, (compact ? STAGING_TARGETS.mobile : STAGING_TARGETS.desktop)[half.side]);
+    const staging = to.scale <= COMPACT_DESTINATION_SCALE
+      ? createCollisionSafeStagingPose(half.side, to, compact)
+      : (compact ? STAGING_TARGETS.mobile : STAGING_TARGETS.desktop)[half.side];
+    Object.assign(from, staging);
   }
   const direction = Math.sign(to.x - from.x) || (half.side === 'left' ? -1 : 1);
   const baseDuration = compact ? 1080 : 1380;
@@ -492,7 +839,8 @@ function createCurvedMotion(half, target, start = performance.now()) {
       to,
       control,
       control2,
-      exiting: true
+      exiting: true,
+      partMotion: createPartMotion(from, to, direction, 1)
     };
   }
 
@@ -531,7 +879,8 @@ function createCurvedMotion(half, target, start = performance.now()) {
       rotationZ: -direction * (0.08 + 0.2 * swing) * bankSettle('rotationZ')
     },
     twistAmp: Math.min(0.34, 0.1 + 0.32 * swing) *
-      (1 - THREE.MathUtils.clamp(Math.abs(to.cornerTwist - from.cornerTwist) / 0.5, 0, 0.8))
+      (1 - THREE.MathUtils.clamp(Math.abs(to.cornerTwist - from.cornerTwist) / 0.5, 0, 0.8)),
+    partMotion: createPartMotion(from, to, direction, swing)
   };
 }
 
@@ -540,15 +889,112 @@ function updateModel(model, time) {
     updateHalfMotion(half, time);
     applyHalfState(half);
   });
+  updateExplosionState(model.explosion, time);
+}
+
+function updateExplosionState(explosion, time) {
+  if (explosion.motion) {
+    let finished = true;
+    explosion.motion.units.forEach(({ unit, from, delay }) => {
+      const progress = THREE.MathUtils.clamp(
+        (time - explosion.motion.start - delay) / EXPLOSION_WAVE_DURATION,
+        0,
+        1
+      );
+      unit.explosionAmount = THREE.MathUtils.lerp(from, explosion.motion.target, smootherStep(progress));
+      finished = finished && progress >= 1;
+    });
+    if (finished) {
+      explosion.units.forEach((unit) => {
+        unit.explosionAmount = explosion.target;
+      });
+      explosion.motion = null;
+    }
+  }
+  syncExplosionAmounts(explosion);
+  if (!explosion.motion) {
+    explosion.current = explosion.target;
+  }
+  applyExplosionState(explosion);
+}
+
+function syncExplosionAmounts(explosion) {
+  explosion.layers.forEach((layer) => {
+    layer.explosionAmount = layer.units.reduce((sum, unit) => sum + unit.explosionAmount, 0) /
+      layer.units.length;
+  });
+  explosion.current = explosion.units.reduce((sum, unit) => sum + unit.explosionAmount, 0) /
+    explosion.units.length;
+}
+
+function getExplosionSpacingScale() {
+  if (!compactLayout.matches) {
+    return 1;
+  }
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  return THREE.MathUtils.lerp(
+    MOBILE_EXPLOSION_SPACING_MIN,
+    MOBILE_EXPLOSION_SPACING_MAX,
+    THREE.MathUtils.clamp((viewportHeight - 619) / (844 - 619), 0, 1)
+  );
+}
+
+function applyExplosionState(explosion) {
+  explosion.spacingScale = getExplosionSpacingScale();
+  const spacing = explosion.spacing * explosion.spacingScale;
+  explosion.layers.forEach((layer) => {
+    layer.object.position.copy(layer.basePosition);
+  });
+  const topCaseOffsets = Object.fromEntries(
+    explosion.layers
+      .filter((layer) => layer.name === 'top_case')
+      .map((layer) => [layer.side, layer.order * spacing * layer.explosionAmount])
+  );
+  explosion.units.forEach((unit) => {
+    const requestedOffset = unit.layer.order * spacing * unit.explosionAmount;
+    const appliedOffset = TOP_CASE_CONSTRAINED_LAYERS.has(unit.layer.name)
+      ? Math.min(requestedOffset, (topCaseOffsets[unit.side] || 0) * TOP_CASE_CLEARANCE_RATIO)
+      : requestedOffset;
+    unit.appliedOffset = appliedOffset;
+    unit.object.position.copy(unit.basePosition);
+    unit.object.position.z += appliedOffset;
+    unit.object.quaternion.copy(unit.baseQuaternion);
+    const phaseStart = unit.rotationPhase * PART_ROTATION_STAGGER;
+    const rotationProgress = THREE.MathUtils.clamp(
+      (unit.layer.half.partMotionProgress - phaseStart) / (1 - phaseStart),
+      0,
+      1
+    );
+    const rotationEnvelope = bellImpulse(rotationProgress, 0.42);
+    unit.partRotationAmount = reduceMotion.matches
+      ? 0
+      : -unit.layer.half.partMotionAmplitude * unit.rotationWeight *
+        rotationEnvelope * unit.explosionAmount;
+    if (Math.abs(unit.partRotationAmount) > 0.00001) {
+      unit.partRotationAxis
+        .copy(unit.layer.half.partMotionAxis)
+        .addScaledVector(unit.rotationAxisJitter, 0.16)
+        .normalize();
+      unit.partRotationQuaternion.setFromAxisAngle(
+        unit.partRotationAxis,
+        unit.partRotationAmount
+      );
+      unit.object.quaternion.multiply(unit.partRotationQuaternion);
+    }
+  });
 }
 
 function updateHalfMotion(half, time) {
   const motion = half.motion;
   if (!motion) {
+    resetPartMotion(half);
     return;
   }
   const rawProgress = Math.min(1, Math.max(0, (time - motion.start) / motion.duration));
   const progress = smootherStep(rawProgress);
+  half.partMotionProgress = rawProgress;
+  half.partMotionAmplitude = motion.partMotion.amplitude;
+  half.partMotionAxis.copy(motion.partMotion.axis);
   if (motion.exiting) {
     ['x', 'y', 'z', 'scale'].forEach((key) => {
       half.current[key] = cubicBezier(motion.from[key], motion.control[key], motion.control2[key], motion.to[key], progress);
@@ -586,6 +1032,7 @@ function updateHalfMotion(half, time) {
   if (rawProgress >= 1) {
     Object.assign(half.current, motion.to);
     half.motion = null;
+    resetPartMotion(half);
   }
 }
 
@@ -657,4 +1104,11 @@ function publishPoseSnapshot(model) {
     side,
     { ...half.current }
   ]));
+  publicState.explosionAmount = model.explosion.current;
+  publicState.explosionTarget = model.explosion.target;
+  publicState.explosionLayerAmounts = model.explosion.layers.map((layer) => layer.explosionAmount);
+  publicState.explosionItemAmounts = model.explosion.units.map((unit) => unit.explosionAmount);
+  publicState.explosionItemOffsets = model.explosion.units.map((unit) => unit.appliedOffset * MODEL_UNIT_SCALE);
+  publicState.explosionItemRotations = model.explosion.units.map((unit) => Math.abs(unit.partRotationAmount));
+  publicState.explosionSpacingScale = model.explosion.spacingScale;
 }
