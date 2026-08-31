@@ -103,8 +103,12 @@ body.retreat-landing,
   /* Native panel frame: 796 × 850 pt, including its title-bar area. */
   --retreat-original-panel-max-height: 106.78392vw;
   position: relative;
+  /* Include the inner frame pad while aligning the visible panel edge with the 3vw content gutter. */
+  width: calc(100% - clamp(1rem, calc(6vw - 1rem), 5rem));
+  max-width: 91rem;
   height: min(100svh, var(--retreat-original-panel-max-height));
   min-height: 0;
+  margin: 0 auto;
   padding: var(--retreat-viewport-pad);
   background: transparent;
   container: retreat-launcher / size;
@@ -744,6 +748,16 @@ body.is-retreat-icon-editor-open {
 
 .retreat-section-header--stacked {
   align-items: flex-start;
+  flex-direction: column;
+}
+
+.retreat-section-header--stacked .retreat-section-heading {
+  width: 100%;
+}
+
+.retreat-section-header--stacked .retreat-section-heading > div {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .retreat-section-heading {
@@ -800,8 +814,24 @@ body.is-retreat-icon-editor-open {
 }
 
 .retreat-section-header--stacked .retreat-section-copy {
+  max-width: none;
   margin: 0;
-  padding-top: 0.35rem;
+  padding-top: clamp(0.9rem, 1.5vw, 1.25rem);
+  white-space: normal;
+}
+
+.retreat-section--showcase .retreat-section-heading {
+  width: 100%;
+}
+
+.retreat-section--showcase .retreat-section-heading > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.retreat-section--showcase .retreat-lede {
+  max-width: none;
+  white-space: normal;
 }
 
 .retreat-store-badge {
@@ -968,19 +998,37 @@ body.is-retreat-icon-editor-open {
 .retreat-cta-window {
   display: grid;
   align-items: center;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: clamp(1.5rem, 3vw, 3rem);
+  grid-template-areas:
+    "icon content"
+    "icon store";
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: clamp(1.5rem, 3vw, 3rem);
+  row-gap: clamp(1rem, 1.5vw, 1.5rem);
 }
 
 .retreat-cta-icon {
+  grid-area: icon;
   width: clamp(4.5rem, 7.5vw, 7.5rem);
   height: clamp(4.5rem, 7.5vw, 7.5rem);
   border-radius: clamp(1.25rem, 2vw, 2rem);
   box-shadow: 0 1.25rem 2.5rem rgba(0, 0, 0, 0.34);
 }
 
+.retreat-cta-copy {
+  min-width: 0;
+  grid-area: content;
+}
+
+.retreat-cta-window > .retreat-store-badge {
+  align-self: end;
+  justify-self: end;
+  grid-area: store;
+}
+
 .retreat-cta-window .retreat-section-copy {
+  max-width: none;
   margin: 1rem 0 0;
+  white-space: normal;
 }
 
 .retreat-liquid-card {
@@ -1079,7 +1127,7 @@ body.is-retreat-icon-editor-open {
 
 .retreat-footer-links {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 1rem 1.5rem;
 }
 
@@ -1114,6 +1162,38 @@ body.is-retreat-icon-editor-open {
   border-color: var(--retreat-line);
   background: var(--retreat-surface);
   color: var(--retreat-white);
+}
+
+@media (min-width: 48.01rem) {
+  .retreat-footer__inner {
+    display: grid;
+    align-items: end;
+    grid-template-areas:
+      "links actions"
+      "copyright actions";
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 1rem;
+  }
+
+  .retreat-footer-links {
+    align-self: end;
+    grid-area: links;
+  }
+
+  .retreat-footer .site-footer__shared {
+    display: contents;
+  }
+
+  .retreat-footer .site-footer__copyright {
+    justify-self: start;
+    grid-area: copyright;
+  }
+
+  .retreat-footer .site-footer__actions {
+    align-self: end;
+    justify-self: end;
+    grid-area: actions;
+  }
 }
 
 .retreat-close:focus-visible,
@@ -1169,9 +1249,12 @@ body.is-retreat-icon-editor-open {
   .retreat-feature-grid {
     grid-template-columns: 1fr;
   }
+}
 
-  .retreat-section-header--stacked {
-    flex-direction: column;
+@media (min-width: 64.01rem) {
+  .retreat-section-title--single-line {
+    max-width: none;
+    white-space: nowrap;
   }
 }
 
@@ -1335,6 +1418,9 @@ body.is-retreat-icon-editor-open {
   .retreat-viewport {
     --retreat-viewport-pad: 0.35rem;
     /* iOS in-app browsers can expose a 100svh taller than their visible area. */
+    /* 0.4rem outer margin + 0.35rem frame pad = the cards' 0.75rem visible gutter. */
+    width: calc(100% - 0.8rem);
+    max-width: none;
     height: var(--retreat-visible-viewport-height, 100svh);
   }
 
@@ -1512,6 +1598,11 @@ body.is-retreat-icon-editor-open {
     grid-row: 1;
   }
 
+  .retreat-section-heading .retreat-section-copy {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
   .retreat-section-title {
     grid-column: 1 / -1;
     grid-row: 2;
@@ -1551,6 +1642,10 @@ body.is-retreat-icon-editor-open {
   }
 
   .retreat-cta-window {
+    grid-template-areas:
+      "icon"
+      "content"
+      "store";
     grid-template-columns: 1fr;
   }
 
