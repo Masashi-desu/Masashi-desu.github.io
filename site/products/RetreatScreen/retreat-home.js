@@ -1210,6 +1210,9 @@
   });
 
   window.addEventListener('retreat:language-applied', () => {
+    document.querySelectorAll('[data-retreat-app-store-link]').forEach((link) => {
+      launcherActionState.delete(link);
+    });
     syncEditingCopy();
     syncLauncherActions();
     if (title.dataset.userLabel !== 'true') {

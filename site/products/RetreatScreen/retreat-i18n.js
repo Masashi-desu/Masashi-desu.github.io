@@ -1,5 +1,9 @@
 (function () {
   const STORAGE_KEY = 'mdw-lang';
+  const APP_STORE_URLS = {
+    ja: 'https://apps.apple.com/jp/app/retreatscreen/id6757686282?mt=12&itscg=30200&itsct=apps_box_badge&mttnsubad=6757686282',
+    en: 'https://apps.apple.com/us/app/retreatscreen/id6757686282?mt=12&itscg=30200&itsct=apps_box_badge&mttnsubad=6757686282'
+  };
   const translations = {
     ja: {
       editHint: 'アイコンをドラッグして並べ替え、押すと名前や画像を変更できます。',
@@ -169,6 +173,12 @@
     });
   }
 
+  function syncAppStoreLinks(lang) {
+    document.querySelectorAll('[data-retreat-app-store-link]').forEach((link) => {
+      link.setAttribute('href', APP_STORE_URLS[lang]);
+    });
+  }
+
   function applyLanguage(locale) {
     recordFallbacks();
     const lang = resolveLocale(locale);
@@ -206,6 +216,7 @@
     });
 
     syncLanguageSelects(lang);
+    syncAppStoreLinks(lang);
     try {
       localStorage.setItem(STORAGE_KEY, lang);
     } catch (error) {

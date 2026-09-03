@@ -1,8 +1,8 @@
 /**
  * テスト概要:
- *  - 目的: RetreatScreen の編集モードで、一覧内編集を行わず本家同様の専用ウィンドウから名前・画像を変更できることを確認する。
- *  - 期待値: 編集中はリンク遷移とホバー効果が無効になり、アイコンが編集ボタンとして動作する一方、横スクロールによるページ送りは利用できる。変更は保存時だけ反映・永続化され、キャンセルでは破棄、元アイコン復元も保存時だけ反映される。
- *  - 検証方法: ローカル静的サーバーで RetreatScreen を開き、Chromium / WebKit で編集モード中の横スクロール、編集ウィンドウの表示、フォーカス、名前変更、PNG 選択、キャンセル、保存、再読み込み、元アイコン復元、編集終了を順に操作して DOM・URL・localStorage・算出スタイルを取得する。
+ *  - 目的: RetreatScreen の編集モードと、表示言語に応じた App Store リンクを確認する。
+ *  - 期待値: 編集中はリンク遷移とホバー効果が無効になり、アイコンが編集ボタンとして動作する一方、横スクロールによるページ送りは利用できる。変更は保存時だけ反映・永続化され、キャンセルでは破棄、元アイコン復元も保存時だけ反映される。App Store リンクは日本語で日本ストア、英語で米国ストアを指す。
+ *  - 検証方法: ローカル静的サーバーで RetreatScreen を開き、Chromium / WebKit で App Store リンク、編集モード中の横スクロール、編集ウィンドウの表示、フォーカス、名前変更、PNG 選択、キャンセル、保存、再読み込み、元アイコン復元、言語切替、編集終了を順に操作して DOM・URL・localStorage・算出スタイルを取得する。
  */
 const http = require('http');
 const fs = require('fs');
@@ -84,6 +84,12 @@ function assertEditingActionsDisabled(state) {
   });
 }
 
+async function readAppStoreHrefs(page) {
+  return page.locator('[data-retreat-app-store-link]').evaluateAll((links) => (
+    links.map((link) => link.getAttribute('href'))
+  ));
+}
+
 async function readIconEffect(page, itemName) {
   return page.locator(`[data-launcher-item="${itemName}"] .retreat-app-icon`).evaluate((icon) => {
     const style = getComputedStyle(icon);
@@ -135,6 +141,11 @@ async function main() {
     assert(normalState.features.href === '#details', `Features link did not start active: ${JSON.stringify(normalState.features)}`);
     assert(normalState.products.href === '../../index.html#products-section', `Dynamic home link was not initialized: ${JSON.stringify(normalState.products)}`);
     assert(await page.getByRole('link', { name: 'Features' }).count() === 1, 'Features was not exposed as a link in normal mode.');
+    const japaneseStoreHrefs = await readAppStoreHrefs(page);
+    assert(
+      japaneseStoreHrefs.length === 2 && japaneseStoreHrefs.every((href) => href.startsWith('https://apps.apple.com/jp/app/retreatscreen/id6757686282?')),
+      `Japanese App Store links were not initialized: ${JSON.stringify(japaneseStoreHrefs)}`
+    );
 
     await page.setViewportSize({ width: 1101, height: 619 });
     await scrollLauncherSurface(page, 48, 2);
@@ -288,6 +299,11 @@ async function main() {
 
     await page.evaluate(() => window.RetreatI18n.apply('en'));
     assertEditingActionsDisabled(await readActionState(page));
+    const editingStoreHrefs = await readAppStoreHrefs(page);
+    assert(
+      editingStoreHrefs[0] === null && editingStoreHrefs[1].startsWith('https://apps.apple.com/us/app/retreatscreen/id6757686282?'),
+      `English App Store links were not synchronized during editing: ${JSON.stringify(editingStoreHrefs)}`
+    );
 
     await page.locator('#retreat-edit-toggle').click();
     await page.waitForSelector('#retreat-app-grid:not(.is-editing)');
@@ -298,6 +314,15 @@ async function main() {
     assert(restoredState.features.role === null && restoredState.features.tabIndex === 0, `Features semantics were not restored: ${JSON.stringify(restoredState.features)}`);
     assert(restoredState.products.href === '../../index.html#products-section', `Dynamic home link was not restored: ${JSON.stringify(restoredState.products)}`);
     assert(restoredState.products.transitionDirection === 'left', `Dynamic home transition was not restored: ${JSON.stringify(restoredState.products)}`);
+    assert(
+      restoredState.download.href.startsWith('https://apps.apple.com/us/app/retreatscreen/id6757686282?'),
+      `The English launcher App Store link was not restored: ${JSON.stringify(restoredState.download)}`
+    );
+    const englishStoreHrefs = await readAppStoreHrefs(page);
+    assert(
+      englishStoreHrefs.length === 2 && englishStoreHrefs.every((href) => href.startsWith('https://apps.apple.com/us/app/retreatscreen/id6757686282?')),
+      `English App Store links were not applied: ${JSON.stringify(englishStoreHrefs)}`
+    );
     assert(await page.getByRole('link', { name: 'Feature Lab' }).count() === 1, 'The renamed icon was not exposed as a link after editing.');
 
     await page.mouse.move(4, 4);
