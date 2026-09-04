@@ -50,7 +50,8 @@
       factPrivacyLabel: 'Privacy',
       factPrivacyValue: 'No analytics or tracking',
       purchaseTitle: 'Remove one step from every input.',
-      purchaseBody: 'TypeFetch runs on macOS 13 and later.\nPurchase or download it from itch.io.',
+      purchaseBody: 'TypeFetch runs on macOS 13 and later. Purchase or download it from itch.io.',
+      purchaseCta: 'Get it on itch.io',
       themeLabel: 'Theme',
       themeSystem: 'System',
       themeLight: 'Light',
@@ -79,7 +80,6 @@
   const openButtons = Array.from(document.querySelectorAll('[data-open-callout]'));
   const cancelButton = document.querySelector('[data-cancel-callout]');
   const confirmButton = document.querySelector('[data-confirm-callout]');
-  const purchaseEmbed = document.querySelector('.tf-purchase__embed iframe[data-theme-src-dark][data-theme-src-light]');
   let calloutOpen = callout && callout.getAttribute('aria-hidden') !== 'true';
   let isComposing = false;
   let targetSelection = { start: 0, end: 0 };
@@ -95,17 +95,6 @@
 
   function resolveLocale(locale) {
     return locale === 'en' ? 'en' : 'ja';
-  }
-
-  function syncPurchaseEmbedTheme() {
-    if (!purchaseEmbed) {
-      return;
-    }
-    const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
-    const source = purchaseEmbed.dataset[theme === 'light' ? 'themeSrcLight' : 'themeSrcDark'];
-    if (source && purchaseEmbed.getAttribute('src') !== source) {
-      purchaseEmbed.setAttribute('src', source);
-    }
   }
 
   function readStoredLanguage() {
@@ -856,7 +845,6 @@
   };
 
   recordFallbacks();
-  syncPurchaseEmbedTheme();
   setupLanguageSelector();
   applyLanguage(currentLocale);
   captureTargetSelection({ atEnd: true });
@@ -870,10 +858,5 @@
   window.addEventListener('mdw:footer-loaded', () => {
     setupLanguageSelector();
     applyLanguage(currentLocale);
-  });
-
-  new MutationObserver(syncPurchaseEmbedTheme).observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['data-theme']
   });
 })();
