@@ -11,6 +11,9 @@
     en: {
       back: 'Back to Products',
       loading3d: 'Loading 3D model',
+      modelLeft: 'Left keyboard',
+      modelRight: 'Right keyboard',
+      modelKeyboardHint: 'Left drag to rotate, middle drag to move. Use one finger to rotate or two to move. Arrow keys rotate, Shift + arrow keys move. Escape resets the layout.',
       heroEyebrow: 'Experimental input system',
       heroTitle: 'The endpoint of HID',
       heroBody: 'From the fingertips to the cursor.\nOne body for every input.',
@@ -33,6 +36,16 @@
   const fallbackCopy = {};
   let sectionNavigation = null;
   let currentLocale = resolveLocale(readStoredLanguage() || 'ja');
+  window.MDWSurroundNavigation = Object.freeze({
+    isSettled() {
+      if (!sectionNavigation) return false;
+      const state = sectionNavigation.getState();
+      const stop = sectionNavigation.index.getById(state.activeId);
+      const top = sectionNavigation.readStopTop(stop);
+      return state.mounted && !state.pendingId && !state.locked && !state.aligning &&
+        top !== null && Math.abs(window.scrollY - top) <= 1;
+    }
+  });
 
   function resolveLocale(locale) {
     return Object.prototype.hasOwnProperty.call(translations, locale) ? locale : 'ja';
@@ -221,6 +234,14 @@
       reduceMotion,
       managedClass: 'surround-scroll-managed',
       visibleClass: 'is-visible',
+      shouldYieldTouch(event) {
+        return Boolean(event.target.closest('[data-surround-model]'));
+      },
+      shouldYieldWheel(event) {
+        if (!window.__SURROUND_3D__?.interaction?.dragging) return false;
+        event.preventDefault();
+        return true;
+      },
       onActiveChange({ stop, source, activeContentId }) {
         announceSegment(stop.id, source, activeContentId);
       }

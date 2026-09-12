@@ -1,12 +1,20 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
+import { createModelInteraction } from './surround-interaction.js';
 
 const visual = document.querySelector('.surround-visual');
 const canvas = document.getElementById('surround-canvas');
-const fallback = document.querySelector('.surround-visual__fallback');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const compactLayout = window.matchMedia('(max-width: 42rem)');
 const MODEL_UNIT_SCALE = 0.001;
+const PAIR_MARGIN_PX = Object.freeze({ desktop: 24, mobile: 16 });
+// Section 04, landscape only. Edit these XYZ Euler angles in degrees to adjust
+// each keyboard's orientation. No additional per-side roll is applied later.
+const LANDSCAPE_EXPLODED_ROTATION_DEG = Object.freeze({
+  left: Object.freeze({ x: 68.93, y: 8.59, z: 39.74 }),
+  right: Object.freeze({ x: 26.35, y: 6.31, z: -40.68 })
+});
 const EXPLOSION_SIDE_DELAY = 20;
 const EXPLOSION_LAYER_DELAYS = Object.freeze({
   bottom_case: 0,
@@ -84,6 +92,8 @@ const publicState = {
   activeScene: Number(document.body.dataset.surroundScene || 0),
   foregroundSide: null,
   heroSpread: null,
+  pairLayout: null,
+  featuredLayout: null,
   motionActive: false,
   motionKind: 'cubic-swing-arc',
   motionEasing: 'smootherstep',
@@ -113,6 +123,7 @@ const publicState = {
   topCaseClearanceRatio: TOP_CASE_CLEARANCE_RATIO,
   mobileExplosionSpacingRange: [MOBILE_EXPLOSION_SPACING_MIN, MOBILE_EXPLOSION_SPACING_MAX],
   explosionSpacingScale: 1,
+  explosionOrientation: null,
   explodedLayerCount: 0,
   explodedLayerOrders: [],
   explosionAmount: 0,
@@ -120,6 +131,7 @@ const publicState = {
   explosionLayerAmounts: [],
   explosionItemAmounts: [],
   explosionItemOffsets: [],
+  explosionLateralDrift: 0,
   explosionItemRotations: [],
   explosionMaxOffset: 0,
   explodedItemCount: 0,
@@ -139,8 +151,7 @@ if (!visual || !canvas) {
 } else {
   start().catch((error) => {
     publicState.failed = true;
-    visual.classList.add('is-fallback');
-    fallback?.removeAttribute('hidden');
+    visual.classList.add('is-failed');
     console.error('Surround1x0-AKDK 3D renderer failed to start.', error);
   });
 }
@@ -230,6 +241,10 @@ async function start() {
     targetPointerY: 0,
     lastTime: performance.now()
   };
+  const interaction = createModelInteraction({
+    models, camera, state: publicState,
+    reset: () => setScene(publicState.activeScene, true)
+  });
 
   function syncTheme() {
     const theme = resolveTheme();
@@ -246,6 +261,8 @@ async function start() {
     if (!immediate && normalized === publicState.activeScene) {
       return false;
     }
+    interaction.cancel();
+    publicState.interaction.modified = false;
     const previous = publicState.activeScene;
     const waveDirection = normalized >= previous ? 1 : -1;
     publicState.activeScene = normalized;
@@ -256,6 +273,13 @@ async function start() {
       window.innerWidth,
       window.visualViewport?.height || window.innerHeight
     );
+    publicState.pairLayout = normalized === 0 || normalized === 3
+      ? fitPairLayout(state, models, camera)
+      : null;
+    publicState.featuredLayout = normalized === 1 || normalized === 2
+      ? fitFeaturedLayout(state, normalized, models, camera)
+      : null;
+    publicState.explosionOrientation = state.explosion ? (state.explosionOrientation || 'vertical') : null;
     publicState.heroSpread = normalized === 0 ? Math.abs(state.left.x) : null;
     Object.values(models).forEach((model) => setModelTarget(model, state, immediate, waveDirection));
     publicState.motionActive = !immediate;
@@ -280,7 +304,7 @@ async function start() {
   }
 
   function handlePointerMove(event) {
-    if (reduceMotion.matches) {
+    if (reduceMotion.matches || publicState.interaction.dragging) {
       return;
     }
     motion.targetPointerX = (event.clientX / Math.max(1, window.innerWidth) - 0.5) * 2;
@@ -311,12 +335,15 @@ async function start() {
       renderer.render(scene, camera);
     }
     publishPoseSnapshot(models[publicState.theme]);
+    interaction.update();
     window.requestAnimationFrame(render);
   }
 
+  // Navigation remains available while the GLBs load. Start at the latest
+  // selected section, including a hash restored after this module initialized.
+  publicState.activeScene = Number(document.body.dataset.surroundScene || 0);
   syncTheme();
   resize();
-  setScene(publicState.activeScene, true);
   visual.style.setProperty('--surround-load-progress', '100%');
   visual.classList.add('is-ready');
   publicState.ready = true;
@@ -327,7 +354,17 @@ async function start() {
     attributeFilter: ['data-theme']
   });
 
+  const refreshFeaturedLayout = () => {
+    if (publicState.activeScene === 1 || publicState.activeScene === 2) {
+      setScene(publicState.activeScene, true);
+    }
+  };
+  const languageObserver = new MutationObserver(refreshFeaturedLayout);
+  languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+  document.fonts.ready.then(refreshFeaturedLayout);
+
   window.addEventListener('surround:segment-change', (event) => {
+    interaction.cancel();
     setScene(event.detail?.index);
   });
   window.addEventListener('pointermove', handlePointerMove, { passive: true });
@@ -337,9 +374,9 @@ async function start() {
   canvas.addEventListener('webglcontextlost', (event) => {
     event.preventDefault();
     publicState.failed = true;
+    interaction.cancel();
     visual.classList.remove('is-ready');
-    visual.classList.add('is-fallback');
-    fallback?.removeAttribute('hidden');
+    visual.classList.add('is-failed');
   });
   window.requestAnimationFrame(render);
 }
@@ -373,10 +410,28 @@ function prepareModel(group, colorName) {
     right: createHalfState(right.control, 'right', rightSource.name)
   };
   const explosion = createExplosionState(halves, keyboardRoot.userData);
+  const layoutPoints = createPairLayoutPoints(halves, explosion);
+  const featuredLayoutPoints = Object.fromEntries(Object.entries(halves).map(([side, half]) => {
+    // A rotated case's bounding-box corners include large empty wedges. The
+    // assembled hull keeps the fit tight while enclosing every actual vertex.
+    const hull = new ConvexHull().setFromObject(half.object);
+    const vertices = new Set();
+    for (const face of hull.faces) {
+      let edge = face.edge;
+      do {
+        vertices.add(edge.head().point);
+        edge = edge.next;
+      } while (edge !== face.edge);
+    }
+    const inverse = half.object.matrixWorld.clone().invert();
+    return [side, [...vertices].map((point) => point.clone().applyMatrix4(inverse))];
+  }));
   return {
     group,
     halves,
     explosion,
+    layoutPoints,
+    featuredLayoutPoints,
     metadata: {
       exportedColorway: keyboardRoot.userData.exported_colorway,
       explodedRevision: keyboardRoot.userData.exploded_view_revision
@@ -575,30 +630,427 @@ function compareExplosionItemPositions(left, right) {
     : left.name.localeCompare(right.name);
 }
 
+// Preserve existing portrait bounds and use actual per-layer hulls for the
+// landscape edges. A box around the ball or a tilted case leaves false margins.
+// Keep explosion offsets separate so resizing never mutates a running animation.
+function createPairLayoutPoints(halves, explosion) {
+  const points = { left: [], right: [], exploded: { left: [], right: [] } };
+  Object.values(halves).forEach((half) => half.object.updateWorldMatrix(true, true));
+  explosion.layers.forEach((layer) => {
+    const inverse = layer.half.object.matrixWorld.clone().invert();
+    const explosionAxis = new THREE.Vector3(0, 0, 1).transformDirection(
+      new THREE.Matrix4().multiplyMatrices(inverse, layer.object.matrixWorld)
+    );
+    const topCase = explosion.layers.find((candidate) => (
+      candidate.side === layer.side && candidate.name === 'top_case'
+    ));
+    const order = TOP_CASE_CONSTRAINED_LAYERS.has(layer.name)
+      ? Math.min(layer.order, (topCase?.order || 0) * TOP_CASE_CLEARANCE_RATIO)
+      : layer.order;
+    const hull = new ConvexHull().setFromObject(layer.object);
+    const vertices = new Set();
+    for (const face of hull.faces) {
+      let edge = face.edge;
+      do {
+        vertices.add(edge.head().point);
+        edge = edge.next;
+      } while (edge !== face.edge);
+    }
+    for (const point of vertices) {
+      points.exploded[layer.side].push({
+        position: point.clone().applyMatrix4(inverse),
+        explosionAxis,
+        rise: order * explosion.spacing * MODEL_UNIT_SCALE
+      });
+    }
+    layer.object.traverse((mesh) => {
+      if (!mesh.isMesh) {
+        return;
+      }
+      mesh.geometry.computeBoundingBox();
+      const box = mesh.geometry.boundingBox;
+      const transform = new THREE.Matrix4().multiplyMatrices(inverse, mesh.matrixWorld);
+      for (const x of [box.min.x, box.max.x]) {
+        for (const y of [box.min.y, box.max.y]) {
+          for (const z of [box.min.z, box.max.z]) {
+            points[layer.side].push({
+              position: new THREE.Vector3(x, y, z).applyMatrix4(transform),
+              explosionAxis,
+              rise: order * explosion.spacing * MODEL_UNIT_SCALE
+            });
+          }
+        }
+      }
+    });
+  });
+  return points;
+}
+
+function createLayoutViews(camera, compact) {
+  // Fit the entire pointer-parallax envelope, including both colorways.
+  return [[0, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]].map(([x, y]) => {
+    const view = camera.clone();
+    view.position.set(
+      x * (compact ? 0.008 : 0.015),
+      (compact ? 0.56 : 0.34) - y * (compact ? 0.005 : 0.009),
+      compact ? 0.88 : 0.56
+    );
+    view.lookAt(x * -0.008, compact ? 0.045 : 0, 0);
+    view.updateMatrixWorld();
+    return new THREE.Matrix4().multiplyMatrices(view.projectionMatrix, view.matrixWorldInverse);
+  });
+}
+
+function readFeaturedCopyBounds(index) {
+  const section = document.getElementById(`surround-0${index + 1}`);
+  const copy = section.querySelector('.surround-copy');
+  const sectionTop = section.getBoundingClientRect().top;
+  const transform = new DOMMatrixReadOnly(getComputedStyle(copy).transform);
+  const bounds = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+  // Text ranges exclude the unused width of the copy's grid cells. Remove its
+  // reveal translation and scroll offset so the destination is stable in transit.
+  for (const child of copy.children) {
+    const range = document.createRange();
+    range.selectNodeContents(child);
+    for (const rect of range.getClientRects()) {
+      if (!rect.width || !rect.height) continue;
+      bounds.left = Math.min(bounds.left, rect.left - transform.m41);
+      bounds.right = Math.max(bounds.right, rect.right - transform.m41);
+      bounds.top = Math.min(bounds.top, rect.top - sectionTop - transform.m42);
+      bounds.bottom = Math.max(bounds.bottom, rect.bottom - sectionTop - transform.m42);
+    }
+  }
+  return bounds;
+}
+
+function fitFeaturedLayout(state, index, models, camera) {
+  const compact = compactLayout.matches;
+  const width = window.innerWidth;
+  const height = window.visualViewport?.height || window.innerHeight;
+  const margin = compact ? PAIR_MARGIN_PX.mobile : PAIR_MARGIN_PX.desktop;
+  const side = index === 1 ? 'right' : 'left';
+  const stacked = compact && width <= height;
+  const copy = readFeaturedCopyBounds(index);
+  const fitArea = {
+    left: margin, right: width - margin,
+    top: document.querySelector('.surround-topbar').getBoundingClientRect().bottom + margin,
+    bottom: height - margin
+  };
+  if (stacked) {
+    fitArea.bottom = Math.min(fitArea.bottom, copy.top - margin);
+  } else if (side === 'right') {
+    fitArea.left = Math.max(fitArea.left, copy.right + margin);
+  } else {
+    fitArea.right = Math.min(fitArea.right, copy.left - margin);
+  }
+  const pose = state[side];
+  const views = createLayoutViews(camera, compact);
+  const rotation = new THREE.Euler(pose.rotationX, pose.rotationY, pose.rotationZ);
+  const points = Object.values(models).flatMap((model) => model.featuredLayoutPoints[side].map((point) => (
+    point.clone().applyEuler(rotation)
+  )));
+  const cameraUp = new THREE.Vector3(0, compact ? 0.88 : 0.56, compact ? -0.515 : -0.34).normalize();
+  const e = views[0].elements;
+  const depth = e[3] * pose.x + e[7] * pose.y + e[11] * pose.z + e[15];
+  const unitsPerPixel = 2 * depth * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / height;
+  const projected = new THREE.Vector3();
+  const evaluate = (scale, offsetX, offsetY) => {
+    const bounds = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+    let depthFits = true;
+    for (const view of views) {
+      for (const point of points) {
+        projected.copy(point).multiplyScalar(scale);
+        projected.x += pose.x + offsetX;
+        projected.y += pose.y + cameraUp.y * offsetY;
+        projected.z += pose.z + cameraUp.z * offsetY;
+        projected.applyMatrix4(view);
+        depthFits = depthFits && projected.z >= -1 && projected.z <= 1;
+        const x = (projected.x + 1) * width / 2;
+        const y = (1 - projected.y) * height / 2;
+        bounds.left = Math.min(bounds.left, x);
+        bounds.right = Math.max(bounds.right, x);
+        bounds.top = Math.min(bounds.top, y);
+        bounds.bottom = Math.max(bounds.bottom, y);
+      }
+    }
+    const fits = depthFits && bounds.left >= fitArea.left && bounds.right <= fitArea.right &&
+      bounds.top >= fitArea.top && bounds.bottom <= fitArea.bottom;
+    return { scale, offsetX, offsetY, bounds, fits };
+  };
+  const evaluateCentered = (scale) => {
+    let result = evaluate(scale, 0, 0);
+    for (let iteration = 0; iteration < 8; iteration += 1) {
+      const { bounds, offsetX, offsetY } = result;
+      const dx = (fitArea.left + fitArea.right - bounds.left - bounds.right) / 2;
+      const dy = (bounds.top + bounds.bottom - fitArea.top - fitArea.bottom) / 2;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 0.01) break;
+      result = evaluate(scale, offsetX + dx * unitsPerPixel, offsetY + dy * unitsPerPixel);
+    }
+    return result;
+  };
+  let low = 0;
+  let high = pose.scale;
+  while (evaluateCentered(high).fits) high *= 2;
+  for (let iteration = 0; iteration < 20; iteration += 1) {
+    const candidate = evaluateCentered((low + high) / 2);
+    if (candidate.fits) low = candidate.scale;
+    else high = candidate.scale;
+  }
+  const result = evaluateCentered(low);
+  pose.scale = result.scale;
+  pose.x += result.offsetX;
+  pose.y += cameraUp.y * result.offsetY;
+  pose.z += cameraUp.z * result.offsetY;
+  return { ...result, side, stacked, edgeMarginPx: margin, copy, fitArea };
+}
+
+function fitPairLayout(state, models, camera) {
+  const compact = compactLayout.matches;
+  const width = window.innerWidth;
+  const height = window.visualViewport?.height || window.innerHeight;
+  const margin = compact ? PAIR_MARGIN_PX.mobile : PAIR_MARGIN_PX.desktop;
+  const maximize = width > height;
+  const fitArea = { left: margin, right: width - margin, top: margin, bottom: height - margin };
+  if (maximize && state.explosion === 0) {
+    const topbar = document.querySelector('.surround-topbar').getBoundingClientRect();
+    fitArea.top = topbar.bottom + margin;
+    // Use section-local coordinates: the hero can still be offscreen when its
+    // return animation starts, so the cue's viewport position is not its inset.
+    const hero = document.getElementById('surround-01');
+    const cue = hero.querySelector('.surround-scroll-cue');
+    if (cue.getClientRects().length) {
+      fitArea.bottom = cue.getBoundingClientRect().top - hero.getBoundingClientRect().top - margin;
+    }
+  }
+  const explosionSpacing = state.explosion * getExplosionSpacingScale();
+  const views = createLayoutViews(camera, compact);
+  const points = Object.fromEntries(['left', 'right'].map((side) => {
+    const pose = state[side];
+    const rotation = new THREE.Euler(pose.rotationX, pose.rotationY, pose.rotationZ);
+    return [side, Object.values(models).flatMap((model) => (
+      state.explosionOrientation === 'horizontal' ? model.layoutPoints.exploded[side] : model.layoutPoints[side]
+    ).map((point) => {
+      const position = point.position.clone();
+      if (state.explosionOrientation === 'horizontal') {
+        position.addScaledVector(point.explosionAxis, point.rise * explosionSpacing);
+      } else {
+        position.y += point.rise * explosionSpacing;
+      }
+      return position.applyEuler(rotation);
+    }))];
+  }));
+  if (state.explosionOrientation === 'horizontal') {
+    return fitLandscapeExplosion(state, points, views, camera, { width, height, margin, compact });
+  }
+  const projected = new THREE.Vector3();
+  const cameraUp = new THREE.Vector3(0, compact ? 0.88 : 0.56, compact ? -0.515 : -0.34).normalize();
+  const e = views[0].elements;
+  const centerDepth = e[7] * state.left.y + e[11] * state.left.z + e[15];
+  const verticalUnitsPerPixel = 2 * centerDepth * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / height;
+  const evaluate = (scale, verticalOffset = 0) => {
+    let spread = 0;
+    // clipX / clipW is linear-fractional in X. Solve each inner-edge
+    // constraint directly, then use the smallest shared symmetric spread.
+    for (const side of ['left', 'right']) {
+      const direction = side === 'left' ? -1 : 1;
+      const innerEdge = direction * margin / width;
+      for (const view of views) {
+        const e = view.elements;
+        for (const point of points[side]) {
+          const x = point.x * scale;
+          const y = point.y * scale + state[side].y + cameraUp.y * verticalOffset;
+          const z = point.z * scale + state[side].z + cameraUp.z * verticalOffset;
+          const clipX = e[0] * x + e[4] * y + e[8] * z + e[12];
+          const clipW = e[3] * x + e[7] * y + e[11] * z + e[15];
+          spread = Math.max(spread, (innerEdge * clipW - clipX) /
+            (direction * (e[0] - innerEdge * e[3])));
+        }
+      }
+    }
+    const bounds = {};
+    let depthFits = true;
+    for (const side of ['left', 'right']) {
+      const x = side === 'left' ? -spread : spread;
+      const box = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+      for (const view of views) {
+        for (const point of points[side]) {
+          projected.copy(point).multiplyScalar(scale);
+          projected.x += x;
+          projected.y += state[side].y + cameraUp.y * verticalOffset;
+          projected.z += state[side].z + cameraUp.z * verticalOffset;
+          projected.applyMatrix4(view);
+          depthFits = depthFits && projected.z >= -1 && projected.z <= 1;
+          const px = (projected.x + 1) * width / 2;
+          const py = (1 - projected.y) * height / 2;
+          box.left = Math.min(box.left, px);
+          box.right = Math.max(box.right, px);
+          box.top = Math.min(box.top, py);
+          box.bottom = Math.max(box.bottom, py);
+        }
+      }
+      bounds[side] = box;
+    }
+    const fits = depthFits && Object.values(bounds).every((box) => (
+      box.left >= fitArea.left && box.right <= fitArea.right &&
+      box.top >= fitArea.top && box.bottom <= fitArea.bottom
+    ));
+    return { spread, scale, verticalOffset, bounds, fits };
+  };
+  const evaluateCentered = (scale) => {
+    let candidate = evaluate(scale);
+    if (maximize) {
+      for (let iteration = 0; iteration < (state.explosion ? 8 : 4); iteration += 1) {
+        const top = Math.min(candidate.bounds.left.top, candidate.bounds.right.top);
+        const bottom = Math.max(candidate.bounds.left.bottom, candidate.bounds.right.bottom);
+        const offset = candidate.verticalOffset + ((top + bottom - fitArea.top - fitArea.bottom) / 2) * verticalUnitsPerPixel;
+        candidate = evaluate(scale, offset);
+      }
+    }
+    return candidate;
+  };
+  const preferredScale = state.left.scale;
+  let upperScale = preferredScale;
+  let result = evaluateCentered(upperScale);
+  while (maximize && result.fits) {
+    upperScale *= 2;
+    result = evaluateCentered(upperScale);
+  }
+  if (!result.fits) {
+    let low = 0;
+    let high = upperScale;
+    for (let iteration = 0; iteration < 20; iteration += 1) {
+      const candidate = evaluateCentered((low + high) / 2);
+      if (candidate.fits) {
+        low = candidate.scale;
+      } else {
+        high = candidate.scale;
+      }
+    }
+    result = evaluateCentered(low);
+  }
+  state.left.x = -result.spread;
+  state.right.x = result.spread;
+  state.left.scale = state.right.scale = result.scale;
+  for (const side of ['left', 'right']) {
+    state[side].y += cameraUp.y * result.verticalOffset;
+    state[side].z += cameraUp.z * result.verticalOffset;
+  }
+  return { ...result, minGapPx: margin, edgeMarginPx: margin, preferredScale, maximize, fitArea };
+}
+
+function fitLandscapeExplosion(state, points, views, camera, { width, height, margin, compact }) {
+  const fitArea = { left: 0, right: width, top: margin, bottom: height - margin };
+  const cameraUp = new THREE.Vector3(0, compact ? 0.88 : 0.56, compact ? -0.515 : -0.34).normalize();
+  const e = views[0].elements;
+  const depth = e[7] * state.left.y + e[11] * state.left.z + e[15];
+  const unitsPerPixel = 2 * depth * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / height;
+  const projected = new THREE.Vector3();
+  const evaluateSide = (side, scale, offsetY) => {
+    const edge = side === 'left' ? -1 : 1;
+    let x = side === 'left' ? -Infinity : Infinity;
+    const y = state[side].y + cameraUp.y * offsetY;
+    const z = state[side].z + cameraUp.z * offsetY;
+    // Solve the outer screen edge exactly over all parts, colorways and views.
+    // Independent roots avoid unused space caused by symmetric X positions.
+    for (const view of views) {
+      const e = view.elements;
+      for (const point of points[side]) {
+        const px = point.x * scale;
+        const py = point.y * scale + y;
+        const pz = point.z * scale + z;
+        const clipX = e[0] * px + e[4] * py + e[8] * pz + e[12];
+        const clipW = e[3] * px + e[7] * py + e[11] * pz + e[15];
+        const candidate = (edge * clipW - clipX) / (e[0] - edge * e[3]);
+        x = side === 'left' ? Math.max(x, candidate) : Math.min(x, candidate);
+      }
+    }
+    const bounds = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+    let depthFits = true;
+    for (const view of views) {
+      for (const point of points[side]) {
+        projected.copy(point).multiplyScalar(scale);
+        projected.x += x;
+        projected.y += y;
+        projected.z += z;
+        projected.applyMatrix4(view);
+        depthFits = depthFits && projected.z >= -1 && projected.z <= 1;
+        const px = (projected.x + 1) * width / 2;
+        const py = (1 - projected.y) * height / 2;
+        bounds.left = Math.min(bounds.left, px);
+        bounds.right = Math.max(bounds.right, px);
+        bounds.top = Math.min(bounds.top, py);
+        bounds.bottom = Math.max(bounds.bottom, py);
+      }
+    }
+    return { x, y, z, offsetY, bounds, depthFits };
+  };
+  const evaluate = (scale) => {
+    const positions = {};
+    for (const side of ['left', 'right']) {
+      let result = evaluateSide(side, scale, 0);
+      for (let iteration = 0; iteration < 12; iteration += 1) {
+        const dy = (result.bounds.top + result.bounds.bottom - fitArea.top - fitArea.bottom) / 2;
+        if (Math.abs(dy) < 0.001) break;
+        result = evaluateSide(side, scale, result.offsetY + dy * unitsPerPixel);
+      }
+      positions[side] = result;
+    }
+    const bounds = { left: positions.left.bounds, right: positions.right.bounds };
+    const fits = Object.values(positions).every((pose) => pose.depthFits &&
+      pose.bounds.top >= fitArea.top && pose.bounds.bottom <= fitArea.bottom) &&
+      bounds.left.right <= bounds.right.left;
+    return { scale, positions, bounds, fits };
+  };
+  const preferredScale = state.left.scale;
+  let low = 0;
+  let high = preferredScale;
+  while (evaluate(high).fits) high *= 2;
+  for (let iteration = 0; iteration < 20; iteration += 1) {
+    const candidate = evaluate((low + high) / 2);
+    if (candidate.fits) low = candidate.scale;
+    else high = candidate.scale;
+  }
+  const result = evaluate(low);
+  for (const side of ['left', 'right']) {
+    const { x, y, z } = result.positions[side];
+    Object.assign(state[side], { x, y, z, scale: result.scale });
+  }
+  return {
+    ...result, minGapPx: 0, edgeMarginPx: 0, verticalMarginPx: margin,
+    preferredScale, maximize: true, placement: 'outer-edges', fitArea
+  };
+}
+
 function getLayoutState(
   index,
   compact,
   viewportWidth = window.innerWidth,
   viewportHeight = window.visualViewport?.height || window.innerHeight
 ) {
-  const heroSpread = compact
-    ? 0.105
-    : THREE.MathUtils.lerp(
-      0.1,
-      0.205,
-      THREE.MathUtils.clamp((viewportWidth - 672) / (1065 - 672), 0, 1)
-    );
+  if (index === 3 && viewportWidth > viewportHeight) {
+    // Compensate only for the mobile camera pitch, preserving the same view.
+    const cameraPitchCorrection = compact ? Math.atan2(0.34, 0.56) - Math.atan2(0.515, 0.88) : 0;
+    const poses = Object.fromEntries(['left', 'right'].map((side) => {
+      const angles = LANDSCAPE_EXPLODED_ROTATION_DEG[side];
+      return [side, createPose({
+        y: 0, z: 0.02, scale: 0.92,
+        rotationX: THREE.MathUtils.degToRad(angles.x) + cameraPitchCorrection,
+        rotationY: THREE.MathUtils.degToRad(angles.y),
+        rotationZ: THREE.MathUtils.degToRad(angles.z)
+      })];
+    }));
+    return { explosion: 1, explosionOrientation: 'horizontal', ...poses };
+  }
   const mobileWidthProgress = THREE.MathUtils.clamp((viewportWidth - 338) / (446 - 338), 0, 1);
   const mobileHeightProgress = THREE.MathUtils.clamp((viewportHeight - 619) / (844 - 619), 0, 1);
-  const mobileExplosionX = THREE.MathUtils.lerp(0.062, 0.068, mobileWidthProgress);
   const mobileExplosionY = THREE.MathUtils.lerp(-0.23, -0.27, mobileHeightProgress);
   const mobileExplosionScale = THREE.MathUtils.lerp(0.82, 0.88, mobileWidthProgress);
   const mobileExplosionPitch = THREE.MathUtils.lerp(-0.22, -0.28, mobileHeightProgress);
   const desktop = [
     {
       explosion: 0,
-      left: createPose({ x: -heroSpread, y: 0.035, z: 0.045, scale: 1.32, rotationX: 0.38 }),
-      right: createPose({ x: heroSpread, y: 0.035, z: 0.045, scale: 1.32, rotationX: 0.38 })
+      left: createPose({ y: 0.035, z: 0.045, scale: 1.32, rotationX: 0.38 }),
+      right: createPose({ y: 0.035, z: 0.045, scale: 1.32, rotationX: 0.38 })
     },
     {
       explosion: 0,
@@ -612,15 +1064,15 @@ function getLayoutState(
     },
     {
       explosion: 1,
-      left: createPose({ x: -0.15, y: -0.09, z: 0.02, scale: 0.92, rotationX: 0.16 }),
-      right: createPose({ x: 0.15, y: -0.09, z: 0.02, scale: 0.92, rotationX: 0.16 })
+      left: createPose({ y: -0.09, z: 0.02, scale: 0.92, rotationX: 0.16 }),
+      right: createPose({ y: -0.09, z: 0.02, scale: 0.92, rotationX: 0.16 })
     }
   ];
   const mobile = [
     {
       explosion: 0,
-      left: createPose({ x: -0.105, y: -0.06, z: 0.02, scale: 0.82, rotationX: 0.24 }),
-      right: createPose({ x: 0.105, y: -0.06, z: 0.02, scale: 0.82, rotationX: 0.24 })
+      left: createPose({ y: -0.06, z: 0.02, scale: 0.82, rotationX: 0.24 }),
+      right: createPose({ y: -0.06, z: 0.02, scale: 0.82, rotationX: 0.24 })
     },
     {
       explosion: 0,
@@ -634,8 +1086,8 @@ function getLayoutState(
     },
     {
       explosion: 1,
-      left: createPose({ x: -mobileExplosionX, y: mobileExplosionY, z: 0.035, scale: mobileExplosionScale, rotationX: mobileExplosionPitch }),
-      right: createPose({ x: mobileExplosionX, y: mobileExplosionY, z: 0.035, scale: mobileExplosionScale, rotationX: mobileExplosionPitch })
+      left: createPose({ y: mobileExplosionY, z: 0.035, scale: mobileExplosionScale, rotationX: mobileExplosionPitch }),
+      right: createPose({ y: mobileExplosionY, z: 0.035, scale: mobileExplosionScale, rotationX: mobileExplosionPitch })
     }
   ];
   return (compact ? mobile : desktop)[index] || (compact ? mobile[0] : desktop[0]);
@@ -717,7 +1169,12 @@ function setModelTarget(model, state, immediate, waveDirection = 1) {
   const now = performance.now();
   Object.entries(model.halves).forEach(([side, half]) => {
     Object.assign(half.target, state[side]);
-    half.motion = createCurvedMotion(half, half.target, now + delays[side]);
+    if (half.current.opacity > 0.5 && half.target.opacity < 0.5) {
+      // A responsive close-up may exceed the original exit scale. Keep the
+      // forward exit growing continuously from the displayed size.
+      half.target.scale = Math.max(half.target.scale, half.current.scale * 1.16);
+    }
+    half.motion = createCurvedMotion(half, half.target, now + delays[side], explosionTarget > 0);
   });
   if (explosionTarget > 0) {
     setExplosionTarget(model.explosion, explosionTarget, false, waveDirection, now);
@@ -804,14 +1261,14 @@ function resetPartMotion(half) {
   half.partMotionAmplitude = 0;
 }
 
-function createCurvedMotion(half, target, start = performance.now()) {
+function createCurvedMotion(half, target, start = performance.now(), explodedDestination = false) {
   const from = { ...half.current };
   const to = { ...target };
   const compact = compactLayout.matches;
   const exiting = from.opacity > 0.5 && to.opacity < 0.5;
   const entering = !exiting && from.opacity < 0.2 && to.opacity > 0.5;
   if (entering) {
-    const staging = to.scale <= COMPACT_DESTINATION_SCALE
+    const staging = explodedDestination || to.scale <= COMPACT_DESTINATION_SCALE
       ? createCollisionSafeStagingPose(half.side, to, compact)
       : (compact ? STAGING_TARGETS.mobile : STAGING_TARGETS.desktop)[half.side];
     Object.assign(from, staging);
@@ -928,10 +1385,14 @@ function syncExplosionAmounts(explosion) {
 }
 
 function getExplosionSpacingScale() {
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  if (window.innerWidth > viewportHeight) {
+    return THREE.MathUtils.lerp(0.85, 1.6,
+      THREE.MathUtils.clamp((window.innerWidth / viewportHeight - 1) / 3, 0, 1));
+  }
   if (!compactLayout.matches) {
     return 1;
   }
-  const viewportHeight = window.visualViewport?.height || window.innerHeight;
   return THREE.MathUtils.lerp(
     MOBILE_EXPLOSION_SPACING_MIN,
     MOBILE_EXPLOSION_SPACING_MAX,
@@ -1109,6 +1570,10 @@ function publishPoseSnapshot(model) {
   publicState.explosionLayerAmounts = model.explosion.layers.map((layer) => layer.explosionAmount);
   publicState.explosionItemAmounts = model.explosion.units.map((unit) => unit.explosionAmount);
   publicState.explosionItemOffsets = model.explosion.units.map((unit) => unit.appliedOffset * MODEL_UNIT_SCALE);
+  publicState.explosionLateralDrift = Math.max(...model.explosion.units.map((unit) => Math.hypot(
+    unit.object.position.x - unit.basePosition.x,
+    unit.object.position.y - unit.basePosition.y
+  ))) * MODEL_UNIT_SCALE;
   publicState.explosionItemRotations = model.explosion.units.map((unit) => Math.abs(unit.partRotationAmount));
   publicState.explosionSpacingScale = model.explosion.spacingScale;
 }

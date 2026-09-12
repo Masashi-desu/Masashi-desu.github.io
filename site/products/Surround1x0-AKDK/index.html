@@ -132,9 +132,16 @@
       <span class="surround-visual__loading-label" data-i18n="loading3d">3Dモデルを読み込み中</span>
       <span class="surround-visual__loading-line" aria-hidden="true"><i></i></span>
     </div>
-    <figure class="surround-visual__fallback" hidden>
-      <img src="./Surround1x0-AKDK.png" alt="Surround1x0-AKDK プロトタイプ">
-    </figure>
+  </div>
+
+  <div class="surround-interaction" hidden>
+    <p id="surround-model-keyboard-hint" class="surround-interaction__sr-only" data-i18n="modelKeyboardHint">左ドラッグで回転、ミドルドラッグで移動。タッチは1本指で回転、2本指で移動。矢印キーで回転、Shift＋矢印キーで移動。Escapeで元の配置に戻ります。</p>
+    <div class="surround-interaction__model" data-surround-model="left" tabindex="0" role="group" aria-labelledby="surround-model-left-label" aria-describedby="surround-model-keyboard-hint">
+      <span id="surround-model-left-label" class="surround-interaction__sr-only" data-i18n="modelLeft">左のキーボード</span>
+    </div>
+    <div class="surround-interaction__model" data-surround-model="right" tabindex="0" role="group" aria-labelledby="surround-model-right-label" aria-describedby="surround-model-keyboard-hint">
+      <span id="surround-model-right-label" class="surround-interaction__sr-only" data-i18n="modelRight">右のキーボード</span>
+    </div>
   </div>
 
   <main class="surround-segments" data-transition-fade>
