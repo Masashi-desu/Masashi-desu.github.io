@@ -3,7 +3,7 @@
  * 対象外のOSで誤って成功扱いにしないための実行環境ガード。
  */
 if (process.platform !== 'darwin') {
-  console.error('test:local-environment requires macOS (darwin). Run test:ci on non-macOS environments.');
+  console.error('test:local-environment requires macOS (darwin). Run test:full for full portable coverage or test:ci for minimal compatibility checks on non-macOS environments.');
   process.exit(1);
 }
 

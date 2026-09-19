@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ needs.changes.outputs.test == 'true' }}
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -69,7 +69,8 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium webkit
 
-      - name: Run deterministic CI tests
+      # Full page, layout, media and GPU checks run in the local release gate.
+      - name: Run minimal Linux compatibility checks
         run: npm run test:ci
 
   build:

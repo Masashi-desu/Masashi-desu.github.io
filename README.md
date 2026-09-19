@@ -15,6 +15,8 @@ Vite は `site/` 内の HTML を入力として `dist/` を生成し、GitHub Ac
 
 開発環境、ブランチ運用、テスト、リリース、一時成果物、実装上の規約は [CONTRIBUTING.md](./CONTRIBUTING.md) を参照してください。
 
+品質保証はローカルのフルゲートを主とし、GitHub Actionsではビルドと環境差を確認する最小限の検証を行います。
+
 - `CONTRIBUTING.md`: 人とエージェントに共通する開発・リリース規約
 - `AGENTS.md`: Agent harness で作業するときの入口と Skill の適用規則
 - `THIRD_PARTY_LICENSES.md`: 利用する第三者ソフトウェアとWebフォントの一覧

@@ -19,6 +19,7 @@ flowchart LR
 ## Skill の適用
 
 - `main` へのpush前に `.agents/skills/release-quality-gate/SKILL.md` を読み、完全な差分から変更区分を判定し、その区分に必要な手順を省略せず実行すること。文書・規約だけの変更に公開物向けのブラウザ検証を適用しないこと。
+- ローカルを品質保証の主ゲートとする。CI・検証変更と公開物変更はmacOSの `npm test`（`test:full` と環境依存検証）を通すこと。軽量なリモート `test:ci` でローカルのフル検証を代替しないこと。公開物変更ではPC・iPhone Simulator確認も維持し、appcast専用の自動更新は生成規則・build・XML出力をリモートで検証すること。
 - 一時成果物を作成、移動、整理するときは、先に `.agents/skills/use-repo-temp-artifacts/SKILL.md` を読み、その手順を適用すること。
 - ブラウザ操作、画面検証、スクリーンショット、UI flow check、localhost の実ブラウザ確認を行う前に、グローバルの `browser-noninvasive-verification` Skill を選定ゲートとして適用すること。
 

@@ -94,7 +94,7 @@ jobs:
     needs: validate
     if: ${{ inputs.operation == 'sync' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
       contents: write
     outputs:
@@ -119,9 +119,6 @@ jobs:
             --release-url "${TYPEFETCH_RELEASE_URL}" \
             --source-sha "${TYPEFETCH_SOURCE_SHA}"
 
-      - name: Test appcast generator
-        run: ruby tests/typefetch-appcast-sync.rb
-
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -130,11 +127,10 @@ jobs:
       - name: Install website dependencies
         run: npm ci --ignore-scripts
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium webkit
-
-      - name: Run deterministic CI tests before commit
-        run: npm run test:ci
+      # This automated path changes only the appcast and has no local gate.
+      # Validate its generator and both built XML URLs before committing.
+      - name: Verify appcast generation and build outputs before commit
+        run: npm run test:typefetch-appcast
 
       - name: Commit synchronized appcast
         id: commit
