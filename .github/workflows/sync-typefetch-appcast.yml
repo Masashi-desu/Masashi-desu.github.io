@@ -128,7 +128,8 @@ jobs:
         run: npm ci --ignore-scripts
 
       # This automated path changes only the appcast and has no local gate.
-      # Validate its generator and both built XML URLs before committing.
+      # Its impact-selected gate is generator + build + both XML URLs.
+      # Website code changes use the local impact policy in CONTRIBUTING.md.
       - name: Verify appcast generation and build outputs before commit
         run: npm run test:typefetch-appcast
 

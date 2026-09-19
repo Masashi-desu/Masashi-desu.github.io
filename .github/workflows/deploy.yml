@@ -69,7 +69,9 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium webkit
 
-      # Full page, layout, media and GPU checks run in the local release gate.
+      # Local checks are selected by change impact (CONTRIBUTING.md).
+      # Full page/media/GPU suites run locally when affected; broad or unknown
+      # impact requires the full gate. This minimal CI does not replace them.
       - name: Run minimal Linux compatibility checks
         run: npm run test:ci
 

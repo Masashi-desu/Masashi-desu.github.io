@@ -18,8 +18,9 @@ flowchart LR
 
 ## Skill の適用
 
-- `main` へのpush前に `.agents/skills/release-quality-gate/SKILL.md` を読み、完全な差分から変更区分を判定し、その区分に必要な手順を省略せず実行すること。文書・規約だけの変更に公開物向けのブラウザ検証を適用しないこと。
-- ローカルを品質保証の主ゲートとする。CI・検証変更と公開物変更はmacOSの `npm test`（`test:full` と環境依存検証）を通すこと。軽量なリモート `test:ci` でローカルのフル検証を代替しないこと。公開物変更ではPC・iPhone Simulator確認も維持し、appcast専用の自動更新は生成規則・build・XML出力をリモートで検証すること。
+- `main` へのpush前に `.agents/skills/release-quality-gate/SKILL.md` を読み、完全な差分から公開区分と検証の影響範囲を判定すること。変更処理・利用先・関連操作・ブラウザを根拠に必要な検証を選び、選定理由と結果を `.temp/<task-slug>/reports/` に記録すること。文書・規約だけの変更に公開物向けのブラウザ検証を適用しないこと。
+- ローカルでの影響範囲に応じた検証を主ゲートとする。CI・検証変更と公開物変更は `npm run test:release-base` と関連テスト、公開物変更はさらにbuildと影響する画面・環境を確認すること。共通部品は全利用先の関連挙動を対象とするが、無関係な機能まで一律に検証しないこと。影響範囲が不明、広範なビルド・依存関係・全体CSSの変更、大規模改修ではmacOSの `npm test` によるフルゲートを実施すること。
+- PC・iPhone Simulator・macOSの動画/GPU検証は、変更が影響する環境と機能に応じて選ぶこと。軽量なリモート `test:ci` だけで必要なローカル検証を代替しないこと。appcast専用の自動更新は生成規則・build・XML出力をリモートで検証すること。検証後の追加修正は影響範囲を再判定し、影響を受ける検証だけ再実行すること。以前の結果を使う場合は、対象ソース・依存関係・環境が変わっていない根拠を記録すること。
 - 一時成果物を作成、移動、整理するときは、先に `.agents/skills/use-repo-temp-artifacts/SKILL.md` を読み、その手順を適用すること。
 - ブラウザ操作、画面検証、スクリーンショット、UI flow check、localhost の実ブラウザ確認を行う前に、グローバルの `browser-noninvasive-verification` Skill を選定ゲートとして適用すること。
 

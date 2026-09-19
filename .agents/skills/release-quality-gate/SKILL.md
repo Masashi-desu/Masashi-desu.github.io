@@ -5,35 +5,41 @@ description: Enforce the Masahi Desu User Site pre-release quality gate. Use bef
 
 # Release Quality Gate
 
-Before pushing `main`, classify the complete diff and run the strongest applicable gate below. The full local gate is the primary quality gate; minimal remote CI never substitutes for it. Treat any failure, skipped required check, or unavailable required check as a blocker. Do not run publication-only checks when no public build input changed. If a tracked file changes after validation, restart at classification.
+Before pushing `main`, review the complete diff and select local checks by change impact. Local validation is the primary gate; full validation is required only under the escalation conditions below. Minimal remote CI never substitutes for required local checks. Treat any failure, skipped required check, or unavailable required check as a blocker. Record the selection and results; do not require unrelated publication checks for documentation or CI-only changes.
 
 ## Procedure
 
 1. Read `../../../CONTRIBUTING.md`, especially **リリース品質ゲート**, and `../../../AGENTS.md`.
 2. Fetch `origin/main`; confirm the local release is a fast-forward and review `git status --short` plus the complete diff.
-3. Classify the diff. Mixed changes use the strongest applicable class:
+3. Classify publication scope separately from test scope. For mixed changes, take the union of the required checks:
    - **Documentation and policy only:** `README.md`, `CONTRIBUTING.md`, `AGENTS.md`, `THIRD_PARTY_LICENSES.md`, `docs/**`, and `.agents/**` with no executable, test, dependency, workflow, or public-source changes.
    - **CI and verification only:** `tests/**`, `tools/**`, `.github/workflows/**`, test/development scripts, and verification-only dependencies with no public build input changes.
    - **Publication-affecting:** changes to `site/**`, `vite.config.mjs`, runtime dependencies, Vite, the build script, or the Vite/three.js dependency graph in `package-lock.json`.
    - Package metadata such as description-only changes require only classification and document validation; they do not require CI or deployment.
-4. For documentation and policy only, run `npm run test:docs` and `git diff --check`. Review all references and the rendered Markdown source. Skip `npm test`, production build, desktop-browser verification, and iPhone Simulator because the Pages artifact cannot change.
-5. For CI and verification only, run the full `npm test` on macOS, including `test:full` and `test:local-environment`. Do not replace it with minimal `test:ci`. The automated gate includes a build; skip additional publication-only preview and visual Simulator checks when no public build input changed.
-6. For publication-affecting changes, run the complete publication gate:
-   1. On macOS, run `npm test` (`test:release-local`). Confirm its independent `test:full` phase passes all non-browser, PC, mobile Chromium and WebKit suites, then confirm `test:local-environment` passes the native H.264, LiquidGL video-frame/texture, and WebGL context checks. Do not substitute minimal CI, Chromium emulation, or Linux WebKit for this full local gate.
-   2. Run `npm run build`, then serve the production output with `npm run preview`.
-   3. Before visual browser work, use `$browser-noninvasive-verification`. Use an isolated desktop browser at a normal PC viewport and inspect every affected page for layout, interaction, visual effects, horizontal overflow, and console errors.
-   4. Use `$use-repo-temp-artifacts` and save browser evidence only under `.temp/<task-slug>/evidence/`.
-   5. Select an available iPhone with `xcrun simctl list devices available`. Boot it with the literal command `xcrun simctl boot <UDID>` and wait with `xcrun simctl bootstatus <UDID> -b`.
-   6. Open the production preview in that Simulator's Mobile Safari with `xcrun simctl openurl <UDID> <URL>`. Inspect every affected page for layout, interaction, visual effects, safe areas, horizontal overflow, and Safari-specific failures. Capture evidence with `xcrun simctl io <UDID> screenshot <path>`.
-   7. Shut down only the Simulator booted for this check. Confirm all evidence remains ignored and outside the staged diff.
-7. Re-run `git status --short` and `git diff --check`. Push `main` only when every required gate for the classified diff passed and no tracked file changed afterward.
+4. Trace changed behavior through direct and indirect consumers, shared CSS, generated assets, configuration, related interactions and browser/device environments. Shared components require related behavior checks at every consumer, not every unrelated feature on those pages. Add a focused regression or concrete manual check when existing coverage is absent. Do not infer sufficient coverage from filenames alone.
+5. Select and execute the gate:
+   - Documentation/policy or package metadata only: `npm run test:docs`, reference/diff review and `git diff --check`.
+   - CI/verification only: `npm run test:release-base` plus checks for the changed test logic or command/workflow wiring. Execute modified test bodies. Pure aggregation changes can be checked through the script dependency graph when constituent commands are unchanged; record that evidence. No publication visual or Simulator checks are required.
+   - Publication-affecting: `npm run test:release-base`, `npm run build`, related automated tests and the affected screen/environment checks below. Publication scope alone does not require the full suite.
+   - Shared scroll input changes: `npm run test:release-scroll` groups core, generated bundle, packed-library Chromium/WebKit, all three consumers' wheel/touch regressions and mobile home/catalog gestures. Add layout, rendering synchronization and native Safari checks when affected; this group is not a complete visual gate.
+6. Escalate to the full gate if impact cannot be bounded, build infrastructure/dependency/global CSS changes have broad impact, or a large refactor crosses multiple features. On macOS run `npm test` (`test:release-local`), retaining every `test:full` suite and `test:local-environment` check. Publication-affecting full gates also require production build and affected PC/Mobile Safari screen checks. A shared component with identified consumers and covered behavior can still use selected validation.
+7. Apply `$use-repo-temp-artifacts`. Record the base revision and tested revision/diff, changed behavior and consumers, selected commands/environments, selection reasons, results, and reasons for major omissions under `.temp/<task-slug>/reports/`.
+8. If tracked files change after validation, assess the additional diff and rerun affected checks. Reuse unaffected results only with recorded evidence that their source, dependencies and environment are unchanged. If uncertain, broaden validation. Before push, review the final diff, `git status --short` and `git diff --check`; confirm the final change is covered and no temporary evidence is staged.
+
+## Screen and Environment Checks
+
+1. When a public change affects display or interaction, serve the production output with `npm run preview`. Apply `$browser-noninvasive-verification` before any browser work. Use an isolated PC browser when desktop behavior is affected.
+2. Mobile layout, viewport, safe-area, touch or Safari-specific changes require related WebKit tests and iPhone Simulator Mobile Safari checks. Documentation, CI configuration and desktop-only changes do not automatically require a Simulator.
+3. Inspect the affected pages' relevant layout, interaction, visual effects and media/LiquidGL, plus horizontal overflow and console errors. Run related native codec/GPU/frame tests on macOS when those functions are affected; Linux CI or Chromium mobile emulation cannot replace them.
+4. For Simulator checks, record existing booted devices and select an available shutdown iPhone using `xcrun simctl list devices available`. Run `xcrun simctl boot <UDID>` and `xcrun simctl bootstatus <UDID> -b`, then `xcrun simctl openurl <UDID> <URL>`. Capture with `xcrun simctl io <UDID> screenshot <path>` under `.temp/<task-slug>/evidence/`. Follow the noninvasive skill for input testing and record any physical-device-specific limitations.
+5. Shut down only the Simulator booted for the check. Keep all evidence ignored and outside the staged diff.
 
 ## CI Boundary
 
 The normal Pages workflow does not start for documentation-and-policy-only pushes. CI-and-verification-only pushes run minimal `npm run test:ci` but skip publication build and deploy. The automated checks still perform a validation build. Publication-affecting pushes run minimal CI before build and deploy, and CI failure blocks publication.
 
-`test:ci` runs non-browser checks plus packed-library fixtures in Chromium and WebKit. It retains clean-checkout build, types, CSS and input compatibility checks without repeating full-page, multi-viewport, animation, media or 3D tests. `npm test` must depend on `test:full`, never on this reduced CI entry point. `test:quality-gate-contract` checks this separation and both deployment workflows.
+`test:ci` runs non-browser checks plus packed-library fixtures in Chromium and WebKit. It retains clean-checkout build, types, CSS and input compatibility checks without repeating full-page, multi-viewport, animation, media or 3D tests. `test:release-base` is only a lightweight common check, not automatic proof of sufficient coverage. `npm test` remains an explicit full-suite entry point depending on `test:full`, never on reduced CI. `test:quality-gate-contract` checks the selectable groups, retained full coverage, CI separation and both deployment workflows.
 
 The TypeFetch appcast workflow owns validation, mutation, build, and deploy for appcast-only updates. It has no local gate for the generated XML: run `npm run test:typefetch-appcast` (generator tests, build and canonical/legacy output verification) before commit, then rebuild the committed revision and verify XML again before deploy. Do not install Playwright or run full site tests on this appcast-only path. The normal Pages workflow excludes `site/products/TypeFetch/appcast.xml`-only pushes to prevent duplicate deployment.
 
-When timing a change, record local `npm test` wall time, the remote `quality-gate` job duration, and total workflow duration separately under `.temp/<task-slug>/reports/`, with commit and run IDs. Compare equivalent job scopes; a CI-only push skips publication build/deploy and is not directly comparable to a previous complete deployment.
+When timing a change, record the selected local commands and wall time, the remote `quality-gate` job duration, and total workflow duration separately under `.temp/<task-slug>/reports/`, with commit and run IDs. Compare equivalent validation scopes; selected checks versus a full suite or a CI-only push versus a complete deployment are not equivalent performance measurements.

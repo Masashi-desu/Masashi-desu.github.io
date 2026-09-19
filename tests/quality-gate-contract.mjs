@@ -1,6 +1,6 @@
 /**
- * 目的: リモートCIを縮小しても、ローカルのフル検証とappcast専用の公開前検証を維持する。
- * 期待値: ローカルは全ブラウザ群とmacOS検証、CIは軽量な部分集合、appcastは生成・build出力を検証する。
+ * 目的: 影響範囲に応じて選べるローカル検証と、必要時のフル検証、appcast専用の公開前検証を維持する。
+ * 期待値: 共通チェックはブラウザを起動せず、スクロール群は関連する入力回帰を含む。npm testは全検証、CIは軽量な部分集合を保持する。
  * 検証方法: npm scriptの依存グラフと、Ruby/Psychで構造解析した実際のworkflowを照合する。
  */
 import assert from 'node:assert/strict';
@@ -37,12 +37,45 @@ function workflow(name) {
   ], { encoding: 'utf8' }));
 }
 
-test('npm test retains every full suite and native checks independently of minimal CI', () => {
+test('explicit full gate retains every full suite and native checks independently of selected tests and CI', () => {
   const local = scriptGraph('test');
   for (const name of ['test:full', 'test:non-browser', 'test:pc-browser', 'test:mobile-chromium', 'test:webkit', 'test:local-environment']) {
     assert.ok(local.names.has(name), `Local gate must include ${name}`);
   }
   assert.ok(!local.names.has('test:ci'), 'Narrowing CI must not narrow the local gate');
+});
+
+test('release base stays lightweight and covers documentation, classification and gate wiring', () => {
+  const base = scriptGraph('test:release-base');
+  assert.deepEqual([...base.names].sort(), [
+    'test:release-base', 'test:docs', 'test:release-scope', 'test:quality-gate-contract'
+  ].sort());
+  assert.deepEqual([...base.commands].sort(), [
+    'node tests/documentation-integrity.mjs',
+    'node --test tests/release-scope-classifier.mjs',
+    'node --test tests/quality-gate-contract.mjs'
+  ].sort());
+});
+
+test('selected scroll gate covers shared input consumers without unrelated rendering or product suites', () => {
+  const scroll = scriptGraph('test:release-scroll');
+  for (const name of [
+    'test:release-base', 'test:segmented-scroll-core', 'test:segmented-bundle',
+    'test:segmented-package', 'test:segmented-package:webkit',
+    'test:segmented-wheel', 'test:segmented-wheel:webkit',
+    'test:home-mobile-swipe', 'test:home-ios-safari-swipe', 'test:catalog-mobile-scroll'
+  ]) {
+    assert.ok(scroll.names.has(name), `Scroll gate must include ${name}`);
+  }
+  for (const name of [
+    'test:full', 'test:release-local', 'test:ci', 'test:non-browser',
+    'test:pc-browser', 'test:mobile-chromium', 'test:webkit',
+    'test:local-environment', 'test:surround-segments', 'test:native-media', 'test:typefetch-appcast'
+  ]) {
+    assert.ok(!scroll.names.has(name), `Unrelated aggregate/suite ${name} must be selected separately`);
+  }
+  const full = scriptGraph('test');
+  for (const command of scroll.commands) assert.ok(full.commands.has(command), `Full gate lost ${command}`);
 });
 
 test('minimal CI is a tested subset with both browser engines and no full page suites', () => {

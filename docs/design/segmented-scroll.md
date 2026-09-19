@@ -71,5 +71,5 @@ iPadOS 26.6.2のSafari・Braveで、トラックパッドの片方向停止と�
 - `npm run test:segmented-scroll-core`: mock clock で小数入力、しきい値、長い入力・慣性・反転、端、移動中の入力、静止後の再操作、単位変換、ズーム、destroy/remount、停止点の前後3pxからのwheel/touch移動と範囲外の飛び越し防止、広い補助停止点・カスタム表示判定による停止や飛び越しの防止を検証する。
 - `npm run test:segmented-wheel`: Chromium の実ページでしきい値とロック、active nav と位置の一致、横ナビを検証する。合成入力は制御可能な時計で間隔を固定し、実 wheel 入力は実時間で検証する。Surroundの3D描画は専用テストに分け、ソフトウェア描画負荷で入力列が変わることを防ぐ。`test:pc-browser` に含める。
 - `npm run test:segmented-wheel:webkit`: 同じ検証を WebKit の desktop と iPad 設定で行う。`test:webkit` に含める。
-- これらの実サイト全体の検証はローカルの `npm run test:full` に維持する。リモートの `npm run test:ci` はcore・生成bundleと、配布パッケージの独立ページをChromium／WebKitで確認する最小構成とし、環境差の検出を残す。
+- 共通入力処理の改修では `npm run test:release-scroll` でcore・bundle・配布パッケージと全利用先の入力回帰をまとめて確認できる。レイアウト、描画同期、Mobile Safariの確認は変更の影響範囲に応じて追加する。これらのテストは明示的なフル検証の `npm run test:full` にも維持する。リモートの `npm run test:ci` はcore・生成bundleと、配布パッケージの独立ページをChromium／WebKitで確認する最小構成とし、環境差の検出を残す。
 - 合成イベントとiPad設定によるテストはUIKitや物理トラックパッドのイベント生成を再現しない。実機確認では製品一覧でゆっくり操作を始め、しきい値未満は位置を維持し、超えたら1区間移動し、長く指を動かしても飛び越さず、静止後の再操作・逆方向操作ができることを確認する。先頭・末尾、横ナビ、タッチも確認する。
