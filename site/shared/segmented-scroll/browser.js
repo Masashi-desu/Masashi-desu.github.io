@@ -228,6 +228,7 @@ var MDWSegmentedScroll = (function(exports) {
 		let lastTouchEventAt = 0;
 		let wheelDeltaY = 0;
 		let wheelResetTimer = null;
+		let lastWheelEventAt = null;
 		let wheelHandled = false;
 		let touchStartX = 0;
 		let touchStartY = 0;
@@ -420,6 +421,7 @@ var MDWSegmentedScroll = (function(exports) {
 		function resetWheelGesture() {
 			clearWheelAccumulation();
 			wheelHandled = false;
+			lastWheelEventAt = null;
 			notifyLocks();
 			if (wheelResetTimer !== null) {
 				win.clearTimeout(wheelResetTimer);
@@ -576,6 +578,12 @@ var MDWSegmentedScroll = (function(exports) {
 			const deltaY = normalizeWheelDelta(event);
 			if (!Number.isFinite(deltaY) || index.getStops().length === 0) return;
 			if (deltaY === 0 && event.deltaX !== 0) return;
+			const now = Date.now();
+			if (lastWheelEventAt !== null && now - lastWheelEventAt >= timings.wheelResetMs) {
+				resetWheelGesture();
+				if (!mounted) return;
+			}
+			lastWheelEventAt = now;
 			if (wheelResetTimer !== null) win.clearTimeout(wheelResetTimer);
 			wheelResetTimer = win.setTimeout(resetWheelGesture, timings.wheelResetMs);
 			if (!event.cancelable) {

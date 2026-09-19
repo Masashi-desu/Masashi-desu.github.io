@@ -169,6 +169,29 @@ test('ナビ移動ロック中に開始した wheel をロック終了後も同�
   assert.deepEqual(h.navigations, ['second']);
 });
 
+test('無入力タイマーが遅延しても、次の wheel は実際の入力間隔でロックを解除する', (t) => {
+  const h = createWheelHarness(t);
+  h.wheel(86);
+  for (let i = 0; i < 20; i += 1) { h.tick(100); h.wheel(1); }
+  assert.equal(h.controller.getState().navigationLocked, false);
+  assert.equal(h.controller.getState().wheelLocked, true);
+  // Advance the clock without running the queued timeout, as when rendering
+  // delays timers and the next input task is delivered first.
+  t.mock.timers.setTime(Date.now() + DEFAULT_TIMINGS.wheelResetMs + 1);
+  h.wheel(-86);
+  assert.deepEqual(h.navigations, ['second', 'first']);
+});
+
+test('無入力タイマーが遅延しても、前の wheel の累積値を次の操作へ持ち越さない', (t) => {
+  const h = createWheelHarness(t);
+  h.wheel(85);
+  t.mock.timers.setTime(Date.now() + DEFAULT_TIMINGS.wheelResetMs + 1);
+  h.wheel(1);
+  assert.deepEqual(h.navigations, []);
+  h.wheel(85);
+  assert.deepEqual(h.navigations, ['second']);
+});
+
 test('逆方向・無入力でしきい値の累積をリセットし、line/page 単位も正規化する', (t) => {
   const h = createWheelHarness(t);
   h.controller.setActive('second');

@@ -42,6 +42,7 @@ export function createScrollController(options = {}) {
   let lastTouchEventAt = 0;
   let wheelDeltaY = 0;
   let wheelResetTimer = null;
+  let lastWheelEventAt = null;
   let wheelHandled = false;
   let touchStartX = 0;
   let touchStartY = 0;
@@ -265,6 +266,7 @@ export function createScrollController(options = {}) {
   function resetWheelGesture() {
     clearWheelAccumulation();
     wheelHandled = false;
+    lastWheelEventAt = null;
     notifyLocks();
     if (wheelResetTimer !== null) {
       win.clearTimeout(wheelResetTimer);
@@ -434,6 +436,14 @@ export function createScrollController(options = {}) {
     // iPad WebKit decides cancelability from the first non-zero wheel event.
     // Cancel even subpixel input and outward input at the first/last stop;
     // returning before this lets native scrolling own the entire gesture.
+    const now = Date.now();
+    // A busy renderer can deliver this input before an overdue reset timer.
+    // The quiet interval, not timer task ordering, defines a new gesture.
+    if (lastWheelEventAt !== null && now - lastWheelEventAt >= timings.wheelResetMs) {
+      resetWheelGesture();
+      if (!mounted) return;
+    }
+    lastWheelEventAt = now;
     if (wheelResetTimer !== null) {
       win.clearTimeout(wheelResetTimer);
     }
