@@ -40,7 +40,8 @@ Masahi Desu User Site が公開物、ビルド、テストで直接または間�
 | 名称 | バージョン | 用途 | ライセンス |
 | --- | --- | --- | --- |
 | [Playwright](https://playwright.dev/) | 1.59.1 | Chromium、WebKitを使うブラウザテストとソーシャル画像生成 | [Apache License 2.0](https://spdx.org/licenses/Apache-2.0.html) |
-| [Rolldown](https://rolldown.rs/) | 1.1.5 | Bartical用Lucide subsetの生成。Viteの間接依存としても利用 | [MIT](https://spdx.org/licenses/MIT.html) |
+| [Rolldown](https://rolldown.rs/) | 1.1.5 | Bartical用Lucide subsetと共通スクロールのbrowser bundle生成。Viteの間接依存としても利用 | [MIT](https://spdx.org/licenses/MIT.html) |
+| [TypeScript](https://www.typescriptlang.org/) | 5.9.3 | 配布予定の共通スクロールAPIの型定義・利用例の検証 | [Apache License 2.0](https://spdx.org/licenses/Apache-2.0.html) |
 | [Vite](https://vite.dev/) | 8.1.4 | 開発サーバーと本番ビルド | [MIT](https://spdx.org/licenses/MIT.html) |
 
 ## npmの間接依存

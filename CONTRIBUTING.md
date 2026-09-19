@@ -46,6 +46,12 @@
 - 本番ビルド: `npm run build`
 - ビルド成果物の確認: `npm run preview`
 
+### 共通スクロールの開発
+
+`site/shared/segmented-scroll/` は将来の外部配布を予定するパッケージです。ESMを正本とし、変更時は `npm run build:segmented-scroll` で既存ページ用の `browser.js` を再生成します。必須CSS・型定義・同梱READMEも同じ変更に含めてください。`browser.js` は既存のscript読み込みで必要な実行時アセットのため追跡します。
+
+`npm run test:segmented-scroll-core`、`npm run test:segmented-bundle`、`npm run test:segmented-package`、`npm run test:segmented-package:webkit` は、状態と入力、生成物の一致、配布アーカイブだけでの独立動作・型を検証します。既存の `npm test` に組み込みます。設計と公開前の未決事項は [共通セクションスクロール](docs/design/segmented-scroll.md) を参照します。
+
 ## リリース品質ゲート
 
 `main` へのpush前に完全な差分を確認し、次のうち最も強い変更区分のゲートを適用します。異なる区分が混在する場合は、上位の区分へ合わせます。

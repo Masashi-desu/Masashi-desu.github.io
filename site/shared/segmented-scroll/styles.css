@@ -1,0 +1,13 @@
+/* Required behavior only. Navigation appearance and section layout belong to the host. */
+:root.segmented-scroll-managed {
+  /* Explicit smooth navigation; alignment corrections must stay immediate. */
+  scroll-behavior: auto;
+  touch-action: pan-x pinch-zoom;
+}
+
+@media (any-pointer: coarse) {
+  :root.segmented-scroll-managed {
+    /* Avoid native snap pulling programmatic navigation back on mobile WebKit. */
+    scroll-snap-type: none;
+  }
+}

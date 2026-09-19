@@ -130,6 +130,7 @@
       }
     })();
   </script>
+  <link rel="stylesheet" href="shared/segmented-scroll/styles.css" />
 </head>
 <body class="page-shell page-home">
   <header class="home-section-nav" data-transition-ignore>
@@ -197,7 +198,7 @@
   <script vite-ignore src="vendor/embla-carousel.umd.js"></script>
   <script vite-ignore src="vendor/embla-carousel-auto-scroll.umd.js"></script>
   <script vite-ignore src="vendor/embla-carousel-wheel-gestures.umd.js"></script>
-  <script vite-ignore src="shared/segmented-scroll.js"></script>
+  <script vite-ignore src="shared/segmented-scroll/browser.js"></script>
   <script vite-ignore src="home-philosophy-tiles.js"></script>
   <script>
     (function () {
@@ -766,18 +767,13 @@
       }
 
       function setupSectionNavigation() {
-        const index = window.MDWSegmentedScroll.createStopIndex({
-          initialId: sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : ''
-        });
-        const segments = window.MDWSegmentedScroll.createSegmentController({
-          index,
+        const segments = window.MDWSegmentedScroll.createSegmentView({
           track: sectionNav,
           getControls: getHomeNavControls,
           getTargetId: getHomeNavControlTarget
         });
         sectionNavigation = window.MDWSegmentedScroll.createScrollController({
-          index,
-          segments,
+          initialId: sectionButtons[0] ? sectionButtons[0].dataset.sectionTarget : '',
           getStops: getHomeScrollStops,
           reduceMotion,
           managedClass: 'home-scroll-managed',
@@ -812,6 +808,7 @@
           });
         }
 
+        segments.connect(sectionNavigation);
         sectionNavigation.mount();
       }
 

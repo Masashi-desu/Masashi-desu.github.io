@@ -30,3 +30,7 @@ TypeFetch の更新情報は `site/products/TypeFetch/appcast.xml` を正本と�
 - 旧バージョン互換 URL: `https://masashi-desu.github.io/works/products/TypeFetch/appcast.xml`
 
 旧 URL は TypeFetch 1.1.0 との互換性を維持するためのもので、Vite build が正式 appcast と同じ内容を生成します。appcast の更新・検証・公開手順は [CONTRIBUTING.md の「TypeFetch Sparkle appcast」](./CONTRIBUTING.md#typefetch-sparkle-appcast) を参照してください。
+
+## 共通スクロールライブラリ
+
+ページめくりのようなスクロールとカレントセクション管理は、将来の外部配布を予定しています。現在はホーム・製品一覧・Surroundで利用する未公開の開発版です。対応範囲、責務分離、状態API、検証方法は [共通セクションスクロール設計](docs/design/segmented-scroll.md) を参照してください。

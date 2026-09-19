@@ -7,13 +7,6 @@
   white-space: pre-line;
 }
 
-.page-surround-document.surround-scroll-managed {
-  /* Navigation requests smooth motion explicitly; final alignment must be
-     immediate so WebKit cannot repeatedly restart a CSS smooth scroll. */
-  scroll-behavior: auto;
-  touch-action: pan-x pinch-zoom;
-}
-
 body.page-product--surround.surround-page {
   --surround-topbar-height: 4.5rem;
   --surround-edge: clamp(1rem, 3vw, 2.5rem);
@@ -579,12 +572,6 @@ body.page-product--surround.surround-page {
 .surround-segment.is-visible [data-surround-animate] {
   opacity: 1;
   transform: translateY(0);
-}
-
-@media (any-pointer: coarse) {
-  .page-surround-document.surround-scroll-managed {
-    scroll-snap-type: none;
-  }
 }
 
 @media (max-width: 56rem) {

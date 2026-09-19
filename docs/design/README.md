@@ -5,6 +5,7 @@
 - `home-philosophy.md`: ホーム Philosophy セクション
 - `home-products.md`: ホーム Product セクション
 - `product-catalog.md`: プロダクト一覧
+- `segmented-scroll.md`: 将来の外部配布を予定する共通スクロールライブラリの境界・API・入力ロックとサイトでの利用
 
 ## 歴史資料
 

@@ -1,0 +1,27 @@
+{
+  "name": "@masahi-desu/segmented-scroll",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Section paging, navigation state, and optional segment navigation for vertical window scrolling.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./styles.css": "./styles.css",
+    "./browser.js": "./browser.js"
+  },
+  "types": "./index.d.ts",
+  "files": [
+    "*.js",
+    "*.css",
+    "index.d.ts",
+    "README.md"
+  ],
+  "sideEffects": [
+    "./styles.css",
+    "./browser.js"
+  ],
+  "license": "UNLICENSED"
+}

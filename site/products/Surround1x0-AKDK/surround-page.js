@@ -40,9 +40,9 @@
     isSettled() {
       if (!sectionNavigation) return false;
       const state = sectionNavigation.getState();
-      const stop = sectionNavigation.index.getById(state.activeId);
+      const stop = sectionNavigation.getStop(state.activeId);
       const top = sectionNavigation.readStopTop(stop);
-      return state.mounted && !state.pendingId && !state.locked && !state.aligning &&
+      return state.mounted && state.settledId === state.activeId && !state.moving && !state.locked && !state.aligning &&
         top !== null && Math.abs(window.scrollY - top) <= 1;
     }
   });
@@ -218,18 +218,13 @@
     });
     viewport.mount();
 
-    const index = window.MDWSegmentedScroll.createStopIndex({
-      initialId: resolveInitialId()
-    });
-    const segments = window.MDWSegmentedScroll.createSegmentController({
-      index,
+    const segments = window.MDWSegmentedScroll.createSegmentView({
       track: nav,
       controls,
       getTargetId: getControlTarget
     });
     sectionNavigation = window.MDWSegmentedScroll.createScrollController({
-      index,
-      segments,
+      initialId: resolveInitialId(),
       getStops: getScrollStops,
       reduceMotion,
       managedClass: 'surround-scroll-managed',
@@ -267,8 +262,9 @@
       });
     });
 
+    segments.connect(sectionNavigation);
     sectionNavigation.mount();
-    const state = index.getState();
+    const state = sectionNavigation.getState();
     announceSegment(state.activeId || resolveInitialId(), 'initial', state.activeContentId);
   }
 

@@ -515,19 +515,14 @@
   }
 
   function setupSectionNavigation() {
-    const index = window.MDWSegmentedScroll.createStopIndex({
-      initialId: searchSection ? searchSection.id : ''
-    });
-    const segments = window.MDWSegmentedScroll.createSegmentController({
-      index,
+    const segments = window.MDWSegmentedScroll.createSegmentView({
       track: sectionNav,
       getControls: getCatalogNavControls,
       getTargetId: getCatalogNavControlTarget,
       revealControl: revealCatalogControl
     });
     sectionNavigation = window.MDWSegmentedScroll.createScrollController({
-      index,
-      segments,
+      initialId: searchSection ? searchSection.id : '',
       getStops: getCatalogScrollStops,
       reduceMotion,
       managedClass: 'catalog-scroll-managed',
@@ -566,15 +561,8 @@
         scrollToFooter();
       });
     }
-    if (numberNav) {
-      numberNav.addEventListener('scroll', () => {
-        const activeControl = numberNav.querySelector('.catalog-section-nav__number.is-active');
-        if (activeControl) {
-          segments.updateIndicator(activeControl);
-        }
-      }, { passive: true });
-    }
 
+    segments.connect(sectionNavigation);
     sectionNavigation.mount();
   }
 
