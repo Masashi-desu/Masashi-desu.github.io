@@ -60,6 +60,7 @@ navigation.mount();
 ## 入力と組み込み時の契約
 
 - wheel は小数も含め86pxで1区間移動し、最後の入力から180ms静止するまで同じジェスチャーとして消費します。OS判定には依存しません。
+- wheel/touch の方向移動は、停止点の認識範囲内かつ位置差が4pxまたはviewport高の2%（大きい方）以内なら、その停止点を起点にします。数pxのずれで現在セクションを再選択しません。広い補助停止点・カスタム表示判定を到着と扱わず、範囲外では実測位置から次の停止点を探します。`activeId` だけを根拠に飛び越しません。`eventRegion` とタッチ開始時の補助停止点は引き続き優先します。
 - `styles.css` はmanaged classがある間の `touch-action`、明示的なスクロール挙動、タッチ環境のnative snap抑制を担当します。利用側からこれらを上書きしないでください。
 - 1つのwindowにmountできるcontrollerは1つです。`destroy()` はlistener、observer、timer、補正処理、購読とライブラリが追加したclassを除去します。既存のclassは保持します。
 - `shouldYieldWheel` / `shouldYieldTouch` はカルーセル、フォーム、3D操作など利用側に委譲する領域を決めます。委譲する操作は利用側が処理してください。

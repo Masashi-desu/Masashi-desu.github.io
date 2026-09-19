@@ -1,7 +1,7 @@
 /**
  * テスト概要:
  *  - 目的: 共通 segmented scroll の停止位置・segment 表示同期と、微小 wheel 入力のキャンセル・ジェスチャー単位の移動を確認する。
- *  - 期待値: index/class/ARIA/indicator の同期に加え、86px 未満では移動せず、1ジェスチャーで1停止点だけ移動し、180ms の無入力後に再入力できる。
+ *  - 期待値: index/class/ARIA/indicator の同期に加え、86px 未満では移動せず、1ジェスチャーで1停止点だけ移動し、180ms の無入力後に再入力できる。停止点から3pxずれていても wheel/touch で隣へ進める。
  *  - 検証方法: Node の test/assert、fake DOM、mock clock で実際の wheel listener に入力し、位置・キャンセル・移動回数を検証する。
  */
 const assert = require('node:assert/strict');
@@ -251,6 +251,76 @@ test('縦成分のない横 wheel はページ固有の委譲領域の外でも�
   const h = createWheelHarness(t);
   assert.equal(h.wheel(0, { deltaX: 100 }).defaultPrevented, false);
   assert.deepEqual(h.navigations, []);
+});
+
+for (const input of ['wheel', 'touch']) {
+  for (const direction of [-1, 1]) {
+    test(`${input}: 停止点の手前3pxでも現在セクションを再選択せず隣へ移動する (direction=${direction})`, (t) => {
+      const h = createWheelHarness(t);
+      h.controller.setActive('second');
+      h.window.scrollY = 1000 - direction * 3;
+      if (input === 'wheel') {
+        h.wheel(direction * 86);
+      } else {
+        h.listeners.get('touchstart')({ touches: [{ clientX: 100, clientY: 400 }] });
+        h.listeners.get('touchmove')({
+          type: 'touchmove', touches: [{ clientX: 100, clientY: 400 - direction * 60 }],
+          cancelable: true, preventDefault() {}
+        });
+        h.listeners.get('touchend')({ touches: [] });
+      }
+      assert.deepEqual(h.navigations, [direction > 0 ? 'third' : 'first']);
+    });
+  }
+}
+
+test('停止点から離れた位置では古い active ID に依存せず実測位置から移動する', (t) => {
+  const h = createWheelHarness(t);
+  h.controller.setActive('third');
+  h.window.scrollY = 500;
+  h.wheel(86);
+  assert.deepEqual(h.navigations, ['second']);
+});
+
+test('表示位置と違う active ID が残っていても、停止点付近では実測位置を起点にする', (t) => {
+  const h = createWheelHarness(t);
+  h.window.scrollY = 997;
+  h.wheel(86);
+  assert.deepEqual(h.navigations, ['third']);
+});
+
+test('停止点の認識範囲外では次の停止点を飛び越さない', (t) => {
+  const h = createWheelHarness(t);
+  h.window.scrollY = 979;
+  h.wheel(86);
+  assert.deepEqual(h.navigations, ['second']);
+});
+
+test('広い footer 表示判定を移動済みと扱わず、100px手前から末尾へ進む', (t) => {
+  const h = createWheelHarness(t, {
+    getStops: () => [
+      { id: 'first', getTop: () => 0 },
+      { id: 'second', getTop: () => 1000 },
+      { id: 'third', getTop: () => 2000 },
+      { id: 'footer', role: 'auxiliary', element: { offsetHeight: 600 }, getTop: () => 3000 }
+    ]
+  });
+  h.window.scrollY = 2900;
+  h.wheel(86);
+  assert.deepEqual(h.navigations, ['footer']);
+});
+
+test('広いカスタム表示判定でも、150px先の停止点を飛び越さない', (t) => {
+  const h = createWheelHarness(t, {
+    getStops: () => [
+      { id: 'first', getTop: () => 0 },
+      { id: 'second', getTop: () => 1000, activationTolerance: 200 },
+      { id: 'third', getTop: () => 2000 }
+    ]
+  });
+  h.window.scrollY = 850;
+  h.wheel(86);
+  assert.deepEqual(h.navigations, ['second']);
 });
 
 test('active index と content index を役割ごとに管理する', () => {

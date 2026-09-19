@@ -1,7 +1,8 @@
 /**
  * テスト概要:
  *  - 目的: 共通スクロールを使うホーム・製品一覧・Surround の wheel 入力が、しきい値とジェスチャーロックを守ることを確認する。
- *  - 期待値: 0.25px の初回からキャンセルし、85.5px では動かず86pxで1区間移動する。1.5秒以上入力が続いても再移動せず、180ms以上の無入力後は逆方向へ戻れる。
+ *  - 期待値: 0.25px の初回からキャンセルし、85.5px では動かず86pxで1区間移動する。1.5秒以上入力が続いても再移動せず、180ms以上の無入力後は逆方向へ戻れる。停止点から3pxずれた位置でも wheel/touch で隣へ進む。
+ *    フッターの表示がactiveでも、移動の許容差を超える手前からwheelで末尾へ到達できる。
  *  - 検証方法: 隔離した Chromium/WebKit の実ページと制御可能な時計で合成 WheelEvent を dispatch し、キャンセル可否・scrollY・active nav を確認する。デスクトップでは実時間の実 wheel 入力も確認する。
  *    WebKit の iPad 設定はレイアウトと入力契約の検証であり、UIKit のイベント生成や実機トラックパッドそのものを再現するものではない。
  */
@@ -109,6 +110,69 @@ async function verifyPage(context, spec, baseURL, profile) {
     await page.clock.runFor(1400);
     await waitAt(page, spec.first);
     assert.equal((await state(page, spec)).active, spec.first);
+
+    // Mimic a small viewport/scroll-position discrepancy before a fresh input.
+    // Disable desktop native snap only while injecting the offset; mobile
+    // already disables it through the managed CSS contract.
+    for (const input of ['wheel', 'touch']) {
+      for (const direction of [-1, 1]) {
+        await page.evaluate(id => window.__segmentedController.goTo(id, { behavior: 'auto' }), spec.next);
+        await page.clock.runFor(1400);
+        const expected = await page.evaluate(({ id, input, direction }) => {
+          const controller = window.__segmentedController;
+          const stops = controller.getStops();
+          const next = stops[stops.findIndex(stop => stop.id === id) + direction].id;
+          const root = document.documentElement;
+          const original = root.style.scrollSnapType;
+          root.style.scrollSnapType = 'none';
+          const top = controller.readStopTop(controller.getStop(id));
+          scrollTo({ top: top - direction * 3, behavior: 'instant' });
+          const offset = top - scrollY;
+          const target = document.getElementById(id);
+          if (input === 'wheel') {
+            target.dispatchEvent(new WheelEvent('wheel', { deltaY: direction * 86, bubbles: true, cancelable: true }));
+          } else {
+            for (const [type, y] of [['touchstart', 400], ['touchmove', 400 - direction * 60], ['touchend', 0]]) {
+              const event = new Event(type, { bubbles: true, cancelable: true });
+              event.touches = type === 'touchend' ? [] : [{ clientX: 100, clientY: y }];
+              target.dispatchEvent(event);
+            }
+          }
+          root.style.scrollSnapType = original;
+          return { id: next, offset, selected: controller.getState().activeId };
+        }, { id: spec.next, input, direction });
+        assert.equal(expected.offset, direction * 3, 'position discrepancy must actually be injected');
+        assert.equal(expected.selected, expected.id, `${input} must advance from the visible stop, direction=${direction}`);
+        await page.clock.runFor(1600);
+        await page.waitForFunction(id => {
+          const controller = window.__segmentedController;
+          return Math.abs(scrollY - controller.readStopTop(controller.getStop(id))) <= 4;
+        }, expected.id);
+      }
+    }
+    // A footer may become visibly active long before its actual stop. A wheel
+    // from the fixed navigation/body must still be able to reach that stop.
+    const footerId = await page.evaluate(() => window.__segmentedController.getStops().at(-1).id);
+    await page.evaluate(id => window.__segmentedController.goTo(id, { behavior: 'auto' }), footerId);
+    await page.clock.runFor(1400);
+    const footerInput = await page.evaluate(id => {
+      const controller = window.__segmentedController;
+      const root = document.documentElement;
+      const original = root.style.scrollSnapType;
+      root.style.scrollSnapType = 'none';
+      const gap = Math.max(4, Math.round(visualViewport.height * 0.02)) + 5;
+      const top = controller.readStopTop(controller.getStop(id));
+      scrollTo({ top: top - gap, behavior: 'instant' });
+      const offset = top - scrollY;
+      document.body.dispatchEvent(new WheelEvent('wheel', { deltaY: 86, bubbles: true, cancelable: true }));
+      root.style.scrollSnapType = original;
+      return { gap, offset, target: controller.getState().targetId };
+    }, footerId);
+    assert.equal(footerInput.offset, footerInput.gap, 'footer position discrepancy must be injected');
+    assert.equal(footerInput.target, footerId, 'footer visibility must not prevent reaching the actual stop');
+    await page.clock.runFor(1400);
+    await page.evaluate(id => window.__segmentedController.goTo(id, { behavior: 'auto' }), spec.first);
+    await page.clock.runFor(1400);
 
     if (spec.url === '/products/') {
       const yielded = await page.locator('.catalog-section-nav__numbers').evaluate((element) => {

@@ -544,8 +544,8 @@ var MDWSegmentedScroll = (function(exports) {
 			return target ? goTo(target.id, navigationOptions) : false;
 		}
 		function getDirectionalStop(direction, event, preferredId = "") {
-			const eventStopId = preferredId || getEventStopId(event);
-			return index.findDirectional(direction, getScrollY(), eventStopId, readStopTop);
+			const anchorId = preferredId || getEventStopId(event) || findStopAtCurrentPosition(false, getPositionTolerance())?.id || "";
+			return index.findDirectional(direction, getScrollY(), anchorId, readStopTop);
 		}
 		function navigateDirection(direction, event, preferredId = "") {
 			const target = getDirectionalStop(direction, event, preferredId);
@@ -684,14 +684,14 @@ var MDWSegmentedScroll = (function(exports) {
 			}
 			if (shouldMonitorRestAlignment()) scheduleRestAlignmentCheck(260);
 		}
-		function findStopAtCurrentPosition(auxiliaryOnly) {
+		function findStopAtCurrentPosition(auxiliaryOnly, maxDistance = Infinity) {
 			const current = getScrollY();
 			let match = null;
 			let matchDistance = Infinity;
 			index.getOrderedStops(readStopTop).forEach((stop) => {
 				if (auxiliaryOnly && getRole(stop) === "content") return;
 				const distance = Math.abs(stop.top - current);
-				if (distance <= getActivationTolerance(stop) && distance < matchDistance) {
+				if (distance <= Math.min(getActivationTolerance(stop), maxDistance) && distance < matchDistance) {
 					match = stop;
 					matchDistance = distance;
 				}
@@ -705,6 +705,9 @@ var MDWSegmentedScroll = (function(exports) {
 			})) || 0;
 			if (Number.isFinite(stop.activationTolerance)) return stop.activationTolerance;
 			if (getRole(stop) !== "content" && stop.element) return Math.max(12, stop.element.offsetHeight * .4);
+			return getPositionTolerance();
+		}
+		function getPositionTolerance() {
 			return Math.max(4, Math.round(getViewportHeight() * .02));
 		}
 		function shouldMonitorRestAlignment() {
@@ -734,7 +737,7 @@ var MDWSegmentedScroll = (function(exports) {
 			restSampleScrollY = null;
 			const nearest = index.findNearest(current, readStopTop);
 			if (!nearest) return;
-			const tolerance = Math.max(4, Math.round(getViewportHeight() * .02));
+			const tolerance = getPositionTolerance();
 			if (nearest.distance > tolerance) goTo(nearest.stop.id, {
 				source: "rest",
 				behavior: "auto",

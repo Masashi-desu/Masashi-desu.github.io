@@ -382,8 +382,12 @@ export function createScrollController(options = {}) {
   }
 
   function getDirectionalStop(direction, event, preferredId = '') {
-    const eventStopId = preferredId || getEventStopId(event);
-    return index.findDirectional(direction, getScrollY(), eventStopId, readStopTop);
+    // Treat small position errors as being at a stop, so input does not select
+    // the current section again. Cap the distance: auxiliary/custom visibility
+    // tolerances can span hundreds of pixels and must not skip unvisited stops.
+    const anchorId = preferredId || getEventStopId(event)
+      || findStopAtCurrentPosition(false, getPositionTolerance())?.id || '';
+    return index.findDirectional(direction, getScrollY(), anchorId, readStopTop);
   }
 
   function navigateDirection(direction, event, preferredId = '') {
@@ -579,7 +583,7 @@ export function createScrollController(options = {}) {
     }
   }
 
-  function findStopAtCurrentPosition(auxiliaryOnly) {
+  function findStopAtCurrentPosition(auxiliaryOnly, maxDistance = Infinity) {
     const current = getScrollY();
     let match = null;
     let matchDistance = Infinity;
@@ -588,7 +592,7 @@ export function createScrollController(options = {}) {
         return;
       }
       const distance = Math.abs(stop.top - current);
-      const tolerance = getActivationTolerance(stop);
+      const tolerance = Math.min(getActivationTolerance(stop), maxDistance);
       if (distance <= tolerance && distance < matchDistance) {
         match = stop;
         matchDistance = distance;
@@ -607,6 +611,10 @@ export function createScrollController(options = {}) {
     if (getRole(stop) !== 'content' && stop.element) {
       return Math.max(12, stop.element.offsetHeight * 0.4);
     }
+    return getPositionTolerance();
+  }
+
+  function getPositionTolerance() {
     return Math.max(4, Math.round(getViewportHeight() * 0.02));
   }
 
@@ -650,7 +658,7 @@ export function createScrollController(options = {}) {
     if (!nearest) {
       return;
     }
-    const tolerance = Math.max(4, Math.round(getViewportHeight() * 0.02));
+    const tolerance = getPositionTolerance();
     if (nearest.distance > tolerance) {
       goTo(nearest.stop.id, { source: 'rest', behavior: 'auto', settleMs: 0, updateHistory: false });
     } else {
