@@ -14,12 +14,10 @@
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium context で
  *    複数 viewport に切り替えながら Product セクションへ移動し、DOMRect、scrollWidth、Barticalアイコンの実体とcomputed styleを取得する。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const { HomePage } = require('./pages/home-page');
+const { startServer } = require('./support/static-server');
 const { chromium } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const OVERFLOW_TOLERANCE = 1;
 const MAX_CAROUSEL_CTA_GAP_RATIO = 0.045;
 const MOBILE_VERTICAL_CENTER_TOLERANCE = 2;
@@ -44,49 +42,6 @@ const VIEWPORTS = [
   { width: 393, height: 852, name: 'reduced-motion', reducedMotion: 'reduce' }
 ];
 
-function serveStatic(req, res) {
-  const urlPath = req.url.split('?')[0];
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    res.statusCode = 403;
-    res.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      res.statusCode = 404;
-      res.end('Not found');
-      return;
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const types = {
-      '.html': 'text/html; charset=utf-8',
-      '.css': 'text/css; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp',
-      '.mp4': 'video/mp4'
-    };
-    res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
-    res.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
-
 function assertRectWithinViewport(rect, viewport, label) {
   if (
     rect.left < -OVERFLOW_TOLERANCE ||
@@ -96,87 +51,6 @@ function assertRectWithinViewport(rect, viewport, label) {
   ) {
     throw new Error(`${label} exceeded viewport: ${JSON.stringify({ rect, viewport })}`);
   }
-}
-
-async function getProductLayoutState(page) {
-  return page.evaluate(() => {
-    const roundRect = (element) => {
-      const rect = element.getBoundingClientRect();
-      return {
-        left: Number(rect.left.toFixed(2)),
-        top: Number(rect.top.toFixed(2)),
-        right: Number(rect.right.toFixed(2)),
-        bottom: Number(rect.bottom.toFixed(2)),
-        width: Number(rect.width.toFixed(2)),
-        height: Number(rect.height.toFixed(2))
-      };
-    };
-    const grid = document.querySelector('.home-product-grid');
-    const gridRect = roundRect(grid);
-    const visibleCards = Array.from(document.querySelectorAll('.home-product-card'))
-      .map(roundRect)
-      .filter((rect) => rect.right > gridRect.left + 8 && rect.left < gridRect.right - 8);
-    const visibleDescriptions = Array.from(document.querySelectorAll('.home-product-card__description'))
-      .filter((description) => {
-        const rect = description.getBoundingClientRect();
-        return rect.right > gridRect.left + 8 && rect.left < gridRect.right - 8;
-      });
-    const barticalIcon = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__icon');
-    const referenceIcon = document.querySelector('.home-product-card[href*="products/RetreatScreen/"] .home-product-card__icon');
-    const barticalVideo = document.querySelector('.home-product-card[href*="products/Bartical/"] .home-product-card__media-video');
-    const barticalVideoStyle = barticalVideo ? getComputedStyle(barticalVideo) : null;
-    const barticalIconStyle = barticalIcon ? getComputedStyle(barticalIcon) : null;
-    const productVideoSources = Array.from(new Set(
-      Array.from(document.querySelectorAll('.home-product-card__media-video'))
-        .map((video) => video.getAttribute('src'))
-    )).sort();
-
-    return {
-      viewport: {
-        width: window.innerWidth,
-        height: window.innerHeight
-      },
-      scroll: {
-        clientWidth: document.documentElement.clientWidth,
-        documentScrollWidth: document.documentElement.scrollWidth,
-        bodyScrollWidth: document.body.scrollWidth
-      },
-      sectionRect: roundRect(document.getElementById('products-section')),
-      productsRect: roundRect(document.querySelector('.home-products')),
-      headerRect: roundRect(document.querySelector('.home-products__header')),
-      hasHeaderCaption: Boolean(document.querySelector('.home-products__body')),
-      gridRect,
-      footerRect: roundRect(document.querySelector('.home-products__footer')),
-      ctaRect: roundRect(document.querySelector('.home-products__all-link')),
-      visibleCards,
-      visibleDescriptionLineClamps: visibleDescriptions.map((description) => getComputedStyle(description).webkitLineClamp),
-      barticalIcon: barticalIcon ? {
-        src: barticalIcon.getAttribute('src'),
-        naturalWidth: barticalIcon.naturalWidth,
-        naturalHeight: barticalIcon.naturalHeight,
-        filter: barticalIconStyle.filter,
-        scale: new DOMMatrix(barticalIconStyle.transform).a,
-        rect: roundRect(barticalIcon),
-        referenceRect: referenceIcon ? roundRect(referenceIcon) : null
-      } : null,
-      barticalVideo: barticalVideo ? {
-        src: barticalVideo.getAttribute('src'),
-        poster: barticalVideo.getAttribute('poster'),
-        muted: barticalVideo.muted,
-        loop: barticalVideo.loop,
-        autoplay: barticalVideo.autoplay,
-        playsInline: barticalVideo.playsInline,
-        controls: barticalVideo.controls,
-        paused: barticalVideo.paused,
-        readyState: barticalVideo.readyState,
-        videoWidth: barticalVideo.videoWidth,
-        videoHeight: barticalVideo.videoHeight,
-        objectPosition: barticalVideoStyle.objectPosition
-      } : null,
-      productVideoSources,
-      reduceMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
-    };
-  });
 }
 
 async function assertProductsFitAtViewport(browser, serverPort, viewport) {
@@ -215,17 +89,18 @@ async function assertProductsFitAtViewport(browser, serverPort, viewport) {
     });
 
     const page = await context.newPage();
+    const home = new HomePage(page);
     await page.goto(`http://127.0.0.1:${serverPort}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle');
-    await page.click('[data-section-target="products-section"]');
-    await page.waitForSelector('.home-product-track');
+    await home.showProducts();
+    await home.productTrack.waitFor({ state: 'visible' });
     await page.waitForFunction(() => {
       const section = document.getElementById('products-section');
       return section && Math.abs(section.getBoundingClientRect().top) <= 2;
     });
     await page.waitForTimeout(1000);
 
-    const state = await getProductLayoutState(page);
+    const state = await home.readProductLayout();
     const maxAllowedWidth = state.scroll.clientWidth + OVERFLOW_TOLERANCE;
     if (
       state.scroll.documentScrollWidth > maxAllowedWidth ||

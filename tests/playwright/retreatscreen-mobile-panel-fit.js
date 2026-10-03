@@ -4,12 +4,10 @@
  *  - 期待値: 通常のスマホではパネル高が初回 visualViewport 高と一致し、ブラウザバーの開閉に伴う同一幅の resize / scroll では変化しない。向き変更では再計測し、縦横比 9:20 以下では 796 × 850 比率を上限にする。スマホ縦持ちのタイトル行からアイコン一覧までを 24〜52px に保ち、ネイティブ比率時は各部品を本家寸法から 1.1px 以内にする。
  *  - 検証方法: ローカル静的サーバーで RetreatScreen を配信し、Playwright Chromium / WebKit の複数 viewport で主要要素の矩形、段組み、タイトル下余白、ネイティブスケールを取得する。iOS 内蔵ブラウザ相当のケースでは visualViewport をレイアウト viewport より低くし、同一幅の高さ変更では固定、orientationchange 後だけ再追従することも再現する。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const { RetreatScreenPage } = require('./pages/retreatscreen-page');
+const { startServer } = require('./support/static-server');
 const { chromium, webkit } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const VIEWPORTS = [
   { name: 'browser-comment', width: 380, height: 619, columns: 3, followsViewport: true, minHeaderGridGap: 40, maxHeaderGridGap: 52 },
   { name: 'ios-in-app-browser', width: 402, height: 874, initialVisibleHeight: 619, browserBarHiddenHeight: 700, orientationVisibleHeight: 650, expectedVisibleHeight: 650, columns: 3, followsViewport: true, minHeaderGridGap: 40, maxHeaderGridGap: 52 },
@@ -27,45 +25,6 @@ const LAYOUT_TOLERANCE = 1;
 const ORIGINAL_PANEL_HEIGHT_RATIO = 850 / 796;
 const BROWSER_ENGINE = process.env.RETREATSCREEN_BROWSER || 'chromium';
 const BROWSER_TYPES = { chromium, webkit };
-
-function serveStatic(req, res) {
-  const urlPath = req.url.split('?')[0];
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    res.statusCode = 403;
-    res.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      res.statusCode = 404;
-      res.end('Not found');
-      return;
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const types = {
-      '.html': 'text/html; charset=utf-8',
-      '.css': 'text/css; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.png': 'image/png',
-      '.svg': 'image/svg+xml',
-      '.webp': 'image/webp'
-    };
-    res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
-    res.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 function assertLayout(viewport, state) {
   const expectedViewportHeight = viewport.expectedVisibleHeight ?? viewport.initialVisibleHeight ?? viewport.height;
@@ -190,13 +149,14 @@ async function main() {
       }, { initialVisibleHeight: viewport.initialVisibleHeight });
 
       const page = await context.newPage();
+      const retreat = new RetreatScreenPage(page);
       await page.goto(`http://127.0.0.1:${port}/products/RetreatScreen/index.html`, {
         waitUntil: 'domcontentloaded'
       });
-      await page.waitForSelector('[data-launcher-item="download"] .retreat-app-icon', { state: 'visible' });
+      await retreat.icon('download').waitFor({ state: 'visible' });
 
       if (viewport.browserBarHiddenHeight) {
-        const initialLauncherHeight = await page.locator('#launcher').evaluate((launcher) => (
+        const initialLauncherHeight = await retreat.launcher.evaluate((launcher) => (
           launcher.getBoundingClientRect().height
         ));
         await page.evaluate((visibleHeight) => {
@@ -208,7 +168,7 @@ async function main() {
         await page.evaluate(() => new Promise((resolve) => {
           requestAnimationFrame(() => requestAnimationFrame(resolve));
         }));
-        const stableLauncherHeight = await page.locator('#launcher').evaluate((launcher) => (
+        const stableLauncherHeight = await retreat.launcher.evaluate((launcher) => (
           launcher.getBoundingClientRect().height
         ));
         if (Math.abs(stableLauncherHeight - initialLauncherHeight) > LAYOUT_TOLERANCE) {

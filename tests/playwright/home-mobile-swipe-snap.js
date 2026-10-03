@@ -4,56 +4,12 @@
  *  - 期待値: 上スワイプ後は Product が active かつ products-section の top が 0px 付近、footer では gear が active になり、その後の下スワイプで Product / Philosophy に戻れる。
  *  - 検証方法: ローカル静的サーバーでトップページを配信し、Playwright の Chromium mobile context から CDP touch event を送って scrollY・active target・section の矩形を取得する。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const { HomePage } = require('./pages/home-page');
+const { startServer } = require('./support/static-server');
 const { chromium, devices } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const MOBILE_VIEWPORT = { width: 393, height: 852 };
 const SECTION_TOLERANCE = 4;
-
-function serveStatic(req, res) {
-  const urlPath = req.url.split('?')[0];
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    res.statusCode = 403;
-    res.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      res.statusCode = 404;
-      res.end('Not found');
-      return;
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const types = {
-      '.html': 'text/html; charset=utf-8',
-      '.css': 'text/css; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp'
-    };
-    res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
-    res.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 async function dispatchSwipe(cdp, page, startY, endY) {
   const x = Math.round(MOBILE_VIEWPORT.width / 2);
@@ -73,23 +29,6 @@ async function dispatchSwipe(cdp, page, startY, endY) {
   await cdp.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
     touchPoints: []
-  });
-}
-
-async function getHomeState(page) {
-  return page.evaluate(() => {
-    const active = document.querySelector('.home-section-nav__button.is-active, .home-section-nav__footer-link.is-active');
-    const catchRect = document.getElementById('catch-section').getBoundingClientRect();
-    const productsRect = document.getElementById('products-section').getBoundingClientRect();
-    const footerRect = document.getElementById('home-footer').getBoundingClientRect();
-    return {
-      scrollY: Math.round(window.scrollY),
-      activeTarget: active ? active.dataset.sectionTarget || active.dataset.footerTarget : null,
-      catchTop: Number(catchRect.top.toFixed(2)),
-      productsTop: Number(productsRect.top.toFixed(2)),
-      footerTop: Number(footerRect.top.toFixed(2)),
-      distanceFromBottom: Math.round(document.documentElement.scrollHeight - (window.scrollY + window.innerHeight))
-    };
   });
 }
 
@@ -148,6 +87,7 @@ async function main() {
     });
 
     const page = await context.newPage();
+    const home = new HomePage(page);
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(500);
@@ -156,32 +96,32 @@ async function main() {
 
     await dispatchSwipe(cdp, page, 650, 190);
     await page.waitForTimeout(1300);
-    const productState = await getHomeState(page);
+    const productState = await home.readScrollState();
     assertSectionState(productState, 'products-section', 'productsTop');
 
-    await page.click('.home-section-nav__footer-link');
+    await home.showFooter();
     await page.waitForTimeout(1300);
-    const footerClickState = await getHomeState(page);
+    const footerClickState = await home.readScrollState();
     assertFooterState(footerClickState);
 
     await dispatchSwipe(cdp, page, 190, 650);
     await page.waitForTimeout(1300);
-    const productReturnState = await getHomeState(page);
+    const productReturnState = await home.readScrollState();
     assertSectionState(productReturnState, 'products-section', 'productsTop');
 
     await dispatchSwipe(cdp, page, 650, 190);
     await page.waitForTimeout(1300);
-    const footerSwipeState = await getHomeState(page);
+    const footerSwipeState = await home.readScrollState();
     assertFooterState(footerSwipeState);
 
     await dispatchSwipe(cdp, page, 190, 650);
     await page.waitForTimeout(1300);
-    const productReturnFromSwipeState = await getHomeState(page);
+    const productReturnFromSwipeState = await home.readScrollState();
     assertSectionState(productReturnFromSwipeState, 'products-section', 'productsTop');
 
     await dispatchSwipe(cdp, page, 190, 650);
     await page.waitForTimeout(1300);
-    const catchState = await getHomeState(page);
+    const catchState = await home.readScrollState();
     assertSectionState(catchState, 'catch-section', 'catchTop');
 
     console.log('Home mobile swipe snaps to complete sections.');

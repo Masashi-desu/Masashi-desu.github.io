@@ -4,12 +4,10 @@
  *  - 期待値: 6件中1ページ目は1〜5の5section、2ページ目は6のみを描画する。前後ボタン・現在ページ・全体通番が同期し、最後の通番タブのfocus ringは横スクロール領域内でクリップしない。Bartical、TypeFetch、WinKinesis背景はposter付きMP4をミュート・ループ・インライン再生する。Bartical背景は画面比率にかかわらず上端を基準に切り抜く。LiquidGLセグメントは暗色tintで動画の明部を抑え、検索sectionとの切替を640ms linearで補間する。DOM差し替え後は除去済み動画を破棄して、1ページ目へ戻したときに新しいvideo要素を再検出する。
  *  - 検証方法: ローカル静的サーバーで /products/ をChromiumまたはWebKitに開き、DOM数、ナビ番号、ページ状態、動画属性とLiquidGL rendererの動画一覧を取得する。viewport変更後、実際のrefreshを維持したspyを使って前後ページを操作し、rendererが現在のDOMだけを追跡することを確認する。codec・GPU・実時間に依存する動画frame更新はmacOS専用のnative-media-liquidgl.jsで検証する。
  */
-const fs = require('fs');
-const http = require('http');
-const path = require('path');
+const { CatalogPage } = require('./pages/catalog-page');
+const { startServer } = require('./support/static-server');
 const { chromium, webkit } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const BROWSER_NAME = process.env.CATALOG_BROWSER || 'chromium';
 const BROWSER_TYPES = { chromium, webkit };
 
@@ -17,112 +15,6 @@ function assert(condition, message, details) {
   if (!condition) {
     throw new Error(`${message}${details ? `: ${JSON.stringify(details)}` : ''}`);
   }
-}
-
-function serveStatic(request, response) {
-  const pathname = decodeURIComponent(request.url.split('?')[0]);
-  const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
-  let filePath = path.resolve(ROOT, relativePath);
-  if (pathname.endsWith('/')) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (filePath !== ROOT && !filePath.startsWith(`${ROOT}${path.sep}`)) {
-    response.statusCode = 403;
-    response.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      response.statusCode = 404;
-      response.end('Not found');
-      return;
-    }
-    const contentTypes = {
-      '.css': 'text/css; charset=utf-8',
-      '.html': 'text/html; charset=utf-8',
-      '.gif': 'image/gif',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.mp4': 'video/mp4',
-      '.png': 'image/png',
-      '.svg': 'image/svg+xml; charset=utf-8'
-    };
-    response.setHeader('Content-Type', contentTypes[path.extname(filePath).toLowerCase()] || 'application/octet-stream');
-    response.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
-
-async function readState(page) {
-  return page.evaluate(() => {
-    const sections = Array.from(document.querySelectorAll('[data-catalog-section="product"]'));
-    const catalogVideos = Array.from(document.querySelectorAll('.catalog-product-section__video'));
-    const renderer = window.__liquidGLRenderer__;
-    const video = document.querySelector('#catalog-product-bartical .catalog-product-section__video');
-    const videoStyle = video ? getComputedStyle(video) : null;
-    const videoRect = video?.getBoundingClientRect();
-    const videoMediaRect = video?.parentElement?.getBoundingClientRect();
-    const barticalIcon = document.querySelector('#catalog-product-bartical .catalog-product-section__icon');
-    const barticalIconStyle = barticalIcon ? getComputedStyle(barticalIcon) : null;
-    const navTrack = document.querySelector('.catalog-section-nav__track');
-    const navTintStyle = navTrack ? getComputedStyle(navTrack, '::before') : null;
-    const status = document.getElementById('catalog-pagination-status');
-    const prev = document.getElementById('catalog-pagination-prev');
-    const next = document.getElementById('catalog-pagination-next');
-    return {
-      sectionIds: sections.map((section) => section.id),
-      productIndexes: sections.map((section) => section.dataset.productIndex),
-      indexLabels: sections.map((section) => section.querySelector('.catalog-product-section__index')?.textContent.trim()),
-      navNumbers: Array.from(document.querySelectorAll('.catalog-section-nav__number')).map((button) => button.textContent.trim()),
-      page: status?.textContent.trim(),
-      pageLabel: status?.getAttribute('aria-label'),
-      prevDisabled: prev?.disabled,
-      nextDisabled: next?.disabled,
-      count: document.getElementById('product-count')?.textContent.trim(),
-      catalogVideoSources: catalogVideos.map((item) => item.getAttribute('src')).sort(),
-      liquidDynamicVideoSources: renderer && Array.isArray(renderer._videoNodes)
-        ? renderer._videoNodes.map((item) => item.getAttribute('src')).sort()
-        : [],
-      catalogNavGlassTone: navTrack?.dataset.glassTone || null,
-      catalogNavGlassTransition: navTintStyle ? {
-        property: navTintStyle.transitionProperty,
-        duration: navTintStyle.transitionDuration,
-        timingFunction: navTintStyle.transitionTimingFunction
-      } : null,
-      video: video ? {
-        src: video.getAttribute('src'),
-        poster: video.getAttribute('poster'),
-        muted: video.muted,
-        loop: video.loop,
-        autoplay: video.autoplay,
-        playsInline: video.playsInline,
-        disablePictureInPicture: video.hasAttribute('disablepictureinpicture'),
-        disableRemotePlayback: video.hasAttribute('disableremoteplayback'),
-        objectPosition: videoStyle?.objectPosition,
-        topEdgeOffset: videoRect && videoMediaRect ? videoRect.top - videoMediaRect.top : null
-      } : null,
-      barticalFallbackImageCount: document.querySelectorAll('#catalog-product-bartical .catalog-product-section__image').length,
-      catalogNavGlassTint: navTintStyle?.backgroundColor || null,
-      barticalIconStyle: barticalIconStyle ? {
-        src: barticalIcon.getAttribute('src'),
-        naturalWidth: barticalIcon.naturalWidth,
-        naturalHeight: barticalIcon.naturalHeight,
-        borderRadius: barticalIconStyle.borderRadius,
-        boxShadow: barticalIconStyle.boxShadow,
-        objectFit: barticalIconStyle.objectFit
-      } : null,
-      liquidRefreshCalls: Array.isArray(window.__catalogLiquidRefreshCalls)
-        ? window.__catalogLiquidRefreshCalls.slice()
-        : []
-    };
-  });
 }
 
 async function main() {
@@ -155,6 +47,7 @@ async function main() {
     });
 
     const page = await context.newPage();
+    const catalog = new CatalogPage(page);
     const pageErrors = [];
     const consoleErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -177,11 +70,11 @@ async function main() {
         && videos.every((video) => renderer._videoNodes.includes(video));
     }, null, { timeout: 15000 });
 
-    const firstPage = await readState(page);
+    const firstPage = await catalog.readPaginationState();
     assert(firstPage.sectionIds.length === 5, 'First page did not render exactly five products', firstPage);
     assert(JSON.stringify(firstPage.productIndexes) === JSON.stringify(['0', '1', '2', '3', '4']), 'First page indexes were incorrect', firstPage);
     assert(JSON.stringify(firstPage.navNumbers) === JSON.stringify(['1', '2', '3', '4', '5']), 'First page nav did not show global numbers 1–5', firstPage);
-    await page.locator('.catalog-section-nav__number').last().focus();
+    await catalog.numberTabs.last().focus();
     const focusedNumberOutline = await page.evaluate(() => {
       const number = document.querySelector('.catalog-section-nav__number:focus');
       const style = number ? getComputedStyle(number) : null;
@@ -266,13 +159,13 @@ async function main() {
       return track?.dataset.glassTone === 'surface'
         && getComputedStyle(track, '::before').backgroundColor === 'rgba(255, 253, 247, 0.28)';
     });
-    await page.locator('.catalog-section-nav__number[data-section-target="catalog-product-bartical"]').click();
+    await catalog.showProduct('catalog-product-bartical');
     await page.waitForFunction(() => {
       const track = document.querySelector('.catalog-section-nav__track');
       return track?.dataset.glassTone === 'dark'
         && getComputedStyle(track, '::before').backgroundColor === 'rgba(5, 4, 14, 0.62)';
     });
-    const lightThemeProductState = await readState(page);
+    const lightThemeProductState = await catalog.readPaginationState();
     assert(
       lightThemeProductState.catalogNavGlassTone === 'dark'
         && lightThemeProductState.catalogNavGlassTint === 'rgba(5, 4, 14, 0.62)',
@@ -282,7 +175,7 @@ async function main() {
         tint: lightThemeProductState.catalogNavGlassTint
       }
     );
-    await page.locator('#catalog-pagination-nav').click();
+    await catalog.showPagination();
     await page.waitForFunction(() => {
       const track = document.querySelector('.catalog-section-nav__track');
       const pagination = document.getElementById('catalog-pagination-nav');
@@ -290,7 +183,7 @@ async function main() {
         && track?.dataset.glassTone === 'dark'
         && getComputedStyle(track, '::before').backgroundColor === 'rgba(5, 4, 14, 0.62)';
     });
-    const lightThemePaginationState = await readState(page);
+    const lightThemePaginationState = await catalog.readPaginationState();
     assert(
       lightThemePaginationState.catalogNavGlassTone === 'dark'
         && lightThemePaginationState.catalogNavGlassTint === 'rgba(5, 4, 14, 0.62)',
@@ -309,7 +202,7 @@ async function main() {
       { width: 573, height: 550 }
     ]) {
       await page.setViewportSize(viewport);
-      const responsiveState = await readState(page);
+      const responsiveState = await catalog.readPaginationState();
       assert(
         responsiveState.video?.objectPosition === '50% 0%'
           && Math.abs(responsiveState.video.topEdgeOffset) < 0.1,
@@ -331,7 +224,7 @@ async function main() {
       };
     });
 
-    await page.locator('#catalog-pagination-next').click();
+    await catalog.nextPage();
     await page.waitForFunction(() => {
       const sections = document.querySelectorAll('[data-catalog-section="product"]');
       return sections.length === 1 && sections[0].dataset.productIndex === '5';
@@ -342,7 +235,7 @@ async function main() {
     });
     await page.waitForFunction(() => window.__liquidGLRenderer__?._videoNodes?.length === 0);
     await page.waitForLoadState('networkidle');
-    const secondPage = await readState(page);
+    const secondPage = await catalog.readPaginationState();
     assert(secondPage.sectionIds.length === 1, 'Second page did not render only the remaining product', secondPage);
     assert(JSON.stringify(secondPage.navNumbers) === JSON.stringify(['6']), 'Second page nav did not preserve global number 6', secondPage);
     assert(secondPage.indexLabels[0] === '06 / 06', 'Second page product counter was incorrect', secondPage);
@@ -360,7 +253,7 @@ async function main() {
       secondPage
     );
 
-    await page.locator('#catalog-pagination-prev').click();
+    await catalog.previousPage();
     await page.waitForFunction(() => document.querySelectorAll('[data-catalog-section="product"]').length === 5);
     await page.waitForFunction(() => {
       const videos = Array.from(document.querySelectorAll('.catalog-product-section__video'));
@@ -369,7 +262,7 @@ async function main() {
         && renderer?._videoNodes?.length === 3
         && videos.every((video) => renderer._videoNodes.includes(video));
     });
-    const restoredPage = await readState(page);
+    const restoredPage = await catalog.readPaginationState();
     assert(restoredPage.page === '1' && restoredPage.prevDisabled && !restoredPage.nextDisabled, 'Previous page did not restore page one', restoredPage);
     assert(
       JSON.stringify(restoredPage.liquidRefreshCalls) === JSON.stringify([0, 0]),
@@ -382,9 +275,9 @@ async function main() {
       restoredPage
     );
 
-    await page.locator('#category-filter').selectOption('MacApp');
+    await catalog.filterCategory('MacApp');
     await page.waitForFunction(() => document.querySelectorAll('[data-catalog-section="product"]').length === 4);
-    const filteredPage = await readState(page);
+    const filteredPage = await catalog.readPaginationState();
     assert(filteredPage.page === '1' && filteredPage.prevDisabled && filteredPage.nextDisabled, 'Filtering did not reset and clamp pagination', filteredPage);
 
     await page.emulateMedia({ reducedMotion: 'reduce' });

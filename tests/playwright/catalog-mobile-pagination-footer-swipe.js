@@ -8,56 +8,12 @@
  *  - 検証方法: ローカル静的サーバーで /products/ を配信し、Playwright WebKit の iPhone context で
  *    対象要素へ合成 TouchEvent を dispatch して、scrollY・active target・各セグメントの距離を取得する。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const { CatalogPage } = require('./pages/catalog-page');
+const { startServer } = require('./support/static-server');
 const { webkit, devices } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const MOBILE_VIEWPORT = { width: 393, height: 852 };
 const SECTION_TOLERANCE = 4;
-
-function serveStatic(req, res) {
-  const urlPath = req.url.split('?')[0];
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    res.statusCode = 403;
-    res.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      res.statusCode = 404;
-      res.end('Not found');
-      return;
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const types = {
-      '.html': 'text/html; charset=utf-8',
-      '.css': 'text/css; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp'
-    };
-    res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
-    res.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 async function dispatchSwipeOnSelector(page, selector, startY, endY, steps = 14) {
   await page.evaluate(async ({ selector, startY, endY, steps }) => {
@@ -96,35 +52,6 @@ async function waitForAnimationFrames(page, frameCount) {
     };
     window.requestAnimationFrame(step);
   }), frameCount);
-}
-
-async function getCatalogState(page) {
-  return page.evaluate(() => {
-    const active = document.querySelector(
-      '.catalog-section-nav__icon-button.is-active, .catalog-section-nav__number.is-active, .catalog-section-nav__footer-link.is-active'
-    );
-    const pagination = document.getElementById('catalog-pagination-section');
-    const footer = document.getElementById('catalog-footer');
-    const productSections = Array.from(document.querySelectorAll('[data-catalog-section="product"]'));
-    const lastProduct = productSections[productSections.length - 1] || null;
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-    const documentHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-    const paginationScrollTop = pagination
-      ? Math.max(0, Math.round(pagination.getBoundingClientRect().bottom + window.scrollY - viewportHeight))
-      : null;
-    return {
-      scrollY: Math.round(window.scrollY),
-      activeTarget: active
-        ? active.dataset.sectionTarget || active.dataset.paginationTarget || active.dataset.footerTarget
-        : null,
-      lastProductTarget: lastProduct ? lastProduct.id : null,
-      lastProductTop: lastProduct ? Number(lastProduct.getBoundingClientRect().top.toFixed(2)) : null,
-      paginationDistance: paginationScrollTop === null ? null : Math.abs(Math.round(window.scrollY) - paginationScrollTop),
-      paginationTop: pagination ? Number(pagination.getBoundingClientRect().top.toFixed(2)) : null,
-      footerTop: footer ? Number(footer.getBoundingClientRect().top.toFixed(2)) : null,
-      distanceFromBottom: Math.round(documentHeight - (window.scrollY + viewportHeight))
-    };
-  });
 }
 
 function assertPaginationState(state, label) {
@@ -191,6 +118,7 @@ async function main() {
     });
 
     const page = await context.newPage();
+    const catalog = new CatalogPage(page);
     await page.goto(`http://127.0.0.1:${port}/products/`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('#footer-language', { timeout: 5000 });
@@ -212,9 +140,9 @@ async function main() {
       throw new Error(`Expected catalog CSS scroll snap to be disabled under JS touch control, got "${scrollControl.scrollSnapType}"`);
     }
 
-    await page.click('.catalog-section-nav__footer-link');
+    await catalog.showFooter();
     await page.waitForTimeout(1300);
-    assertFooterState(await getCatalogState(page), 'nav click to footer');
+    assertFooterState(await catalog.readScrollState(), 'nav click to footer');
     await waitForAnimationFrames(page, 40);
 
     await page.evaluate(() => {
@@ -228,22 +156,22 @@ async function main() {
     });
     await dispatchSwipeOnSelector(page, '#catalog-footer', 190, 650);
     await page.waitForTimeout(1300);
-    assertPaginationState(await getCatalogState(page), 'partial footer upward swipe');
+    assertPaginationState(await catalog.readScrollState(), 'partial footer upward swipe');
     await waitForAnimationFrames(page, 40);
 
     await dispatchSwipeOnSelector(page, '#catalog-pagination-section', 650, 190);
     await page.waitForTimeout(1300);
-    assertFooterState(await getCatalogState(page), 'pagination downward swipe');
+    assertFooterState(await catalog.readScrollState(), 'pagination downward swipe');
     await waitForAnimationFrames(page, 40);
 
     await dispatchSwipeOnSelector(page, '#catalog-footer', 190, 650);
     await page.waitForTimeout(1300);
-    assertPaginationState(await getCatalogState(page), 'footer upward swipe');
+    assertPaginationState(await catalog.readScrollState(), 'footer upward swipe');
     await waitForAnimationFrames(page, 40);
 
     await dispatchSwipeOnSelector(page, '#catalog-pagination-section', 190, 650);
     await page.waitForTimeout(1300);
-    assertLastProductState(await getCatalogState(page), 'pagination upward swipe');
+    assertLastProductState(await catalog.readScrollState(), 'pagination upward swipe');
     await waitForAnimationFrames(page, 40);
 
     await page.evaluate(() => {
@@ -261,7 +189,7 @@ async function main() {
       });
     });
     await page.waitForTimeout(1500);
-    assertPaginationState(await getCatalogState(page), 'unmanaged stop near pagination');
+    assertPaginationState(await catalog.readScrollState(), 'unmanaged stop near pagination');
     await waitForAnimationFrames(page, 40);
 
     await page.evaluate(() => {
@@ -278,7 +206,7 @@ async function main() {
       });
     });
     await page.waitForTimeout(1500);
-    assertFooterState(await getCatalogState(page), 'unmanaged stop near footer');
+    assertFooterState(await catalog.readScrollState(), 'unmanaged stop near footer');
 
     await page.evaluate(() => {
       document.documentElement.style.scrollSnapType = '';

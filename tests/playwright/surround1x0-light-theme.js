@@ -39,6 +39,7 @@
  *    Playwright Chromiumからページを開き、公開された3D状態、セグメント位置、テーマselect、DOMRect、
  *    scrollWidthをデスクトップとモバイルの両方で計測する。
  */
+const { SurroundPage } = require('./pages/surround-page');
 const http = require('http');
 const net = require('net');
 const path = require('path');
@@ -150,14 +151,15 @@ async function verifyNavigationDuringModelLoad(browser, pageUrl) {
   const modelGate = new Promise((resolve) => { releaseModels = resolve; });
   try {
     const page = await context.newPage();
+    const surround = new SurroundPage(page);
     await page.route('**/*.glb', async (route) => {
       await modelGate;
       await route.continue();
     });
     await page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => Boolean(window.__SURROUND_3D__));
-    await clickSegment(page, 2);
-    await clickSegment(page, 4);
+    await surround.showSection(2);
+    await surround.showSection(4);
     assert(await page.evaluate(() => !window.__SURROUND_3D__.ready), 'Model load was not delayed');
     releaseModels();
     await waitFor3d(page);
@@ -191,23 +193,6 @@ async function verifyWebKitScrollAlignment(pageUrl) {
   } finally {
     await browser.close();
   }
-}
-
-async function clickSegment(page, number) {
-  const id = `surround-0${number}`;
-  await page.locator(`[data-surround-target="${id}"]`).click();
-  await page.waitForFunction((expected) => (
-    document.body.dataset.surroundScene === String(expected.index) &&
-    Math.abs(document.getElementById(expected.id).getBoundingClientRect().top) <= 1
-  ), { id, index: number - 1 });
-}
-
-async function clickFooter(page) {
-  await page.locator('[data-surround-footer-target="surround-footer"]').click();
-  await page.waitForFunction(() => (
-    document.body.dataset.surroundStop === 'surround-footer' &&
-    Math.abs(document.documentElement.scrollHeight - window.innerHeight - window.scrollY) <= 1
-  ));
 }
 
 async function readLayout(page) {
@@ -422,6 +407,7 @@ async function verifyNoPhotoFallback(browser, pageUrl) {
   for (const failure of ['glb', 'webgl', 'context-lost']) {
     const context = await browser.newContext();
     const page = await context.newPage();
+    const surround = new SurroundPage(page);
     const photoRequests = [];
     page.on('request', (request) => {
       if (request.url().endsWith('/Surround1x0-AKDK.png')) photoRequests.push(request.url());
@@ -455,8 +441,8 @@ async function verifyNoPhotoFallback(browser, pageUrl) {
     }));
     assert(state.images === 0 && photoRequests.length === 0 && state.loading === 'hidden' && !state.ready,
       `${failure} displayed or requested a photo fallback`, { state, photoRequests });
-    await clickSegment(page, 4);
-    assert(await page.locator('.surround-action--primary').isVisible(), `${failure} hid the repository link`);
+    await surround.showSection(4);
+    assert(await surround.primaryAction.isVisible(), `${failure} hid the repository link`);
     await context.close();
   }
 }
@@ -471,12 +457,13 @@ async function verifyModelInteraction(browser, pageUrl) {
   };
   await context.addInitScript(deterministicFrames);
   const page = await context.newPage();
+  const surround = new SurroundPage(page);
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const waitInteractive = () => page.waitForFunction(() => window.__SURROUND_3D__?.interaction?.enabled);
   const readPoses = () => page.evaluate(() => structuredClone(window.__SURROUND_3D__.currentPoses));
   const assertModelFocus = async (side, visible) => {
-    const focus = await page.locator(`[data-surround-model="${side}"]`).evaluate((area) => ({
+    const focus = await surround.model(side).evaluate((area) => ({
       focused: document.activeElement === area,
       style: getComputedStyle(area).outlineStyle,
       width: getComputedStyle(area).outlineWidth
@@ -484,7 +471,7 @@ async function verifyModelInteraction(browser, pageUrl) {
     assert(visible ? focus.focused && focus.style === 'solid' && focus.width === '2px' : focus.style === 'none',
       `${side} model focus outline did not match ${visible ? 'Tab selection' : 'pointer operation'}`, focus);
   };
-  const pointOnModel = async (side) => page.locator(`[data-surround-model="${side}"]`).evaluate((area) => {
+  const pointOnModel = async (side) => surround.model(side).evaluate((area) => {
     const box = area.getBoundingClientRect();
     for (const fy of [0.15, 0.85, 0.5]) {
       for (const fx of [0.25, 0.5, 0.75]) {
@@ -510,8 +497,8 @@ async function verifyModelInteraction(browser, pageUrl) {
   };
   await page.goto(pageUrl);
   await waitInteractive();
-  assert(await page.locator('.surround-interaction button').count() === 0, 'Model interaction added visible controls');
-  await page.locator('.surround-wordmark').focus();
+  assert(await surround.interaction.locator('button').count() === 0, 'Model interaction added visible controls');
+  await surround.wordmark.focus();
   await page.keyboard.press('Tab');
   await assertModelFocus('left', true);
   await page.keyboard.press('Tab');
@@ -533,8 +520,8 @@ async function verifyModelInteraction(browser, pageUrl) {
   await waitInteractive();
   assert(JSON.stringify(await readPoses()) === JSON.stringify(original), 'Reset did not restore the responsive layout');
 
-  const left = page.locator('[data-surround-model="left"]');
-  await page.locator('.surround-wordmark').focus();
+  const left = surround.model('left');
+  await surround.wordmark.focus();
   await page.keyboard.press('Tab');
   await assertModelFocus('left', true);
   await page.keyboard.press('ArrowRight');
@@ -545,25 +532,25 @@ async function verifyModelInteraction(browser, pageUrl) {
   assert(JSON.stringify(await readPoses()) === JSON.stringify(original), 'Escape did not reset keyboard manipulation');
 
   await dragModel('left');
-  await page.locator('[data-surround-target="surround-02"]').click();
+  await surround.selectSection(2);
   await page.waitForFunction(() => window.__SURROUND_3D__.motionActive && !window.__SURROUND_3D__.interaction.enabled);
-  assert(await page.locator('.surround-interaction').isHidden(), 'Controls stayed active during section movement');
+  assert(await surround.interaction.isHidden(), 'Controls stayed active during section movement');
   await left.dispatchEvent('pointerdown', { pointerId: 1, isPrimary: true, button: 0, clientX: 200, clientY: 400 });
   assert(await page.evaluate(() => !window.__SURROUND_3D__.interaction.dragging), 'A transition accepted model input');
   await waitInteractive();
   assert(await left.isHidden(), 'The exited model retained an interactive area');
   await dragModel('right');
 
-  await clickSegment(page, 4);
+  await surround.showSection(4);
   await waitInteractive();
   const offsets = await page.evaluate(() => [...window.__SURROUND_3D__.explosionItemOffsets]);
   await dragModel('right');
   assert(await page.evaluate((expected) => JSON.stringify(window.__SURROUND_3D__.explosionItemOffsets) === JSON.stringify(expected), offsets),
     'Dragging the exploded model changed its layer spacing');
   const beforeFooter = await readPoses();
-  await clickFooter(page);
+  await surround.showFooter();
   await page.waitForFunction(() => !window.__SURROUND_3D__.interaction.enabled);
-  await page.locator('.theme-select').selectOption('dark');
+  await surround.footer.selectTheme('dark');
   await page.waitForFunction(() => window.__SURROUND_3D__.theme === 'dark');
   assert(JSON.stringify(await readPoses()) === JSON.stringify(beforeFooter), 'Theme change lost the user pose');
   assert(errors.length === 0, 'Model interaction raised browser errors', errors);
@@ -698,6 +685,7 @@ async function main() {
       window.__SURROUND_TEST_SKIP_RENDER__ = true;
     });
     const page = await context.newPage();
+    const surround = new SurroundPage(page);
     await page.goto(pageUrl, { waitUntil: 'load' });
     await waitFor3d(page);
 
@@ -837,7 +825,7 @@ async function main() {
     });
     await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
 
-    await clickSegment(page, 2);
+    await surround.showSection(2);
     let motionState = await page.evaluate(() => window.__SURROUND_3D__);
     assert(motionState.activeScene === 1, 'Segment 02 did not activate right-unit scene', motionState);
     assert(motionState.foregroundSide === 'right', 'Segment 02 did not feature the right unit', motionState);
@@ -881,7 +869,7 @@ async function main() {
       'Segment copy was not stacked above the single 3D canvas',
       stackingState
     );
-    await clickSegment(page, 3);
+    await surround.showSection(3);
     motionState = await page.evaluate(() => window.__SURROUND_3D__);
     assert(motionState.activeScene === 2, 'Segment 03 did not activate left-unit scene', motionState);
     assert(motionState.foregroundSide === 'left', 'Segment 03 did not feature the left unit', motionState);
@@ -967,7 +955,7 @@ async function main() {
         ? { rotations: [...rotations], maximum, spread }
         : false;
     });
-    await clickSegment(page, 4);
+    await surround.showSection(4);
     const collisionSafeEntryHandle = await collisionSafeEntryHandlePromise;
     const collisionSafeEntry = await collisionSafeEntryHandle.jsonValue();
     await collisionSafeEntryHandle.dispose();
@@ -1089,7 +1077,7 @@ async function main() {
         }
         : false;
     });
-    await clickSegment(page, 3);
+    await surround.showSection(3);
     const reassemblyHandle = await reassemblyHandlePromise;
     const reassemblyState = await reassemblyHandle.jsonValue();
     await reassemblyHandle.dispose();
@@ -1103,7 +1091,7 @@ async function main() {
       window.__SURROUND_3D__?.motionActive === false &&
       window.__SURROUND_3D__?.explosionItemAmounts?.every((amount) => amount === 0)
     ));
-    await clickSegment(page, 4);
+    await surround.showSection(4);
     await page.waitForFunction(() => (
       window.__SURROUND_3D__?.motionActive === false &&
       window.__SURROUND_3D__?.explosionAmount === 1
@@ -1111,7 +1099,7 @@ async function main() {
 
     await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
     const posesBeforeFooter = await page.evaluate(() => window.__SURROUND_3D__.currentPoses);
-    await clickFooter(page);
+    await surround.showFooter();
     await page.waitForTimeout(240);
     const footerState = await page.evaluate(() => {
       const control = document.querySelector('[data-surround-footer-target="surround-footer"]');
@@ -1137,7 +1125,7 @@ async function main() {
       { before: posesBeforeFooter, after: footerState }
     );
 
-    await page.locator('.theme-select').selectOption('light');
+    await surround.footer.selectTheme('light');
     await page.waitForFunction(() => document.documentElement.dataset.theme === 'light' && window.__SURROUND_3D__?.theme === 'light');
     await page.waitForFunction(() => (
       getComputedStyle(document.querySelector('.surround-section-nav__indicator')).backgroundColor === 'rgb(104, 109, 117)'
@@ -1156,7 +1144,7 @@ async function main() {
     await page.setViewportSize({ width: 874, height: 619 });
     await page.reload({ waitUntil: 'load' });
     await waitFor3d(page);
-    await clickSegment(page, 1);
+    await surround.showSection(1);
     await assertPairFit(page, 'Intermediate segment 01');
     layout = await readLayout(page);
     assertHorizontalFit(layout, 'Intermediate segment 01');
@@ -1165,7 +1153,7 @@ async function main() {
     await page.reload({ waitUntil: 'load' });
     await waitFor3d(page);
     for (let number = 1; number <= 4; number += 1) {
-      await clickSegment(page, number);
+      await surround.showSection(number);
       layout = await readLayout(page);
       assertHorizontalFit(layout, `Mobile segment 0${number}`);
       if (number === 1) {
@@ -1218,7 +1206,7 @@ async function main() {
         );
       }
     }
-    await clickFooter(page);
+    await surround.showFooter();
     layout = await readLayout(page);
     assertHorizontalFit(layout, 'Mobile footer settings');
     assert(layout.primaryAction.top >= 0 && layout.primaryAction.bottom <= layout.viewport.height, 'Mobile repository link is clipped', layout.primaryAction);
@@ -1231,7 +1219,7 @@ async function main() {
     await page.reload({ waitUntil: 'load' });
     await waitFor3d(page);
     for (let number = 1; number <= 3; number += 1) {
-      await clickSegment(page, number);
+      await surround.showSection(number);
       if (number > 1) {
         await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
       }
@@ -1246,7 +1234,7 @@ async function main() {
         await assertFeaturedFit(page, `Mobile 446x619 segment 0${number}`);
       }
     }
-    await clickSegment(page, 1);
+    await surround.showSection(1);
     await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
     const compactHeroState = await page.evaluate(() => {
       const copy = document.querySelector('.surround-copy--hero').getBoundingClientRect();
@@ -1266,7 +1254,7 @@ async function main() {
     await page.setViewportSize({ width: 338, height: 619 });
     await page.reload({ waitUntil: 'load' });
     await waitFor3d(page);
-    await clickSegment(page, 1);
+    await surround.showSection(1);
     layout = await readLayout(page);
     assertHorizontalFit(layout, 'Mobile 338x619 segment 01');
     const narrowHeroState = await page.evaluate(() => {
@@ -1283,7 +1271,7 @@ async function main() {
       'Mobile 338x619 hero did not close the copy-to-model gap around the viewport center',
       narrowHeroState
     );
-    await clickSegment(page, 4);
+    await surround.showSection(4);
     await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
     const narrowExplosionState = await page.evaluate(() => ({
       poses: structuredClone(window.__SURROUND_3D__.currentPoses),
@@ -1309,7 +1297,7 @@ async function main() {
     for (const [width, height] of [[1353, 1323], [1440, 900], [900, 1200], [900, 900], [901, 900], [900, 901], [874, 619], [673, 1100], [672, 1100], [390, 844], [338, 619], [446, 619], [844, 390], [1676, 619], [2560, 619], [1920, 1080], [2736, 1480], [3840, 2160], [1370, 300], [667, 375]]) {
       await page.setViewportSize({ width, height });
       for (const number of [1, 2, 3, 4]) {
-        await clickSegment(page, number);
+        await surround.showSection(number);
         if (number === 2 || number === 3) await assertFeaturedFit(page, `${width}x${height} segment 0${number}`);
         else await assertPairFit(page, `${width}x${height} segment 0${number}`);
       }

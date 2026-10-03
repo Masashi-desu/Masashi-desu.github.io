@@ -4,56 +4,11 @@
  *  - 期待値: reload 後の scrollY が 0px 付近で、home nav track が opacity 1、かつ LiquidGL renderer に texture が作成されている。
  *  - 検証方法: ローカル静的サーバーで /index.html を開き、iPhone 幅の Chromium context で一画面分スクロールしてから reload し、scrollY と LiquidGL 状態を取得する。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const { startServer } = require('./support/static-server');
 const { chromium, devices } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const MOBILE_VIEWPORT = { width: 393, height: 852 };
 const SCROLL_TOLERANCE = 2;
-
-function serveStatic(req, res) {
-  const urlPath = req.url.split('?')[0];
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    res.statusCode = 403;
-    res.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      res.statusCode = 404;
-      res.end('Not found');
-      return;
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const types = {
-      '.html': 'text/html; charset=utf-8',
-      '.css': 'text/css; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp'
-    };
-    res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
-    res.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 async function main() {
   const server = await startServer();

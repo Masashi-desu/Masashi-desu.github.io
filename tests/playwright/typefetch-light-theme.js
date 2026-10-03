@@ -12,6 +12,7 @@
  *  - 検証方法: 一時ポートのVite開発サーバーを起動し、隔離したPlaywrightブラウザでテーマselectを操作する。
  *    data-theme、computed style、CTA属性とアイコン、localStorage、scrollWidthを取得して期待値と比較する。
  */
+const { TypeFetchPage } = require('./pages/typefetch-page');
 const http = require('http');
 const net = require('net');
 const path = require('path');
@@ -91,143 +92,6 @@ function stopProcess(child) {
   });
 }
 
-async function waitForTheme(page, theme) {
-  await page.waitForFunction((expected) => document.documentElement.dataset.theme === expected, theme);
-  await page.waitForFunction((expected) => {
-    const topbar = document.querySelector('.tf-topbar');
-    const targetWindow = document.querySelector('.tf-target-window');
-    if (!topbar || !targetWindow) {
-      return false;
-    }
-    const expectedTopbar = expected === 'light' ? 'rgba(244, 247, 251, 0.82)' : 'rgba(7, 9, 16, 0.78)';
-    const expectedWindow = expected === 'light' ? 'rgb(255, 255, 255)' : 'rgb(17, 20, 29)';
-    return getComputedStyle(topbar).backgroundColor === expectedTopbar
-      && getComputedStyle(targetWindow).backgroundColor === expectedWindow;
-  }, theme);
-}
-
-async function readThemeState(page) {
-  return page.evaluate(() => {
-    const style = (selector) => getComputedStyle(document.querySelector(selector));
-    const rootStyle = getComputedStyle(document.documentElement);
-    const distributionAction = document.querySelector('.tf-purchase__button');
-    const distributionLabel = distributionAction?.querySelector('[data-i18n="purchaseCta"]');
-    const distributionIcon = distributionAction?.querySelector('.tf-purchase__button-icon');
-    const distributionLabelRect = distributionLabel?.getBoundingClientRect();
-    const distributionIconRect = distributionIcon?.getBoundingClientRect();
-    const distributionStyle = distributionAction ? getComputedStyle(distributionAction) : null;
-    const distributionLabelStyle = distributionLabel ? getComputedStyle(distributionLabel) : null;
-    const distributionIconStyle = distributionIcon ? getComputedStyle(distributionIcon) : null;
-    const purchaseSection = document.querySelector('.tf-purchase');
-    const purchaseIcon = document.querySelector('.tf-purchase__icon');
-    const purchaseCopy = document.querySelector('.tf-purchase__copy');
-    const purchaseTitle = document.querySelector('#tf-purchase-title');
-    const purchaseBody = document.querySelector('.tf-purchase__copy > p:last-child');
-    const rect = (element) => {
-      if (!element) {
-        return null;
-      }
-      const bounds = element.getBoundingClientRect();
-      return {
-        top: bounds.top,
-        right: bounds.right,
-        bottom: bounds.bottom,
-        left: bounds.left,
-        width: bounds.width,
-        height: bounds.height
-      };
-    };
-    const countTextLines = (element) => {
-      if (!element) {
-        return 0;
-      }
-      const range = document.createRange();
-      range.selectNodeContents(element);
-      return Array.from(range.getClientRects()).filter((line) => line.width > 0).length;
-    };
-    return {
-      theme: document.documentElement.dataset.theme,
-      preference: document.documentElement.dataset.themePreference,
-      stored: localStorage.getItem('mdw-theme'),
-      selected: document.querySelector('.theme-select')?.value,
-      colorScheme: rootStyle.colorScheme,
-      body: {
-        background: style('body').backgroundColor,
-        color: style('body').color
-      },
-      topbar: style('.tf-topbar').backgroundColor,
-      story: style('.tf-operation-story').backgroundColor,
-      targetWindow: style('.tf-target-window').backgroundColor,
-      callout: {
-        background: style('.tf-callout').backgroundImage,
-        colorScheme: style('.tf-callout').colorScheme,
-        title: style('.tf-callout__heading h2').color,
-        subtitle: style('.tf-callout__heading p').color,
-        input: style('#tf-callout-input').backgroundColor,
-        inputText: style('#tf-callout-input').color,
-        placeholder: getComputedStyle(document.querySelector('#tf-callout-input'), '::placeholder').color,
-        cancel: style('.tf-callout-button--cancel').backgroundColor,
-        cancelText: style('.tf-callout-button--cancel').color,
-        confirm: style('.tf-callout-button--confirm').backgroundImage
-      },
-      rules: style('.tf-rules').backgroundColor,
-      showcase: style('.tf-showcase').backgroundColor,
-      facts: style('.tf-facts').backgroundColor,
-      purchase: style('.tf-purchase').backgroundColor,
-      footer: style('.tf-footer').backgroundColor,
-      footerDesign: {
-        sharedDirection: style('.site-footer__shared').flexDirection,
-        sharedAlign: style('.site-footer__shared').alignItems,
-        sharedGap: style('.site-footer__shared').gap,
-        actionsDirection: style('.site-footer__actions').flexDirection,
-        actionsGap: style('.site-footer__actions').gap,
-        labelSize: style('.site-footer__label').fontSize,
-        labelSpacing: style('.site-footer__label').letterSpacing,
-        labelTransform: style('.site-footer__label').textTransform,
-        shellBackground: style('.site-footer__select-shell').backgroundColor,
-        selectBackground: style('.lang-select').backgroundColor,
-        selectRadius: style('.lang-select').borderRadius,
-        selectSize: style('.lang-select').fontSize,
-        selectSpacing: style('.lang-select').letterSpacing,
-        selectTransform: style('.lang-select').textTransform
-      },
-      distribution: {
-        href: distributionAction?.getAttribute('href') || null,
-        target: distributionAction?.getAttribute('target') || null,
-        rel: distributionAction?.getAttribute('rel') || null,
-        label: distributionLabel?.textContent || null,
-        backgroundColor: distributionStyle?.backgroundColor || null,
-        labelColor: distributionLabelStyle?.color || null,
-        iconColor: distributionIconStyle?.backgroundColor || null,
-        iconMask: distributionIconStyle
-          ? `${distributionIconStyle.maskImage} ${distributionIconStyle.webkitMaskImage}`
-          : '',
-        iconIsLeftOfLabel: Boolean(
-          distributionLabelRect && distributionIconRect && distributionIconRect.right <= distributionLabelRect.left
-        )
-      },
-      purchaseLayout: {
-        section: rect(purchaseSection),
-        sectionPaddingLeft: purchaseSection ? parseFloat(getComputedStyle(purchaseSection).paddingLeft) : 0,
-        sectionPaddingRight: purchaseSection ? parseFloat(getComputedStyle(purchaseSection).paddingRight) : 0,
-        icon: rect(purchaseIcon),
-        copy: rect(purchaseCopy),
-        title: rect(purchaseTitle),
-        body: rect(purchaseBody),
-        button: rect(distributionAction),
-        copyTextAlign: purchaseCopy ? getComputedStyle(purchaseCopy).textAlign : null,
-        titleLineCount: countTextLines(purchaseTitle),
-        bodyLineCount: countTextLines(purchaseBody)
-      },
-      overflow: {
-        clientWidth: document.documentElement.clientWidth,
-        scrollWidth: document.documentElement.scrollWidth,
-        bodyScrollWidth: document.body.scrollWidth
-      }
-    };
-  });
-}
-
 function assertNoHorizontalOverflow(state, label) {
   const tolerance = 1;
   assert(
@@ -241,18 +105,20 @@ function assertNoHorizontalOverflow(state, label) {
 function assertDistributionAction(state, theme) {
   const action = state.distribution;
   assert(
-    action.href === 'https://masashi-desu.itch.io/typefetch'
-      && action.target === '_blank'
-      && action.rel?.includes('noopener')
-      && action.rel.includes('noreferrer')
-      && action.label === 'itch.ioで入手'
-      && action.backgroundColor === 'rgb(255, 255, 255)'
-      && action.labelColor === 'rgb(21, 92, 191)'
+    action.href === 'https://masashi-desu.itch.io/typefetch' && action.target === '_blank'
+      && action.rel?.includes('noopener') && action.rel.includes('noreferrer') && action.label === 'itch.ioで入手',
+    `${theme} TypeFetch distribution action did not keep its published itch.io link and label`, action
+  );
+  assertDistributionAppearance(state, theme);
+}
+
+function assertDistributionAppearance(state, label) {
+  const action = state.distribution;
+  assert(
+    action.backgroundColor === 'rgb(255, 255, 255)' && action.labelColor === 'rgb(21, 92, 191)'
       && action.iconColor === action.labelColor
-      && action.iconMask.includes('cdn.jsdelivr.net/npm/simple-icons@v16/icons/itchdotio.svg')
-      && action.iconIsLeftOfLabel,
-    `${theme} TypeFetch distribution action did not keep its published itch.io link, legible label, and left-side Simple Icons mark`,
-    action
+      && action.iconMask.includes('cdn.jsdelivr.net/npm/simple-icons@v16/icons/itchdotio.svg') && action.iconIsLeftOfLabel,
+    `${label} TypeFetch distribution action lost its legible colors or left-side Simple Icons mark`, action
   );
 }
 
@@ -310,85 +176,16 @@ function assertMobileFooterDesign(state) {
   assert(footer.shellBackground === 'rgba(0, 0, 0, 0)', 'Mobile footer select shell rendered a rectangular background', footer);
 }
 
-async function readExpectedFooterFocus(page, theme) {
-  return page.evaluate((background) => {
-    const probe = document.createElement('span');
-    probe.style.color = 'var(--accent-color)';
-    probe.style.boxShadow = '0 0 0 2px color-mix(in srgb, var(--accent-color) 32%, transparent)';
-    document.body.appendChild(probe);
-    const style = getComputedStyle(probe);
-    const result = {
-      border: style.color,
-      background,
-      ring: style.boxShadow
-    };
-    probe.remove();
-    return result;
-  }, theme === 'light' ? 'rgba(255, 255, 255, 0.72)' : 'rgba(255, 255, 255, 0.05)');
-}
-
-async function readFooterFocusStates(page, theme) {
-  const expected = await readExpectedFooterFocus(page, theme);
-  const states = {};
-  for (const selector of ['.lang-select', '.theme-select']) {
-    const locator = page.locator(selector);
-    let focusError;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await locator.focus();
-      try {
-        await page.waitForFunction(({ target, border, background, ring }) => {
-          const element = document.querySelector(target);
-          if (!element || document.activeElement !== element) {
-            return false;
-          }
-          const style = getComputedStyle(element);
-          return style.borderColor === border
-            && style.backgroundColor === background
-            && style.boxShadow.includes(ring);
-        }, {
-          target: selector,
-          border: expected.border,
-          background: expected.background,
-          ring: expected.ring
-        }, { timeout: 2000, polling: 50 });
-        focusError = null;
-        break;
-      } catch (error) {
-        focusError = error;
-      }
-    }
-    if (focusError) {
-      const details = await locator.evaluate((element) => {
-        const style = getComputedStyle(element);
-        return {
-          activeElement: document.activeElement
-            ? `${document.activeElement.tagName}.${document.activeElement.className}`
-            : null,
-          border: style.borderColor,
-          background: style.backgroundColor,
-          ring: style.boxShadow
-        };
-      });
-      throw new Error(`${selector} focus style did not settle: ${JSON.stringify(details)}`);
-    }
-    states[selector] = await page.locator(selector).evaluate((element) => {
-      const style = getComputedStyle(element);
-      return {
-        border: style.borderColor,
-        background: style.backgroundColor,
-        ring: style.boxShadow
-      };
-    });
-  }
-  return states;
-}
-
-async function assertFooterFocus(page, states, theme) {
-  const expected = await readExpectedFooterFocus(page, theme);
-  for (const [selector, state] of Object.entries(states)) {
-    assert(state.border === expected.border, `${selector} did not use the page accent focus border`, state);
-    assert(state.background === expected.background, `${selector} focus background changed unexpectedly`, state);
-    assert(state.ring === expected.ring, `${selector} did not use the page accent focus ring`, state);
+async function assertFooterFocus(footer, theme) {
+  const expected = {
+    ...await footer.expectedFocus(),
+    background: theme === 'light' ? 'rgba(255, 255, 255, 0.72)' : 'rgba(255, 255, 255, 0.05)'
+  };
+  for (const control of ['language', 'theme']) {
+    const state = await footer.focusControl(control, expected);
+    assert(state.border === expected.border, `${control} did not use the page accent focus border`, state);
+    assert(state.background === expected.background, `${control} focus background changed unexpectedly`, state);
+    assert(state.ring === expected.ring, `${control} did not use the page accent focus ring`, state);
   }
 }
 
@@ -424,11 +221,12 @@ async function run() {
       }
     });
     const page = await context.newPage();
+    const typefetch = new TypeFetchPage(page);
     await page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('.theme-select');
-    await waitForTheme(page, 'dark');
+    await typefetch.footer.waitUntilLoaded();
+    await typefetch.waitForTheme('dark');
 
-    let state = await readThemeState(page);
+    let state = await typefetch.readThemeState();
     const darkCallout = state.callout;
     assert(state.body.background === 'rgb(7, 9, 16)', 'Dark page background changed unexpectedly', state);
     assert(state.targetWindow === 'rgb(17, 20, 29)', 'Dark demo surface changed unexpectedly', state);
@@ -444,21 +242,21 @@ async function run() {
     assertDistributionAction(state, 'Dark');
     assert(state.purchaseLayout.bodyLineCount === 1, 'Dark desktop purchase caption wrapped unnecessarily', state.purchaseLayout);
     assertDesktopFooterDesign(state, 'dark');
-    await assertFooterFocus(page, await readFooterFocusStates(page, 'dark'), 'dark');
+    await assertFooterFocus(typefetch.footer, 'dark');
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} dark desktop`);
 
     for (const width of [1180, 944, 908, 792]) {
       await page.setViewportSize({ width, height: 619 });
-      state = await readThemeState(page);
-      assertDistributionAction(state, `Dark ${width}px`);
+      state = await typefetch.readThemeState();
+      assertDistributionAppearance(state, `Dark ${width}px`);
       assertResponsivePurchaseLayout(state, `${BROWSER_NAME} dark ${width}px`, width);
       assertNoHorizontalOverflow(state, `${BROWSER_NAME} dark ${width}px`);
     }
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    await page.locator('.theme-select').selectOption('light');
-    await waitForTheme(page, 'light');
-    state = await readThemeState(page);
+    await typefetch.footer.selectTheme('light');
+    await typefetch.waitForTheme('light');
+    state = await typefetch.readThemeState();
     assert(state.preference === 'light' && state.stored === 'light' && state.selected === 'light', 'Light preference was not synchronized', state);
     assert(state.colorScheme === 'light', 'Native controls did not switch to light color-scheme', state);
     assert(state.body.background === 'rgb(244, 247, 251)', 'Light page background was not applied', state);
@@ -475,38 +273,38 @@ async function run() {
     assertDistributionAction(state, 'Light');
     assert(state.purchaseLayout.bodyLineCount === 1, 'Light desktop purchase caption wrapped unnecessarily', state.purchaseLayout);
     assertDesktopFooterDesign(state, 'light');
-    await assertFooterFocus(page, await readFooterFocusStates(page, 'light'), 'light');
+    await assertFooterFocus(typefetch.footer, 'light');
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} light desktop`);
 
     for (const width of [1180, 944, 908, 792]) {
       await page.setViewportSize({ width, height: 619 });
-      state = await readThemeState(page);
-      assertDistributionAction(state, `Light ${width}px`);
+      state = await typefetch.readThemeState();
+      assertDistributionAppearance(state, `Light ${width}px`);
       assertResponsivePurchaseLayout(state, `${BROWSER_NAME} light ${width}px`, width);
       assertNoHorizontalOverflow(state, `${BROWSER_NAME} light ${width}px`);
     }
     await page.setViewportSize({ width: 1440, height: 900 });
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('.theme-select');
-    await waitForTheme(page, 'light');
-    state = await readThemeState(page);
+    await typefetch.footer.waitUntilLoaded();
+    await typefetch.waitForTheme('light');
+    state = await typefetch.readThemeState();
     assert(state.preference === 'light' && state.selected === 'light', 'Light preference did not survive reload', state);
 
     await page.setViewportSize({ width: 390, height: 844 });
-    state = await readThemeState(page);
+    state = await typefetch.readThemeState();
     assertMobileFooterDesign(state);
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} light mobile`);
 
-    await page.locator('.theme-select').selectOption('system');
-    await waitForTheme(page, 'dark');
-    state = await readThemeState(page);
+    await typefetch.footer.selectTheme('system');
+    await typefetch.waitForTheme('dark');
+    state = await typefetch.readThemeState();
     assert(state.preference === 'system' && state.stored === 'system', 'System preference was not persisted', state);
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} system-dark mobile`);
 
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
-    await waitForTheme(page, 'light');
-    state = await readThemeState(page);
+    await typefetch.waitForTheme('light');
+    state = await typefetch.readThemeState();
     assert(state.preference === 'system' && state.theme === 'light', 'System preference did not follow the OS light theme', state);
     assertNoHorizontalOverflow(state, `${BROWSER_NAME} system-light mobile`);
 

@@ -4,56 +4,11 @@
  *  - 期待値: iPhone幅のWebKit contextでcatalog nav trackがload未発火中にfallbackとして表示される。再試行でtexture作成後はfallback classと背景styleが外れる。
  *  - 検証方法: DOMContentLoaded時に2.5秒応答を遅延する画像を追加し、1.2秒のsnapshot timeoutを設定して /products/index.html を開く。fallback状態と、内蔵rasteriserの再試行による復帰後のcomputed/inline styleを取得する。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const { startServer } = require('./support/static-server');
 const { webkit, devices } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const MOBILE_VIEWPORT = { width: 393, height: 852 };
 const DELAYED_IMAGE_PATH = '/__liquidgl-delay.png';
-
-function serveStatic(req, res) {
-  const urlPath = req.url.split('?')[0];
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    res.statusCode = 403;
-    res.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      res.statusCode = 404;
-      res.end('Not found');
-      return;
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const types = {
-      '.html': 'text/html; charset=utf-8',
-      '.css': 'text/css; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp'
-    };
-    res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
-    res.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 async function main() {
   const server = await startServer();

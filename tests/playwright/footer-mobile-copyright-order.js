@@ -4,12 +4,10 @@
  *  - 期待値: iPhone 幅の viewport で .site-footer__shared が column 方向となり、.site-footer__copyright は .site-footer__actions の下に 1 回だけ表示される。
  *  - 検証方法: ローカル静的サーバーで主要ページを配信し、Playwright の Chromium mobile context で footer partial 読み込み後の矩形と DOM 件数を取得する。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const { FooterControls } = require('./components/footer-controls');
+const { startServer } = require('./support/static-server');
 const { chromium, devices } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const MOBILE_VIEWPORT = { width: 393, height: 852 };
 const PAGES = [
   '/',
@@ -22,48 +20,6 @@ const PAGES = [
   '/products/RetreatScreen/support.html',
   '/products/RetreatScreen/index.html'
 ];
-
-function serveStatic(req, res) {
-  const urlPath = req.url.split('?')[0];
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    res.statusCode = 403;
-    res.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      res.statusCode = 404;
-      res.end('Not found');
-      return;
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const types = {
-      '.html': 'text/html; charset=utf-8',
-      '.css': 'text/css; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp'
-    };
-    res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
-    res.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 async function main() {
   const server = await startServer();
@@ -99,24 +55,11 @@ async function main() {
 
     for (const pathname of PAGES) {
       const page = await context.newPage();
+      const footer = new FooterControls(page);
       await page.goto(`http://127.0.0.1:${port}${pathname}`, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => window.__mdwFooterLoadCount >= 1, null, { timeout: 10000 });
-      await page.waitForSelector('.site-footer__shared .site-footer__copyright', { timeout: 5000 });
-      const state = await page.evaluate(() => {
-        const shared = document.querySelector('.site-footer__shared');
-        const actions = document.querySelector('.site-footer__shared .site-footer__actions');
-        const copyright = document.querySelector('.site-footer__shared .site-footer__copyright');
-        const sharedStyle = shared ? getComputedStyle(shared) : null;
-        const actionsRect = actions ? actions.getBoundingClientRect() : null;
-        const copyrightRect = copyright ? copyright.getBoundingClientRect() : null;
-        return {
-          copyrightCount: document.querySelectorAll('.site-footer__copyright').length,
-          copyrightText: copyright ? copyright.textContent.trim() : null,
-          flexDirection: sharedStyle ? sharedStyle.flexDirection : null,
-          actionsBottom: actionsRect ? Number(actionsRect.bottom.toFixed(2)) : null,
-          copyrightTop: copyrightRect ? Number(copyrightRect.top.toFixed(2)) : null
-        };
-      });
+      await footer.copyright.waitFor({ state: 'visible', timeout: 5000 });
+      const state = await footer.readMobileOrder();
       await page.close();
 
       if (

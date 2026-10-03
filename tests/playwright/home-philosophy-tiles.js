@@ -16,55 +16,12 @@
  *    複数距離の alpha を比較し、通常モーションではポインタ中心に近い安定サンプル群の
  *    同一タイルを時系列で比較する。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const { HomePage } = require('./pages/home-page');
+const { startServer } = require('./support/static-server');
 const { chromium } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const TILE_SIZE = 10;
 const TILE_GAP = 5;
-
-function serveStatic(req, res) {
-  const urlPath = req.url.split('?')[0];
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    res.statusCode = 403;
-    res.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      res.statusCode = 404;
-      res.end('Not found');
-      return;
-    }
-    const types = {
-      '.html': 'text/html; charset=utf-8',
-      '.css': 'text/css; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp'
-    };
-    res.setHeader('Content-Type', types[path.extname(filePath).toLowerCase()] || 'application/octet-stream');
-    res.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 function assert(condition, message, details) {
   if (!condition) {
@@ -86,56 +43,6 @@ function parseIntensitySample(value) {
 
 function parseNumericList(value) {
   return value.split(',').map(Number);
-}
-
-async function readTileSamples(page) {
-  return page.evaluate(({ tileSize, tileGap }) => {
-    const canvas = document.querySelector('[data-philosophy-tiles]');
-    const section = canvas.closest('.home-section--catch');
-    const columns = Number(canvas.dataset.tileColumns);
-    const rows = Number(canvas.dataset.tileRows);
-    const stride = tileSize + tileGap;
-    const width = section.getBoundingClientRect().width;
-    const height = section.getBoundingClientRect().height;
-    const gridWidth = columns * tileSize + (columns - 1) * tileGap;
-    const gridHeight = rows * tileSize + (rows - 1) * tileGap;
-    const offsetX = (width - gridWidth) / 2;
-    const offsetY = (height - gridHeight) / 2;
-    const column = Math.max(8, Math.min(columns - 9, Math.round((width / 2 - offsetX - tileSize / 2) / stride)));
-    const row = Math.max(1, Math.min(rows - 2, Math.round((height / 2 - offsetY - tileSize / 2) / stride)));
-    const centerX = offsetX + column * stride + tileSize / 2;
-    const centerY = offsetY + row * stride + tileSize / 2;
-    const dprX = canvas.width / width;
-    const dprY = canvas.height / height;
-    const context = canvas.getContext('2d');
-    const alphaAt = (columnOffset) => {
-      const x = Math.round((centerX + columnOffset * stride) * dprX);
-      const y = Math.round(centerY * dprY);
-      return context.getImageData(x, y, 1, 1).data[3] / 255;
-    };
-    return {
-      pointer: {
-        x: section.getBoundingClientRect().left + centerX,
-        y: section.getBoundingClientRect().top + centerY
-      },
-      alpha: {
-        center: alphaAt(0),
-        near: alphaAt(2),
-        middle: alphaAt(4),
-        outside: alphaAt(8)
-      },
-      idleOpacity: Number(canvas.dataset.tileIdleOpacity),
-      pointerGlowRadius: Number(canvas.dataset.pointerGlowRadius),
-      pointerGlowOpacity: Number(canvas.dataset.pointerGlowOpacity),
-      pointerGlowIntensity: Number(canvas.dataset.pointerGlowIntensity),
-      pointerTileCount: Number(canvas.dataset.pointerTileCount),
-      pointerTileIntensitySpread: Number(canvas.dataset.pointerTileIntensitySpread),
-      pointerTileIntensitySample: canvas.dataset.pointerTileIntensitySample,
-      pointerShapeSignature: canvas.dataset.pointerShapeSignature,
-      pointerShapeExtents: canvas.dataset.pointerShapeExtents,
-      hoveredTile: Number(canvas.dataset.hoveredTile)
-    };
-  }, { tileSize: TILE_SIZE, tileGap: TILE_GAP });
 }
 
 async function main() {
@@ -164,6 +71,7 @@ async function main() {
     });
 
     const page = await context.newPage();
+    const home = new HomePage(page);
     await page.clock.install();
     await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => {
@@ -173,7 +81,7 @@ async function main() {
     const pageTime = await page.evaluate(() => Date.now());
     await page.clock.pauseAt(pageTime + 1000);
 
-    const idle = await readTileSamples(page);
+    const idle = await home.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     assert(
       idle.alpha.center <= 0.008 && idle.idleOpacity <= 0.0015,
       'Idle tile remained visibly opaque',
@@ -182,7 +90,7 @@ async function main() {
 
     await page.mouse.move(idle.pointer.x, idle.pointer.y);
     await page.clock.runFor(80);
-    const enteringGlow = await readTileSamples(page);
+    const enteringGlow = await home.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     assert(
       enteringGlow.alpha.center >= 0.003 && enteringGlow.alpha.center < 0.45 &&
       enteringGlow.pointerGlowOpacity > 0 && enteringGlow.pointerGlowOpacity < 1,
@@ -190,7 +98,7 @@ async function main() {
       enteringGlow
     );
     await page.clock.runFor(320);
-    const glow = await readTileSamples(page);
+    const glow = await home.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     const [topExtent, , bottomExtent] = parseNumericList(glow.pointerShapeExtents);
     assert(glow.pointerGlowRadius === 72, 'Pointer glow radius changed unexpectedly', glow);
     assert(
@@ -208,14 +116,14 @@ async function main() {
 
     await page.mouse.move(idle.pointer.x + 180, idle.pointer.y);
     await page.clock.runFor(80);
-    const movementFading = await readTileSamples(page);
+    const movementFading = await home.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     assert(
       movementFading.alpha.center > 0.05 && movementFading.alpha.center < glow.alpha.center,
       'Tiles at the previous pointer position did not fade after pointer movement',
       { glow, movementFading }
     );
     await page.clock.runFor(650);
-    const movementCleared = await readTileSamples(page);
+    const movementCleared = await home.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     assert(
       movementCleared.alpha.center <= 0.02,
       'Tiles at the previous pointer position remained after the movement fade completed',
@@ -224,18 +132,18 @@ async function main() {
 
     await page.mouse.move(idle.pointer.x, idle.pointer.y);
     await page.clock.runFor(400);
-    const restoredGlow = await readTileSamples(page);
+    const restoredGlow = await home.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
 
     await page.mouse.move(idle.pointer.x, page.viewportSize().height + 20);
     await page.clock.runFor(120);
-    const fading = await readTileSamples(page);
+    const fading = await home.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     assert(
       fading.pointerGlowOpacity > 0 && fading.pointerGlowOpacity < restoredGlow.pointerGlowOpacity,
       'Pointer glow did not begin fading after leaving the browser',
       { restoredGlow, fading }
     );
     await page.clock.runFor(280);
-    const cleared = await readTileSamples(page);
+    const cleared = await home.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     assert(
       cleared.pointerGlowOpacity === 0 && cleared.alpha.center <= 0.008 && cleared.hoveredTile === -1,
       'Pointer glow remained after its browser-leave fade completed',
@@ -244,7 +152,7 @@ async function main() {
 
     await page.mouse.move(idle.pointer.x + TILE_GAP + TILE_SIZE, idle.pointer.y);
     await page.clock.runFor(80);
-    const reenteredGlow = await readTileSamples(page);
+    const reenteredGlow = await home.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     assert(
       reenteredGlow.pointerTileCount > 0 &&
       reenteredGlow.pointerGlowOpacity > 0 && reenteredGlow.pointerGlowOpacity < 1,
@@ -273,6 +181,7 @@ async function main() {
       localStorage.setItem('mdw-lang', 'ja');
     });
     const motionPage = await motionContext.newPage();
+    const motionHome = new HomePage(motionPage);
     await motionPage.clock.install();
     await motionPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
     await motionPage.waitForFunction(() => {
@@ -281,12 +190,12 @@ async function main() {
     });
     const motionPageTime = await motionPage.evaluate(() => Date.now());
     await motionPage.clock.pauseAt(motionPageTime + 1000);
-    const motionIdle = await readTileSamples(motionPage);
+    const motionIdle = await motionHome.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     await motionPage.mouse.move(motionIdle.pointer.x, motionIdle.pointer.y);
     await motionPage.clock.runFor(220);
-    const firstIntensityState = await readTileSamples(motionPage);
+    const firstIntensityState = await motionHome.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     await motionPage.clock.runFor(700);
-    const secondIntensityState = await readTileSamples(motionPage);
+    const secondIntensityState = await motionHome.readTileSamples({ tileSize: TILE_SIZE, tileGap: TILE_GAP });
     const firstShapeSignature = parseNumericList(firstIntensityState.pointerShapeSignature);
     const secondShapeSignature = parseNumericList(secondIntensityState.pointerShapeSignature);
     const largestShapeChange = Math.max(...firstShapeSignature.map((value, index) => (

@@ -4,57 +4,13 @@
  *  - 期待値: visualViewport に古い offsetTop / offsetLeft が残っていても、WebGL viewport の上下左右がナビの canvas 相対矩形と 1px 以内で一致する。
  *  - 検証方法: iPhone 相当の隔離 Chromium context でホームから Surround1x0-AKDK へ移動して戻り、stale viewport offset を注入して描画座標を取得する。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const { HomePage } = require('./pages/home-page');
+const { startServer } = require('./support/static-server');
 const { chromium, devices } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const MOBILE_VIEWPORT = { width: 393, height: 852 };
 const POSITION_TOLERANCE = 1;
 const STALE_VISUAL_VIEWPORT_OFFSET = { left: 11, top: 280 };
-
-function serveStatic(req, res) {
-  const urlPath = req.url.split('?')[0];
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//u, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    res.statusCode = 403;
-    res.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      res.statusCode = 404;
-      res.end('Not found');
-      return;
-    }
-    const types = {
-      '.css': 'text/css; charset=utf-8',
-      '.gif': 'image/gif',
-      '.glb': 'model/gltf-binary',
-      '.html': 'text/html; charset=utf-8',
-      '.jpeg': 'image/jpeg',
-      '.jpg': 'image/jpeg',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.png': 'image/png',
-      '.svg': 'image/svg+xml',
-      '.webp': 'image/webp'
-    };
-    res.setHeader('Content-Type', types[path.extname(filePath).toLowerCase()] || 'application/octet-stream');
-    res.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 function assertNear(actual, expected, label) {
   if (Math.abs(actual - expected) > POSITION_TOLERANCE) {
@@ -91,8 +47,9 @@ async function main() {
     });
 
     const page = await context.newPage();
+    const home = new HomePage(page);
     await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('.home-product-card[href*="Surround1x0-AKDK"]');
+    await home.productLink('Surround1x0-AKDK').waitFor({ state: 'visible' });
     await page.waitForFunction(() => Boolean(
       window.__liquidGLRenderer__ &&
       window.__liquidGLRenderer__.texture &&
@@ -101,7 +58,7 @@ async function main() {
 
     await Promise.all([
       page.waitForURL(/\/products\/Surround1x0-AKDK\/index\.html/u),
-      page.locator('.home-product-card[href*="Surround1x0-AKDK"]').first().click()
+      home.openProduct('Surround1x0-AKDK')
     ]);
     await page.goBack({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => Boolean(

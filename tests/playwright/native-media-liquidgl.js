@@ -4,12 +4,9 @@
  *  - 期待値: ChromiumとmacOS WebKitの両方で製品一覧の3本のMP4がデコード・再生され、LiquidGLが各video要素をtextureへ登録して実時間frameを更新する。Bartical詳細ではダーク／ライト両MP4がデコードされ、MP4内へ焼き込んだ1.4秒のクロスフェード境界を単一videoのネイティブループで途切れず再生する。
  *  - 検証方法: macOS上のPlaywright Chromium／WebKitからローカル静的サーバーを開く。videoのcodec対応、readyState、currentTime、LiquidGLのtexture・video frame stateを条件待ちで取得し、固定sleepに依存せず進行を確認する。
  */
-const fs = require('fs');
-const http = require('http');
-const path = require('path');
+const { startServer } = require('./support/static-server');
 const { chromium, webkit } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const BROWSERS = [
   { name: 'chromium', type: chromium },
   { name: 'webkit', type: webkit }
@@ -20,47 +17,6 @@ function assert(condition, message, details) {
   if (!condition) {
     throw new Error(`${message}${details ? `: ${JSON.stringify(details)}` : ''}`);
   }
-}
-
-function serveStatic(request, response) {
-  const pathname = decodeURIComponent(request.url.split('?')[0]);
-  const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
-  let filePath = path.resolve(ROOT, relativePath);
-  if (pathname.endsWith('/')) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (filePath !== ROOT && !filePath.startsWith(`${ROOT}${path.sep}`)) {
-    response.statusCode = 403;
-    response.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      response.statusCode = 404;
-      response.end('Not found');
-      return;
-    }
-    const contentTypes = {
-      '.css': 'text/css; charset=utf-8',
-      '.html': 'text/html; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.mp4': 'video/mp4',
-      '.png': 'image/png',
-      '.svg': 'image/svg+xml; charset=utf-8',
-      '.xml': 'application/xml; charset=utf-8'
-    };
-    response.setHeader('Content-Type', contentTypes[path.extname(filePath).toLowerCase()] || 'application/octet-stream');
-    response.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
 }
 
 async function createContext(browser) {

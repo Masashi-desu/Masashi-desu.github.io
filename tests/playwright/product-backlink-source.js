@@ -3,49 +3,13 @@
  *  - 期待値: ホーム経由は `?from=home` と「ホームに戻る」、一覧経由は `?from=catalog` と「一覧に戻る」を使う。
  *  - 検証方法: file:// でトップ/一覧を開き、fetch を差し替えて製品カードを生成したうえで内部詳細リンクと戻りリンクの href/text を取得する。
  */
+const { HomePage } = require('./pages/home-page');
+const { CatalogPage } = require('./pages/catalog-page');
+const { ProductPage } = require('./pages/product-page');
+const { installFixtureFetch } = require('./support/fixture-fetch');
 const path = require('path');
 const { chromium } = require('playwright');
 
-const productData = require(path.resolve(__dirname, '../../site/products/index.json'));
-const footerMarkup = '<footer data-test="injected">Playwright Footer</footer>';
-
-async function installFixtureFetch(context) {
-  await context.addInitScript(({ data, footer }) => {
-    const originalFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
-    const normalizeUrl = (input) => {
-      if (!input) {
-        return '';
-      }
-      if (typeof input === 'string') {
-        return input;
-      }
-      if (typeof input === 'object' && 'url' in input) {
-        return input.url;
-      }
-      return '';
-    };
-
-    window.fetch = async (input, init) => {
-      const url = normalizeUrl(input);
-      if (/index\.json($|\?)/.test(url)) {
-        return new Response(JSON.stringify(data), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      if (url.includes('partials/footer.html')) {
-        return new Response(footer, {
-          status: 200,
-          headers: { 'Content-Type': 'text/html' }
-        });
-      }
-      if (originalFetch) {
-        return originalFetch(input, init);
-      }
-      throw new Error('Fetch not supported in this environment');
-    };
-  }, { data: productData, footer: footerMarkup });
-}
 
 function assert(condition, message) {
   if (!condition) {
@@ -53,63 +17,33 @@ function assert(condition, message) {
   }
 }
 
-async function inspectBacklink(page) {
-  return page.evaluate(() => {
-    const link = document.querySelector('[data-product-backlink]');
-    return {
-      href: link ? link.href : '',
-      text: link ? link.textContent.trim() : '',
-      search: window.location.search,
-      pathname: window.location.pathname,
-      hash: window.location.hash
-    };
-  });
-}
+const SOURCES = [
+  { source: 'home', Model: HomePage, entry: 'index.html', backlink: '/site/index.html#products-section', label: '← ホームに戻る' },
+  { source: 'catalog', Model: CatalogPage, entry: 'products/index.html', backlink: '/site/products/index.html', label: '← 一覧に戻る' }
+];
 
-async function verifyHomeSource(context) {
+async function verifySource(context, { source, Model, entry, backlink, label }) {
   const page = await context.newPage();
-  const indexPath = path.resolve(__dirname, '../../site/index.html');
-  await page.goto(`file://${indexPath}`);
-  await page.waitForSelector('.home-product-card[href*="RetreatScreen"][href*="from=home"]');
-
-  const detailHref = await page.locator('.home-product-card[href*="RetreatScreen"][href*="from=home"]').first().getAttribute('href');
-  assert(detailHref && detailHref.includes('?from=home'), `Expected home product link to include from=home, got ${detailHref}`);
-
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'load' }),
-    page.locator('.home-product-card[href*="RetreatScreen"][href*="from=home"]').first().click()
-  ]);
-
-  const state = await inspectBacklink(page);
-  assert(state.pathname.endsWith('/site/products/RetreatScreen/index.html'), `Expected RetreatScreen detail page, got ${state.pathname}`);
-  assert(state.search === '?from=home', `Expected from=home on detail URL, got ${state.search}`);
-  assert(state.href.endsWith('/site/index.html#products-section'), `Expected backlink to home products section, got ${state.href}`);
-  assert(state.text === '← ホームに戻る', `Expected home backlink label, got ${state.text}`);
-
-  await page.close();
-}
-
-async function verifyCatalogSource(context) {
-  const page = await context.newPage();
-  const catalogPath = path.resolve(__dirname, '../../site/products/index.html');
-  await page.goto(`file://${catalogPath}`);
-  await page.waitForSelector('#product-grid a[href*="RetreatScreen"][href*="from=catalog"]');
-
-  const detailHref = await page.locator('#product-grid a[href*="RetreatScreen"][href*="from=catalog"]').first().getAttribute('href');
-  assert(detailHref && detailHref.includes('?from=catalog'), `Expected catalog product link to include from=catalog, got ${detailHref}`);
-
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'load' }),
-    page.locator('#product-grid a[href*="RetreatScreen"][href*="from=catalog"]').first().click()
-  ]);
-
-  const state = await inspectBacklink(page);
-  assert(state.pathname.endsWith('/site/products/RetreatScreen/index.html'), `Expected RetreatScreen detail page, got ${state.pathname}`);
-  assert(state.search === '?from=catalog', `Expected from=catalog on detail URL, got ${state.search}`);
-  assert(state.href.endsWith('/site/products/index.html'), `Expected backlink to catalog, got ${state.href}`);
-  assert(state.text === '← 一覧に戻る', `Expected catalog backlink label, got ${state.text}`);
-
-  await page.close();
+  try {
+    const origin = new Model(page);
+    const detail = new ProductPage(page);
+    await page.goto(`file://${path.resolve(__dirname, '../../site', entry)}`);
+    const link = origin.productLink('RetreatScreen', source);
+    await link.waitFor({ state: 'visible' });
+    const href = await link.getAttribute('href');
+    assert(href && href.includes(`?from=${source}`), `Expected ${source} product link to include source, got ${href}`);
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'load' }),
+      origin.openProduct('RetreatScreen', source)
+    ]);
+    const state = await detail.readBacklink();
+    assert(state.pathname.endsWith('/site/products/RetreatScreen/index.html'), `Expected RetreatScreen detail page, got ${state.pathname}`);
+    assert(state.search === `?from=${source}`, `Expected from=${source} on detail URL, got ${state.search}`);
+    assert(state.href.endsWith(backlink), `Expected ${source} backlink, got ${state.href}`);
+    assert(state.text === label, `Expected ${source} backlink label, got ${state.text}`);
+  } finally {
+    await page.close();
+  }
 }
 
 async function main() {
@@ -118,8 +52,7 @@ async function main() {
   await installFixtureFetch(context);
 
   try {
-    await verifyHomeSource(context);
-    await verifyCatalogSource(context);
+    for (const source of SOURCES) await verifySource(context, source);
   } finally {
     await browser.close();
   }

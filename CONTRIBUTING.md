@@ -169,6 +169,8 @@ npm run test:typefetch-appcast
 
 ### 自動テストの記述
 
+ブラウザテストは Page Object Model を使い、ページ固有のロケーター・操作・状態取得を `tests/playwright/pages/`、共通UIを `tests/playwright/components/`、配信やfixtureなどの準備を `tests/playwright/support/` へまとめます。期待値とassert、ブラウザ・端末条件はテスト側に置きます。GPU、動画frame、イベント欠落の注入など、回帰条件そのものを表す低レベルの観測・操作はテストに残せます。責務と重複を見直す基準は [ブラウザテストの構成](tests/playwright/README.md) を参照してください。
+
 Playwright などで追加する自動テストスクリプトには、次の内容をファイル先頭のコメントに記載します。
 
 - **目的**: どの UI・挙動を検証するテストなのか。

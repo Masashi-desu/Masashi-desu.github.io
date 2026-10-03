@@ -4,8 +4,9 @@
  *  - 期待値: メインメニューは初期表示で展開され、縦型メニューから独立した実アプリ準拠のAboutにappcast.xmlから同期した1.0.0(1)と製品ページURLを表示する。AboutのアイコンとfaviconはBarticalのIcon Composer書類から書き出した正式PNGを使い、ライトテーマではmacOSのライト外観に合わせた明るい半透明ウィンドウと薄いMaterialカードへ切り替わる。Overviewの配置例は境界①・②を持ち、外部アイコンを⌘ドラッグすると右側で最初の境界から所属を再計算し、hover時に所属先と同じ番号アンカーアイコンと、番号を重ねない所属文言を表示する。縦型メニューにSparklesは置かず、所属項目の操作でAboutを閉じない。ヒーローは動的viewportからメニューバー高を引いた範囲へ収まり、Aboutと映像がviewport下へはみ出さない。背景はテーマ別MP4と指定ベース色を使い、MP4内へ1.4秒のクロスフェードを焼き込んだ単一映像をネイティブループして、背景色を混ぜず停止や空白を挟まない。縦メニュー末尾の設定も他の所属項目と同じアンカー展開を経て、元アイコン直下のメニューからライト／ダークを切り替える。元アプリメニューの左端は選択した元アイコンの左端へ揃え、狭い画面では8pxの安全余白へ収める。縦書きBARTICALは置かず、左端の戻る導線は矢印アイコンだけを表示する。正式SVGは通常時から右寄りへ固定し、viewport幅に応じた共通倍率でヘッダー・アイコン・操作領域・余白・中心間隔を一体調整する。所属項目の展開前後では倍率、中心座標、寸法、余白を変えない。モバイルではアイコン中心間隔を60pxに揃え、選択ランチャーの元項目を全件復元し、展開列がviewport左端からはみ出すことを許容して元アプリメニューを左8pxへ吸着する。展開した元項目は縦型メニューの上から下の順に対応して右から左へ並べ、選択中はフォーカス中でも青い円形アウトラインを重ねず、隣接アイコンの中心間隔より狭い白い半透明のmacOS風ピルだけを背面へ表示する。右側の他アプリアイコンはアンカー展開中も消さず、画面外へ続く分をメニューバー内でクリップしてページ全体の横スクロールを発生させない。最終セクションは公開済みの文脈とし、CTAはitch.ioの配信ページへ接続して、文字の左側にSimple Icons v16のitch.ioアイコンを表示する。
  *  - 検証方法: ローカル静的サーバーで Bartical ページを配信し、ChromiumまたはWebKitで1440×900、1372×619、811×891、393×852、320×568のviewportを開く。DOM属性、表示状態、フォーカス順、URL hash、アイコン実体、要素矩形、console/page errorを取得して検証する。codecに依存しない動画設定とレイアウトを対象とし、H.264の実デコードはmacOS専用のnative-media-liquidgl.jsで検証する。
  */
+const { BarticalPage } = require('./pages/bartical-page');
+const { startServer } = require('./support/static-server');
 const fs = require('fs');
-const http = require('http');
 const path = require('path');
 const { chromium, webkit } = require('playwright');
 
@@ -49,54 +50,6 @@ function readPngSize(filePath) {
     width: data.readUInt32BE(16),
     height: data.readUInt32BE(20)
   };
-}
-
-function serveStatic(request, response) {
-  const pathname = decodeURIComponent(request.url.split('?')[0]);
-  const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
-  let filePath = path.resolve(ROOT, relativePath);
-  if (pathname.endsWith('/')) {
-    filePath = path.join(filePath, 'index.html');
-  }
-
-  const rootPrefix = `${ROOT}${path.sep}`;
-  if (filePath !== ROOT && !filePath.startsWith(rootPrefix)) {
-    response.statusCode = 403;
-    response.end('Forbidden');
-    return;
-  }
-
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      response.statusCode = 404;
-      response.end('Not found');
-      return;
-    }
-
-    const contentTypes = {
-      '.css': 'text/css; charset=utf-8',
-      '.gif': 'image/gif',
-      '.html': 'text/html; charset=utf-8',
-      '.jpeg': 'image/jpeg',
-      '.jpg': 'image/jpeg',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.mp4': 'video/mp4',
-      '.png': 'image/png',
-      '.svg': 'image/svg+xml; charset=utf-8',
-      '.webp': 'image/webp'
-    };
-    response.setHeader('Content-Type', contentTypes[path.extname(filePath).toLowerCase()] || 'application/octet-stream');
-    response.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
 }
 
 async function readInitialState(page) {
@@ -851,11 +804,12 @@ function assertInitialState(state, viewport) {
 }
 
 async function verifyInteractions(page, viewport) {
-  const mainButton = page.locator('[data-launcher="main"]');
-  const mainPanel = page.locator('#bt-menu-main');
-  const themeSettingsTrigger = page.locator('[data-theme-settings-trigger]');
-  const themeSourceActions = page.locator('[data-theme-source-actions]');
-  const sourceSectionActions = page.locator('[data-source-section-actions]');
+  const bartical = new BarticalPage(page);
+  const mainButton = bartical.mainButton;
+  const mainPanel = bartical.mainPanel;
+  const themeSettingsTrigger = bartical.themeSettingsTrigger;
+  const themeSourceActions = bartical.themeSourceActions;
+  const sourceSectionActions = bartical.sourceSectionActions;
   const storedIconMetrics = await page.evaluate(() => {
     const centerGaps = (rects) => rects.slice(1).map((rect, index) => (
       (rect.left + (rect.width / 2))
@@ -1069,7 +1023,7 @@ async function verifyInteractions(page, viewport) {
   );
   assert(await themeSourceActions.isVisible(), `[${viewport.name}] Theme choices were not visible in the source menu`);
   assert(await sourceSectionActions.getAttribute('hidden') !== null, `[${viewport.name}] Section actions remained visible in the theme menu`);
-  await page.locator('[data-theme-option="light"]').click();
+  await bartical.selectTheme('light');
   await page.waitForFunction(() => (
     document.documentElement.dataset.theme === 'light'
       && document.querySelector('[data-hero-video]')?.getAttribute('src') === './hero-bg-light.mp4'
@@ -1115,7 +1069,7 @@ async function verifyInteractions(page, viewport) {
   await page.waitForFunction(() => document.getElementById('bt-menu-main')?.hidden === false);
   await themeSettingsTrigger.click();
   await page.waitForFunction(() => document.documentElement.dataset.barticalActivation === 'revealed');
-  await page.locator('[data-theme-option="dark"]').click();
+  await bartical.selectTheme('dark');
   await page.waitForFunction(() => (
     document.documentElement.dataset.theme === 'dark'
       && document.querySelector('[data-hero-video]')?.getAttribute('src') === './hero-bg-dark.mp4'
@@ -1138,7 +1092,7 @@ async function verifyInteractions(page, viewport) {
   await page.waitForFunction(() => document.documentElement.dataset.barticalActivation === 'revealed');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.documentElement.dataset.barticalActivation);
-  assert(await page.locator('[data-source-menu]').getAttribute('hidden') !== null, `[${viewport.name}] Escape did not close the theme source menu`);
+  assert(await bartical.sourceMenu.getAttribute('hidden') !== null, `[${viewport.name}] Escape did not close the theme source menu`);
   assert(
     await mainButton.evaluate((button) => document.activeElement === button),
     `[${viewport.name}] Escape did not restore focus to the source launcher`
@@ -1176,21 +1130,21 @@ async function verifyInteractions(page, viewport) {
 
   await mainButton.click();
   await page.waitForFunction(() => document.getElementById('bt-menu-main')?.hidden === false);
-  await page.locator('.bt-hero').click({ position: { x: 8, y: 420 } });
+  await bartical.hero.click({ position: { x: 8, y: 420 } });
   await page.waitForFunction(() => document.getElementById('bt-menu-main')?.hidden === true);
   assert(await mainButton.getAttribute('aria-expanded') === 'false', `[${viewport.name}] Outside press did not close the main menu`);
 
   await mainButton.click();
   await page.waitForFunction(() => document.getElementById('bt-menu-main')?.hidden === false);
 
-  const launcherTwo = page.locator('[data-launcher="2"]');
+  const launcherTwo = bartical.launcher('2');
   await launcherTwo.click();
   await page.waitForFunction(() => document.getElementById('bt-menu-2')?.hidden === false);
   assert(await launcherTwo.getAttribute('aria-expanded') === 'true', `[${viewport.name}] Launcher 2 did not expand`);
   assert(await mainButton.getAttribute('aria-expanded') === 'false', `[${viewport.name}] Main launcher stayed expanded after switching to launcher 2`);
   assert(await mainPanel.getAttribute('hidden') !== null, `[${viewport.name}] Main panel stayed visible after switching to launcher 2`);
 
-  const customizeSourceItem = page.locator('#bt-menu-2 [data-section-link="customize"]');
+  const customizeSourceItem = bartical.sectionLink('2', 'customize');
   const storedMainLauncherCenter = await mainButton.evaluate((button) => {
     const rect = button.getBoundingClientRect();
     return rect.left + (rect.width / 2);
@@ -1198,7 +1152,7 @@ async function verifyInteractions(page, viewport) {
   await customizeSourceItem.click();
   await page.waitForFunction(() => document.documentElement.dataset.barticalActivation === 'revealed');
   await page.keyboard.press('Tab');
-  await page.locator('[data-original-section][aria-pressed="true"]').focus();
+  await bartical.activeOriginalSection.focus();
   await page.waitForFunction(() => (
     document.querySelector('[data-original-section][aria-pressed="true"]')?.matches(':focus-visible')
   ));
@@ -1370,7 +1324,7 @@ async function verifyInteractions(page, viewport) {
 
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.documentElement.dataset.barticalActivation);
-  assert(await page.locator('[data-activation-strip]').getAttribute('hidden') !== null, `[${viewport.name}] Escape did not restore the stored layout`);
+  assert(await bartical.activationStrip.getAttribute('hidden') !== null, `[${viewport.name}] Escape did not restore the stored layout`);
   assert(
     await launcherTwo.evaluate((button) => document.activeElement === button),
     `[${viewport.name}] Escape did not restore focus to the source launcher`
@@ -1379,31 +1333,31 @@ async function verifyInteractions(page, viewport) {
   await launcherTwo.click();
   await customizeSourceItem.click();
   await page.waitForFunction(() => document.documentElement.dataset.barticalActivation === 'revealed');
-  await page.locator('[data-source-close]').click();
+  await bartical.closeSourceMenu();
   await page.waitForFunction(() => !document.documentElement.dataset.barticalActivation);
-  assert(await page.locator('[data-source-menu]').getAttribute('hidden') !== null, `[${viewport.name}] Close menu action left the original menu open`);
-  assert(await page.locator('[data-activation-strip]').getAttribute('hidden') !== null, `[${viewport.name}] Close menu action left anchors and original items visible`);
+  assert(await bartical.sourceMenu.getAttribute('hidden') !== null, `[${viewport.name}] Close menu action left the original menu open`);
+  assert(await bartical.activationStrip.getAttribute('hidden') !== null, `[${viewport.name}] Close menu action left anchors and original items visible`);
   assert(await launcherTwo.getAttribute('aria-expanded') === 'false', `[${viewport.name}] Close menu action reopened the launcher`);
 
   await launcherTwo.click();
   await page.waitForFunction(() => document.getElementById('bt-menu-2')?.hidden === false);
   await customizeSourceItem.click();
   await page.waitForFunction(() => document.documentElement.dataset.barticalActivation === 'revealed');
-  await page.locator('[data-source-navigation]').click();
+  await bartical.navigateToSource();
   await page.waitForFunction(() => window.location.hash === '#customize');
-  assert(await page.locator('[data-source-menu]').getAttribute('hidden') !== null, `[${viewport.name}] Original menu stayed open after section navigation`);
-  assert(await page.locator('[data-activation-strip]').getAttribute('hidden') !== null, `[${viewport.name}] Anchors and original items stayed visible after section navigation`);
-  assert(await page.locator('#bt-menu-2').getAttribute('hidden') !== null, `[${viewport.name}] Vertical menu stayed open after section navigation`);
+  assert(await bartical.sourceMenu.getAttribute('hidden') !== null, `[${viewport.name}] Original menu stayed open after section navigation`);
+  assert(await bartical.activationStrip.getAttribute('hidden') !== null, `[${viewport.name}] Anchors and original items stayed visible after section navigation`);
+  assert(await bartical.menu('2').getAttribute('hidden') !== null, `[${viewport.name}] Vertical menu stayed open after section navigation`);
   assert(
-    await page.locator('[data-launcher]').evaluateAll((buttons) => buttons.every((button) => button.getAttribute('aria-expanded') === 'false')),
+    await bartical.launchers.evaluateAll((buttons) => buttons.every((button) => button.getAttribute('aria-expanded') === 'false')),
     `[${viewport.name}] A launcher remained expanded after section navigation`
   );
   assert(
-    await page.locator('[data-about-window]').getAttribute('hidden') === null,
+    await bartical.aboutWindow.getAttribute('hidden') === null,
     `[${viewport.name}] Navigating from another grouped item hid the independent About window`
   );
 
-  const distributionAction = page.locator('#coming-soon .bt-coming__button');
+  const distributionAction = bartical.distributionAction;
   const distributionLayout = await distributionAction.evaluate((action) => {
     const label = action.querySelector('[data-i18n="comingCta"]');
     const icon = action.querySelector('.bt-coming__button-icon');
@@ -1441,22 +1395,22 @@ async function verifyInteractions(page, viewport) {
     distributionLayout
   );
 
-  const aboutWindow = page.locator('[data-about-window]');
-  const aboutClose = page.locator('[data-about-close]');
+  const aboutWindow = bartical.aboutWindow;
+  const aboutClose = bartical.aboutClose;
   await page.evaluate(() => window.scrollTo(0, 0));
   assert(await aboutWindow.isVisible(), `[${viewport.name}] About did not remain visible after grouped-item interactions`);
-  assert(await page.locator('[data-about-trigger]').count() === 0, `[${viewport.name}] Removed About trigger was still rendered`);
+  assert(await bartical.aboutTrigger.count() === 0, `[${viewport.name}] Removed About trigger was still rendered`);
   await mainButton.click();
   await page.waitForFunction(() => document.getElementById('bt-menu-main')?.hidden === false);
   await aboutClose.click();
   await page.waitForFunction(() => document.querySelector('[data-about-window]')?.hidden === true);
   assert(
-    await page.locator('[data-about-version]').evaluateAll((items) => items.every((item) => item.textContent.trim() === '1.0.0(1)')),
+    await bartical.aboutVersion.evaluateAll((items) => items.every((item) => item.textContent.trim() === '1.0.0(1)')),
     `[${viewport.name}] Independent About version display changed`
   );
   await mainButton.click();
   await page.waitForFunction(() => document.getElementById('bt-menu-main')?.hidden === false);
-  await page.locator('#bt-menu-main [data-section-link="how-it-works"]').click();
+  await bartical.sectionLink('main', 'how-it-works').click();
   await page.waitForFunction(() => document.documentElement.dataset.barticalActivation === 'revealed');
   assert(
     await aboutWindow.getAttribute('hidden') !== null,
@@ -1465,8 +1419,9 @@ async function verifyInteractions(page, viewport) {
 }
 
 async function verifySourceMenuAlignment(page, viewport) {
-  const mainButton = page.locator('[data-launcher="main"]');
-  const mainPanel = page.locator('#bt-menu-main');
+  const bartical = new BarticalPage(page);
+  const mainButton = bartical.mainButton;
+  const mainPanel = bartical.mainPanel;
 
   for (const section of MAIN_GROUPED_ITEM_ORDER) {
     if (await mainPanel.getAttribute('hidden') !== null) {
@@ -1474,7 +1429,7 @@ async function verifySourceMenuAlignment(page, viewport) {
       await page.waitForFunction(() => document.getElementById('bt-menu-main')?.hidden === false);
     }
 
-    await page.locator(`#bt-menu-main [data-section-link="${section}"]`).click();
+    await bartical.sectionLink('main', section).click();
     await page.waitForFunction((activeSection) => (
       document.documentElement.dataset.barticalActivation === 'revealed'
         && document.querySelector('[data-source-menu]')?.hidden === false
@@ -1521,6 +1476,7 @@ async function verifySourceMenuAlignment(page, viewport) {
 }
 
 async function verifyPlacementSimulation(page, viewport) {
+  const bartical = new BarticalPage(page);
   await page.evaluate(() => document.getElementById('overview')?.scrollIntoView({
     behavior: 'auto',
     block: 'start'
@@ -1556,7 +1512,7 @@ async function verifyPlacementSimulation(page, viewport) {
     initial
   );
 
-  const bell = page.locator('[data-placement-item="bell"]');
+  const bell = bartical.placementItem('bell');
   await bell.hover();
   const initialTooltip = await bell.evaluate((item) => {
     const tooltip = item.querySelector('.bt-placement__membership');
@@ -1590,7 +1546,7 @@ async function verifyPlacementSimulation(page, viewport) {
   );
 
   const bellBox = await bell.boundingBox();
-  const boundaryTwoBox = await page.locator('[data-placement-boundary="2"]').boundingBox();
+  const boundaryTwoBox = await bartical.placementBoundary('2').boundingBox();
   assert(bellBox && boundaryTwoBox, `[${viewport.name}] Placement drag targets had no layout boxes`);
   await bell.dispatchEvent('pointerdown', {
     button: 0,
@@ -1642,8 +1598,8 @@ async function verifyPlacementSimulation(page, viewport) {
   );
 
   const movedBellBox = await bell.boundingBox();
-  const movedBoundaryBox = await page.locator('[data-placement-boundary="2"]').boundingBox();
-  const wifiBox = await page.locator('[data-placement-item="wifi"]').boundingBox();
+  const movedBoundaryBox = await bartical.placementBoundary('2').boundingBox();
+  const wifiBox = await bartical.placementItem('wifi').boundingBox();
   assert(movedBellBox && movedBoundaryBox && wifiBox, `[${viewport.name}] Placement reset targets had no layout boxes`);
   await bell.dispatchEvent('pointerdown', {
     button: 0,

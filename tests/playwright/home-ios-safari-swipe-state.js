@@ -22,56 +22,12 @@
  *    合成 TouchEvent(touches 配列を持つ plain Event)を window へ dispatch してスワイプを再現し、
  *    scrollY・active target・各セクションの矩形を取得して判定する。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+const { HomePage } = require('./pages/home-page');
+const { startServer } = require('./support/static-server');
 const { webkit, devices } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const MOBILE_VIEWPORT = { width: 393, height: 852 };
 const SECTION_TOLERANCE = 4;
-
-function serveStatic(req, res) {
-  const urlPath = req.url.split('?')[0];
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    res.statusCode = 403;
-    res.end('Forbidden');
-    return;
-  }
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      res.statusCode = 404;
-      res.end('Not found');
-      return;
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const types = {
-      '.html': 'text/html; charset=utf-8',
-      '.css': 'text/css; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.json': 'application/json; charset=utf-8',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp'
-    };
-    res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
-    res.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 async function dispatchSwipe(page, startY, endY, steps = 14) {
   await page.evaluate(async ({ startY, endY, steps }) => {
@@ -106,21 +62,6 @@ async function waitForAnimationFrames(page, frameCount) {
     };
     window.requestAnimationFrame(step);
   }), frameCount);
-}
-
-async function getHomeState(page) {
-  return page.evaluate(() => {
-    const active = document.querySelector('.home-section-nav__button.is-active, .home-section-nav__footer-link.is-active');
-    const catchRect = document.getElementById('catch-section').getBoundingClientRect();
-    const productsRect = document.getElementById('products-section').getBoundingClientRect();
-    return {
-      scrollY: Math.round(window.scrollY),
-      activeTarget: active ? active.dataset.sectionTarget || active.dataset.footerTarget : null,
-      catchTop: Number(catchRect.top.toFixed(2)),
-      productsTop: Number(productsRect.top.toFixed(2)),
-      distanceFromBottom: Math.round(document.documentElement.scrollHeight - (window.scrollY + window.innerHeight))
-    };
-  });
 }
 
 function assertSectionState(state, expectedTarget, topKey, label) {
@@ -178,6 +119,7 @@ async function main() {
     });
 
     const page = await context.newPage();
+    const home = new HomePage(page);
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(500);
@@ -221,22 +163,22 @@ async function main() {
     // (3) スワイプでの往復移動が常に整合すること
     await dispatchSwipe(page, 650, 190);
     await page.waitForTimeout(1300);
-    assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'swipe catch->products');
+    assertSectionState(await home.readScrollState(), 'products-section', 'productsTop', 'swipe catch->products');
     await waitForAnimationFrames(page, 40);
 
     await dispatchSwipe(page, 650, 190);
     await page.waitForTimeout(1300);
-    assertFooterState(await getHomeState(page), 'swipe products->footer');
+    assertFooterState(await home.readScrollState(), 'swipe products->footer');
     await waitForAnimationFrames(page, 40);
 
     await dispatchSwipe(page, 190, 650);
     await page.waitForTimeout(1300);
-    assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'swipe footer->products');
+    assertSectionState(await home.readScrollState(), 'products-section', 'productsTop', 'swipe footer->products');
     await waitForAnimationFrames(page, 40);
 
     await dispatchSwipe(page, 190, 650);
     await page.waitForTimeout(1300);
-    assertSectionState(await getHomeState(page), 'catch-section', 'catchTop', 'swipe products->catch');
+    assertSectionState(await home.readScrollState(), 'catch-section', 'catchTop', 'swipe products->catch');
     await waitForAnimationFrames(page, 40);
 
     // (4) プログラムスクロールが数回無視されても補正されること(iOS の慣性中挙動の模擬)
@@ -259,14 +201,14 @@ async function main() {
     if (droppedCalls < 3) {
       throw new Error(`Expected the dropped-scroll simulation to swallow 3 calls, swallowed ${droppedCalls}`);
     }
-    assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'dropped-scroll recovery');
+    assertSectionState(await home.readScrollState(), 'products-section', 'productsTop', 'dropped-scroll recovery');
     await waitForAnimationFrames(page, 40);
 
     // (5) ロック中の連続スワイプ後も位置と nav が食い違わないこと
     await dispatchSwipe(page, 190, 650);
     await dispatchSwipe(page, 190, 650, 6);
     await page.waitForTimeout(1500);
-    const rapidState = await getHomeState(page);
+    const rapidState = await home.readScrollState();
     const aligned = [
       { target: 'catch-section', top: rapidState.catchTop },
       { target: 'products-section', top: rapidState.productsTop }
@@ -298,7 +240,7 @@ async function main() {
       window.scrollTo(0, productsTop - 200);
     });
     await page.waitForTimeout(1400);
-    assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'unmanaged mid-scroll recovery (section)');
+    assertSectionState(await home.readScrollState(), 'products-section', 'productsTop', 'unmanaged mid-scroll recovery (section)');
     await waitForAnimationFrames(page, 40);
 
     await page.evaluate(() => {
@@ -306,7 +248,7 @@ async function main() {
       window.scrollTo(0, documentHeight - window.innerHeight - 60);
     });
     await page.waitForTimeout(1400);
-    assertFooterState(await getHomeState(page), 'unmanaged mid-scroll recovery (footer)');
+    assertFooterState(await home.readScrollState(), 'unmanaged mid-scroll recovery (footer)');
     await waitForAnimationFrames(page, 40);
 
     // (7) 長押しでシステムがジェスチャを奪い、touchend が届かないままスクロールされても
@@ -321,7 +263,7 @@ async function main() {
       window.scrollTo(0, productsTop - 250);
     });
     await page.waitForTimeout(2600);
-    assertSectionState(await getHomeState(page), 'products-section', 'productsTop', 'system-claimed gesture recovery');
+    assertSectionState(await home.readScrollState(), 'products-section', 'productsTop', 'system-claimed gesture recovery');
 
     await page.evaluate(() => {
       document.documentElement.style.scrollSnapType = '';

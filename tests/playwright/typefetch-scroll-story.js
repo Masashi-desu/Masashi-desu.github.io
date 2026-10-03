@@ -4,52 +4,12 @@
  *  - 期待値: 操作説明の背景は透明、ヒーローは sticky、左見出しは上詰めで current 行だけ不透過、右手順は右寄せ、番号レールは存在しない。縦に短い viewport では操作説明が画面へ入る前にヒーローデモが上へ移動し、TypeFetch入力パネル全体が見えて操作できる。モバイルでは前面アプリの外枠は viewport 幅へ追従する一方、本文の文字、ウィンドウバー、余白、フッター操作は小さい縮尺を保ち、縦向きでは固定ヘッダーを除いた表示領域に収まる。操作説明の先頭が viewport 中央へ到達するまではヒーローが操作可能で、中央を越えてから同じデモが現在位置から viewport 中央へ連続移動・縮小し、逆方向も連続する。ルール終端側からストーリーへ再進入した後にヒーローへ戻っても、デモは画面外へ消えず、その時点のヒーロー内の実位置まで連続して戻る。各手順の中央表示時に対応する手順が current となり、2段階目では入力、3段階目では前面アプリへの挿入が反映される。ルールセクションは半透明で、最終状態の固定デモを同セクションの終端まで維持する。先頭へ戻ると手動デモの初期状態へ復帰する。
  *  - 検証方法: ローカル静的サーバーで TypeFetch を開き、390px と 426px 幅で前面アプリの viewport 幅比、文字サイズ、バー、余白、フッター配置を算出スタイルから確認する。短い viewport で説明領域が画面外にある間のデモ移動量、入力パネル下端、focus 状態を確認し、複数 viewport で中央引き継ぎ線の直前・直後の active/inert/focus 状態を確認する。続いて Chromium の 1387 × 994 viewport で切り替え前後のデモ矩形を animation frame ごとに採取し、各手順とルールセクションを順に中央へスクロールする。さらに 1280 × 666 viewport でルール終端側から再進入して上方向へ戻り、デモが全フレームで viewport 内に残り、終点でも座標ジャンプせず relative 配置へ復帰することを確認する。363 × 619 の縦向きモバイルでは固定プレビューの上下端とヘッダー下の表示領域中央を検証する。公開状態 API、textarea 値、aria 属性、console/page error も取得する。ただし Google Fonts の CDN 障害はシステムフォントへフォールバック可能で操作フローと無関係なため、fonts.gstatic.com のリソース読込エラーだけは除外する。
  */
-const fs = require('fs');
-const http = require('http');
-const path = require('path');
+const { TypeFetchPage } = require('./pages/typefetch-page');
+const { startServer } = require('./support/static-server');
 const { chromium } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '../../site');
 const VIEWPORT = { width: 1387, height: 994 };
 const EXPECTED_SAMPLE = '入力した文字を、前面へ。';
-
-function serveStatic(request, response) {
-  const pathname = decodeURIComponent(request.url.split('?')[0]);
-  let filePath = path.join(ROOT, pathname === '/' ? 'index.html' : pathname.replace(/^\//u, ''));
-  if (filePath.endsWith(path.sep)) {
-    filePath = path.join(filePath, 'index.html');
-  }
-  if (!filePath.startsWith(ROOT)) {
-    response.statusCode = 403;
-    response.end('Forbidden');
-    return;
-  }
-
-  fs.readFile(filePath, (error, data) => {
-    if (error) {
-      response.statusCode = 404;
-      response.end('Not found');
-      return;
-    }
-    const contentTypes = {
-      '.css': 'text/css; charset=utf-8',
-      '.gif': 'image/gif',
-      '.html': 'text/html; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.png': 'image/png',
-      '.svg': 'image/svg+xml'
-    };
-    response.setHeader('Content-Type', contentTypes[path.extname(filePath).toLowerCase()] || 'application/octet-stream');
-    response.end(data);
-  });
-}
-
-function startServer() {
-  const server = http.createServer(serveStatic);
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 function assert(condition, message) {
   if (!condition) {
@@ -184,6 +144,7 @@ async function captureReverseHandoffAfterBottomReentry(page) {
 }
 
 async function verifyDeferredControlHandoff(page, viewport) {
+  const typefetch = new TypeFetchPage(page);
   await page.setViewportSize(viewport);
   const setup = await page.evaluate(async () => {
     document.documentElement.style.scrollBehavior = 'auto';
@@ -211,8 +172,8 @@ async function verifyDeferredControlHandoff(page, viewport) {
     };
   });
 
-  await page.locator('#tf-callout-input').click({ position: { x: 16, y: 16 } });
-  const inputFocused = await page.locator('#tf-callout-input').evaluate((input) => document.activeElement === input);
+  await typefetch.focusInput();
+  const inputFocused = await typefetch.calloutInput.evaluate((input) => document.activeElement === input);
   const after = await page.evaluate(async (boundaryScroll) => {
     const manual = document.querySelector('#manual');
     const hero = document.querySelector('.tf-hero');
@@ -309,6 +270,7 @@ async function verifyMobileTargetVisualHierarchy(page) {
 }
 
 async function verifyPreviewApproachBeforeManual(page) {
+  const typefetch = new TypeFetchPage(page);
   const viewport = { width: 1280, height: 666 };
   await page.setViewportSize(viewport);
   const setup = await page.evaluate(async () => {
@@ -332,7 +294,7 @@ async function verifyPreviewApproachBeforeManual(page) {
     window.scrollTo(0, revealScroll - 2);
     await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
   }, setup.revealScroll);
-  await page.locator('#tf-callout-input').click({ position: { x: 16, y: 16 } });
+  await typefetch.focusInput();
   const approached = await page.evaluate(() => {
     const manual = document.querySelector('#manual');
     const demo = document.querySelector('.tf-demo');
@@ -363,7 +325,8 @@ async function verifyPreviewApproachBeforeManual(page) {
 }
 
 async function scrollMoveToStoryLine(page, index) {
-  await page.locator('.tf-move__key').nth(index).evaluate((keyRow) => {
+  const typefetch = new TypeFetchPage(page);
+  await typefetch.storyKeys.nth(index).evaluate((keyRow) => {
     document.documentElement.style.scrollBehavior = 'auto';
     const absoluteTop = window.scrollY + keyRow.getBoundingClientRect().top;
     window.scrollTo(0, absoluteTop - window.innerHeight * 0.55);
@@ -401,6 +364,7 @@ async function main() {
       localStorage.setItem('mdw-theme', 'dark');
     });
     const page = await context.newPage();
+    const typefetch = new TypeFetchPage(page);
     const pageErrors = [];
     const consoleErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -526,7 +490,7 @@ async function main() {
     assert(stepThree.calloutHidden === 'true', `Step 03 did not close TypeFetch: ${JSON.stringify(stepThree)}`);
     assert(stepThree.titleOpacities[2] === 1 && stepThree.titleOpacities.slice(0, 2).every((opacity) => opacity <= 0.5), `Step 03 title emphasis was incorrect: ${JSON.stringify(stepThree)}`);
 
-    await page.locator('.tf-rules').evaluate((rules) => {
+    await typefetch.rules.evaluate((rules) => {
       const absoluteTop = window.scrollY + rules.getBoundingClientRect().top;
       window.scrollTo(0, absoluteTop + Math.min(rules.offsetHeight * 0.24, window.innerHeight * 0.3));
     });
@@ -568,7 +532,7 @@ async function main() {
     assert(rulesState.calloutHidden === 'true', `The final demo panel state changed behind the rules section: ${JSON.stringify(rulesState)}`);
     assert(rulesState.targetValue === `${initial.targetValue} ${EXPECTED_SAMPLE}`, `The inserted text did not persist through the rules section: ${JSON.stringify(rulesState)}`);
 
-    await page.locator('.tf-rules').evaluate((rules) => {
+    await typefetch.rules.evaluate((rules) => {
       const absoluteBottom = window.scrollY + rules.getBoundingClientRect().bottom;
       const topbarHeight = document.querySelector('.tf-topbar')?.getBoundingClientRect().height ?? 0;
       window.scrollTo(0, absoluteBottom - topbarHeight + 2);
@@ -576,7 +540,7 @@ async function main() {
     await page.waitForFunction(() => !window.TypeFetchScrollStory.getState().active);
 
     await page.setViewportSize({ width: 1280, height: 666 });
-    await page.locator('.tf-rules').evaluate((rules) => {
+    await typefetch.rules.evaluate((rules) => {
       const absoluteBottom = window.scrollY + rules.getBoundingClientRect().bottom;
       const topbarHeight = document.querySelector('.tf-topbar')?.getBoundingClientRect().height ?? 0;
       window.scrollTo(0, absoluteBottom - topbarHeight + 2);
