@@ -50,7 +50,8 @@ jobs:
           node tools/classify-pages-change.mjs "${BEFORE_SHA}" "${CURRENT_SHA}" >> "${GITHUB_OUTPUT}"
 
   quality-gate:
-    runs-on: ubuntu-latest
+    # Playwright 1.59.1 supports Ubuntu 24.04 for Chromium and WebKit.
+    runs-on: ubuntu-24.04
     needs: changes
     if: ${{ needs.changes.outputs.test == 'true' }}
     timeout-minutes: 10
