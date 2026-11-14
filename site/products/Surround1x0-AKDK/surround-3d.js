@@ -12,6 +12,12 @@ const PAIR_MARGIN_PX = Object.freeze({ desktop: 24, mobile: 16 });
 const FEATURE_SCROLL_DAMPING = 14;
 const FEATURE_SCROLL_MAX_SPEED = 2.5;
 const FEATURE_SCROLL_EPSILON = 0.001;
+// Keep both units in frame during the handoff, including when scrolling back.
+// The right unit leaves the frame before its exit fade begins.
+const FEATURE_MOTION_WINDOWS = {
+  left: { start: 0.12, end: 0.93 },
+  right: { start: 0.20, end: 1 }
+};
 const TECHNOLOGY_SCENE = 3;
 const LINKS_SCENE = 4;
 const technology = document.getElementById('surround-technology');
@@ -364,9 +370,7 @@ async function start() {
     for (const model of modelList) {
       for (const [side, half] of Object.entries(model.halves)) {
         const motion = featuredMotions[side];
-        // The incoming unit stages near the frame before the outgoing one fades.
-        const start = side === 'left' ? 0.07 : 0;
-        const end = side === 'left' ? 0.93 : 0.86;
+        const { start, end } = FEATURE_MOTION_WINDOWS[side];
         half.motion = null;
         Object.assign(half.target, destination.state[side]);
         sampleHalfMotion(half, motion, THREE.MathUtils.clamp((progress - start) / (end - start), 0, 1));
