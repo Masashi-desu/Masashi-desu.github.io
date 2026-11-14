@@ -14,7 +14,7 @@ export function createWindowScrollAdapter(win, doc) {
     return Math.max(0, Math.round(documentHeight - getViewportHeight()));
   }
 
-  function readStopTop(stop) {
+  function readStopTop(stop, getTop = stop?.getTop) {
     if (!stop) {
       return null;
     }
@@ -26,8 +26,8 @@ export function createWindowScrollAdapter(win, doc) {
       scrollY: getScrollY(),
       documentBottom: getDocumentBottom()
     };
-    if (typeof stop.getTop === 'function') {
-      const value = stop.getTop(context);
+    if (typeof getTop === 'function') {
+      const value = getTop.call(stop, context);
       const customTop = value === null ? NaN : Number(value);
       return Number.isFinite(customTop) ? customTop : null;
     }

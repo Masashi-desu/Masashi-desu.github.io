@@ -9,6 +9,9 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const compactLayout = window.matchMedia('(max-width: 42rem)');
 const MODEL_UNIT_SCALE = 0.001;
 const PAIR_MARGIN_PX = Object.freeze({ desktop: 24, mobile: 16 });
+const FEATURE_SCROLL_DAMPING = 14;
+const FEATURE_SCROLL_MAX_SPEED = 2.5;
+const FEATURE_SCROLL_EPSILON = 0.001;
 // Section 04, landscape only. Edit these XYZ Euler angles in degrees to adjust
 // each keyboard's orientation. No additional per-side roll is applied later.
 const LANDSCAPE_EXPLODED_ROTATION_DEG = Object.freeze({
@@ -90,6 +93,7 @@ const publicState = {
   failed: false,
   theme: resolveTheme(),
   activeScene: Number(document.body.dataset.surroundScene || 0),
+  featureProgress: null,
   foregroundSide: null,
   heroSpread: null,
   pairLayout: null,
@@ -243,8 +247,13 @@ async function start() {
   };
   const interaction = createModelInteraction({
     models, camera, state: publicState,
-    reset: () => setScene(publicState.activeScene, true)
+    reset: () => refreshScene()
   });
+  let featuredLayouts;
+  let featuredMotions;
+  let targetFeatureProgress = null;
+  let pendingFeaturedLayout = false;
+  const modelList = Object.values(models);
 
   function syncTheme() {
     const theme = resolveTheme();
@@ -261,13 +270,14 @@ async function start() {
     if (!immediate && normalized === publicState.activeScene) {
       return false;
     }
+    pendingFeaturedLayout = false;
     interaction.cancel();
     publicState.interaction.modified = false;
     const previous = publicState.activeScene;
     const waveDirection = normalized >= previous ? 1 : -1;
-    publicState.activeScene = normalized;
-    publicState.foregroundSide = normalized === 1 ? 'right' : (normalized === 2 ? 'left' : null);
-    const state = getLayoutState(
+    const featured = normalized === 1 || normalized === 2;
+    const layout = featured ? getFeaturedLayouts()[normalized - 1] : null;
+    const state = layout?.state ?? getLayoutState(
       normalized,
       compactLayout.matches,
       window.innerWidth,
@@ -276,14 +286,68 @@ async function start() {
     publicState.pairLayout = normalized === 0 || normalized === 3
       ? fitPairLayout(state, models, camera)
       : null;
-    publicState.featuredLayout = normalized === 1 || normalized === 2
-      ? fitFeaturedLayout(state, normalized, models, camera)
-      : null;
+    setForegroundScene(normalized, layout?.fit);
     publicState.explosionOrientation = state.explosion ? (state.explosionOrientation || 'vertical') : null;
     publicState.heroSpread = normalized === 0 ? Math.abs(state.left.x) : null;
-    Object.values(models).forEach((model) => setModelTarget(model, state, immediate, waveDirection));
+    modelList.forEach((model) => setModelTarget(model, state, immediate, waveDirection));
     publicState.motionActive = !immediate;
     return true;
+  }
+
+  function setForegroundScene(index, fit) {
+    publicState.activeScene = index;
+    publicState.foregroundSide = fit?.side ?? null;
+    publicState.featuredLayout = fit;
+  }
+
+  function getFeaturedLayouts() {
+    featuredLayouts ??= [1, 2].map((index) => {
+      const state = getLayoutState(index, compactLayout.matches, window.innerWidth, window.visualViewport?.height || window.innerHeight);
+      return { state, fit: fitFeaturedLayout(state, index, models, camera) };
+    });
+    return featuredLayouts;
+  }
+
+  function applyFeatureScroll(progress) {
+    const [right, left] = getFeaturedLayouts();
+    const destination = progress < 0.5 ? right : left;
+    const index = progress < 0.5 ? 1 : 2;
+    setForegroundScene(index, destination.fit);
+    const inTransition = progress > 0 && progress < 1;
+    if (!inTransition) {
+      modelList.forEach((model) => setModelTarget(model, destination.state, true));
+      return;
+    }
+
+    featuredMotions ??= Object.fromEntries(['left', 'right'].map((side) => {
+      const current = right.state[side];
+      const target = { ...left.state[side] };
+      if (side === 'right') target.scale = Math.max(target.scale, current.scale * 1.16);
+      return [side, createCurvedMotion({ side, current }, target, 0)];
+    }));
+    for (const model of modelList) {
+      for (const [side, half] of Object.entries(model.halves)) {
+        const motion = featuredMotions[side];
+        // The incoming unit stages near the frame before the outgoing one fades.
+        const start = side === 'left' ? 0.07 : 0;
+        const end = side === 'left' ? 0.93 : 0.86;
+        half.motion = null;
+        Object.assign(half.target, destination.state[side]);
+        sampleHalfMotion(half, motion, THREE.MathUtils.clamp((progress - start) / (end - start), 0, 1));
+      }
+      if (model.explosion.current || model.explosion.target || model.explosion.motion) {
+        setExplosionTarget(model.explosion, 0, true, 1);
+      }
+    }
+  }
+
+  function refreshScene() {
+    pendingFeaturedLayout = false;
+    featuredLayouts = null;
+    featuredMotions = null;
+    const progress = publicState.featureProgress;
+    if (progress === null || progress === 0 || progress === 1) setScene(publicState.activeScene, true);
+    else applyFeatureScroll(progress);
   }
 
   function resize() {
@@ -300,7 +364,7 @@ async function start() {
     camera.position.set(position.x, position.y, position.z);
     camera.lookAt(0, compact ? 0.045 : 0, 0);
     camera.updateProjectionMatrix();
-    setScene(publicState.activeScene, true);
+    refreshScene();
   }
 
   function handlePointerMove(event) {
@@ -311,6 +375,30 @@ async function start() {
     motion.targetPointerY = (event.clientY / Math.max(1, window.innerHeight) - 0.5) * 2;
   }
 
+  function updateFeatureMotion(delta) {
+    const progress = publicState.featureProgress;
+    if (targetFeatureProgress === null || progress === targetFeatureProgress || publicState.interaction.dragging) return;
+    interaction.cancel();
+    publicState.interaction.modified = false;
+    const remaining = targetFeatureProgress - progress;
+    // Wheel ticks and touch events can advance many pixels in one update.
+    // Limit the distance per frame, then ease into the actual scroll position.
+    const step = Math.min(
+      Math.abs(remaining) * -Math.expm1(-delta * FEATURE_SCROLL_DAMPING),
+      delta * FEATURE_SCROLL_MAX_SPEED
+    );
+    publicState.featureProgress = reduceMotion.matches || Math.abs(remaining) - step <= FEATURE_SCROLL_EPSILON
+      ? targetFeatureProgress
+      : progress + Math.sign(remaining) * step;
+    applyFeatureScroll(publicState.featureProgress);
+  }
+
+  function hasSceneMotion() {
+    return modelList.some((model) => (
+      model.halves.left.motion || model.halves.right.motion || model.explosion.motion
+    ));
+  }
+
   function render(time) {
     const delta = Math.min(0.05, Math.max(0.001, (time - motion.lastTime) / 1000));
     motion.lastTime = time;
@@ -318,11 +406,13 @@ async function start() {
     motion.pointerX = THREE.MathUtils.lerp(motion.pointerX, motion.targetPointerX, smoothing * 0.65);
     motion.pointerY = THREE.MathUtils.lerp(motion.pointerY, motion.targetPointerY, smoothing * 0.65);
 
-    Object.values(models).forEach((model) => updateModel(model, time));
-    publicState.motionActive = Object.values(models).some((model) => (
-      Object.values(model.halves).some((half) => Boolean(half.motion)) ||
-      Boolean(model.explosion.motion)
-    ));
+    if (!hasSceneMotion()) {
+      if (pendingFeaturedLayout) refreshScene();
+      updateFeatureMotion(delta);
+    }
+    modelList.forEach((model) => updateModel(model, time));
+    const progress = publicState.featureProgress;
+    publicState.motionActive = (progress > 0 && progress < 1) || progress !== targetFeatureProgress || hasSceneMotion();
 
     const compact = compactLayout.matches;
     const baseX = 0;
@@ -342,6 +432,9 @@ async function start() {
   // Navigation remains available while the GLBs load. Start at the latest
   // selected section, including a hash restored after this module initialized.
   publicState.activeScene = Number(document.body.dataset.surroundScene || 0);
+  if (document.body.dataset.surroundStop === 'surround-02') {
+    publicState.featureProgress = targetFeatureProgress = Number(document.body.dataset.surroundFeatureProgress || 0);
+  }
   syncTheme();
   resize();
   visual.style.setProperty('--surround-load-progress', '100%');
@@ -355,9 +448,11 @@ async function start() {
   });
 
   const refreshFeaturedLayout = () => {
-    if (publicState.activeScene === 1 || publicState.activeScene === 2) {
-      setScene(publicState.activeScene, true);
-    }
+    featuredLayouts = null;
+    featuredMotions = null;
+    if (publicState.activeScene !== 1 && publicState.activeScene !== 2) return;
+    if (hasSceneMotion()) pendingFeaturedLayout = true;
+    else refreshScene();
   };
   const languageObserver = new MutationObserver(refreshFeaturedLayout);
   languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
@@ -365,7 +460,17 @@ async function start() {
 
   window.addEventListener('surround:segment-change', (event) => {
     interaction.cancel();
-    setScene(event.detail?.index);
+    const { index, featureProgress = null } = event.detail;
+    const previousProgress = publicState.featureProgress;
+    targetFeatureProgress = featureProgress;
+    // A cross-section move starts from the displayed pose, including a scroll
+    // transition that has not yet caught up to its target.
+    if (featureProgress !== null && previousProgress !== null) return;
+    publicState.featureProgress = featureProgress === null ? null : Number(index === 2);
+    setScene(index);
+  });
+  window.addEventListener('surround:feature-scroll', (event) => {
+    targetFeatureProgress = event.detail.progress;
   });
   window.addEventListener('pointermove', handlePointerMove, { passive: true });
   window.addEventListener('resize', resize, { passive: true });
@@ -704,22 +809,21 @@ function createLayoutViews(camera, compact) {
 }
 
 function readFeaturedCopyBounds(index) {
-  const section = document.getElementById(`surround-0${index + 1}`);
-  const copy = section.querySelector('.surround-copy');
-  const sectionTop = section.getBoundingClientRect().top;
-  const transform = new DOMMatrixReadOnly(getComputedStyle(copy).transform);
+  const hand = index === 1 ? 'right' : 'left';
+  const frame = document.querySelector(`[data-surround-hand="${hand}"]`);
+  const copy = frame.querySelector('.surround-copy');
+  const frameTop = frame.getBoundingClientRect().top;
   const bounds = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
-  // Text ranges exclude the unused width of the copy's grid cells. Remove its
-  // reveal translation and scroll offset so the destination is stable in transit.
+  // Text ranges exclude unused grid space. Measure relative to each moving frame.
   for (const child of copy.children) {
     const range = document.createRange();
     range.selectNodeContents(child);
     for (const rect of range.getClientRects()) {
       if (!rect.width || !rect.height) continue;
-      bounds.left = Math.min(bounds.left, rect.left - transform.m41);
-      bounds.right = Math.max(bounds.right, rect.right - transform.m41);
-      bounds.top = Math.min(bounds.top, rect.top - sectionTop - transform.m42);
-      bounds.bottom = Math.max(bounds.bottom, rect.bottom - sectionTop - transform.m42);
+      bounds.left = Math.min(bounds.left, rect.left);
+      bounds.right = Math.max(bounds.right, rect.right);
+      bounds.top = Math.min(bounds.top, rect.top - frameTop);
+      bounds.bottom = Math.max(bounds.bottom, rect.bottom - frameTop);
     }
   }
   return bounds;
@@ -1454,6 +1558,15 @@ function updateHalfMotion(half, time) {
     return;
   }
   const rawProgress = Math.min(1, Math.max(0, (time - motion.start) / motion.duration));
+  sampleHalfMotion(half, motion, rawProgress);
+  if (rawProgress >= 1) {
+    Object.assign(half.current, motion.to);
+    half.motion = null;
+    resetPartMotion(half);
+  }
+}
+
+function sampleHalfMotion(half, motion, rawProgress) {
   const progress = smootherStep(rawProgress);
   half.partMotionProgress = rawProgress;
   half.partMotionAmplitude = motion.partMotion.amplitude;
@@ -1491,11 +1604,6 @@ function updateHalfMotion(half, time) {
       : progress;
     half.current.opacity = THREE.MathUtils.lerp(motion.from.opacity, motion.to.opacity, fadeProgress);
     half.current.foreground = THREE.MathUtils.lerp(motion.from.foreground, motion.to.foreground, progress);
-  }
-  if (rawProgress >= 1) {
-    Object.assign(half.current, motion.to);
-    half.motion = null;
-    resetPartMotion(half);
   }
 }
 

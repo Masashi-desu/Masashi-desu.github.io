@@ -3,6 +3,7 @@
  *  - 目的: 共通スクロールを使うホーム・製品一覧・Surround の wheel 入力が、しきい値とジェスチャーロックを守ることを確認する。
  *  - 期待値: 0.25px の初回からキャンセルし、85.5px では動かず86pxで1区間移動する。1.5秒以上入力が続いても再移動せず、180ms以上の無入力後は逆方向へ戻れる。停止点から3pxずれた位置でも wheel/touch で隣へ進む。
  *    フッターの表示がactiveでも、移動の許容差を超える手前からwheelで末尾へ到達できる。
+ *    Surroundでは、分解表示から上方向のwheelまたはスワイプ1回で左手用の説明全体が見える位置へ着地する。
  *  - 検証方法: 隔離した Chromium/WebKit の実ページと制御可能な時計で合成 WheelEvent を dispatch し、キャンセル可否・scrollY・active nav を確認する。デスクトップでは実時間の実 wheel 入力も確認する。
  *    WebKit の iPad 設定はレイアウトと入力契約の検証であり、UIKit のイベント生成や実機トラックパッドそのものを再現するものではない。
  */
@@ -68,7 +69,7 @@ async function verifyPage(context, spec, baseURL, profile) {
         value.createScrollController = (...args) => {
           const controller = create(...args);
           window.__segmentedController = controller;
-          controller.subscribe(({ type, id, reason, state }) => record({ type, id, reason, state }));
+          controller.subscribe(({ type, id, source, reason, state }) => record({ type, id, source, reason, state }));
           return controller;
         };
       }
@@ -114,7 +115,113 @@ async function verifyPage(context, spec, baseURL, profile) {
     // Mimic a small viewport/scroll-position discrepancy before a fresh input.
     // Disable desktop native snap only while injecting the offset; mobile
     // already disables it through the managed CSS contract.
-    for (const input of ['wheel', 'touch']) {
+    const isRange = spec.managed === 'surround-scroll-managed';
+    if (isRange) {
+      const geometry = await page.evaluate(() => {
+        const controller = window.__segmentedController;
+        const stop = controller.getStop('surround-02');
+        stop.element.style.setProperty('--surround-feature-scroll-distance', '360px');
+        const frame = stop.element.querySelector('[data-surround-hand="left"]');
+        const text = document.createRange();
+        text.selectNodeContents(frame.querySelector('.surround-copy > :last-child'));
+        return {
+          start: controller.readStopTop(stop),
+          end: controller.readStopTop(stop, 'end'),
+          exit: Math.ceil(text.getBoundingClientRect().bottom - frame.getBoundingClientRect().top)
+        };
+      });
+      assert.equal(geometry.end - geometry.start, 360 + geometry.exit);
+      await page.evaluate(() => window.__segmentedController.goTo('surround-02', { behavior: 'auto' }));
+      await page.clock.runFor(1600);
+      const featureState = () => page.evaluate(() => {
+        const text = document.createRange();
+        text.selectNodeContents(document.querySelector('[data-surround-hand="left"] .surround-copy > :last-child'));
+        return {
+          y: scrollY,
+          progress: Number(document.body.dataset.surroundFeatureProgress),
+          leftAnchor: document.getElementById('surround-03').getBoundingClientRect().top,
+          right: document.querySelector('[data-surround-hand="right"]').getBoundingClientRect().top,
+          left: text.getBoundingClientRect().bottom,
+          active: document.querySelector('[data-surround-target="surround-02"]').getAttribute('aria-current')
+        };
+      });
+      // Let the browser deliver compositor scroll events even while the test clock is paused.
+      const syncScroll = () => page.evaluate(() => window.dispatchEvent(new Event('scroll')));
+      await wheel(page, 144);
+      await syncScroll();
+      await page.clock.runFor(1500);
+      const middle = await featureState();
+      assert.equal(middle.y, geometry.start + 144);
+      assert.equal(middle.progress, 0.4);
+      assert.ok(middle.right < -144 && middle.left > 216 && middle.active === 'true');
+      const swipe = async (steps) => page.evaluate((steps) => {
+        const target = document.querySelector('.surround-feature-stage');
+        for (const [index, y] of steps.entries()) {
+          const event = new Event(index === 0 ? 'touchstart' : 'touchmove', { cancelable: true, bubbles: true });
+          event.touches = [{ clientX: 100, clientY: y }];
+          target.dispatchEvent(event);
+        }
+        const end = new Event('touchend', { bubbles: true });
+        end.touches = [];
+        target.dispatchEvent(end);
+      }, steps);
+      await swipe([600, 480, 340, 200]);
+      await syncScroll();
+      await page.clock.runFor(1500);
+      const trailing = await featureState();
+      assert.equal(trailing.y, geometry.start + 544);
+      assert.equal(trailing.progress, 1);
+      assert.ok(trailing.left > 0 && trailing.active === 'true');
+      assert.ok(geometry.end > trailing.y + 16, JSON.stringify({ geometry, trailing }));
+      await wheel(page, geometry.end - trailing.y - 16);
+      await syncScroll();
+      assert.ok((await featureState()).left > 0, 'the final line should still be visible before the threshold');
+      assert.equal((await featureState()).active, 'true');
+      await wheel(page, 16);
+      await syncScroll();
+      assert.ok((await featureState()).left <= 0, 'the final line should be above the viewport when the transition starts');
+      assert.equal((await featureState()).active, 'false', 'crossing the threshold must start the transition immediately');
+      assert.equal(await page.locator('[data-surround-target="surround-04"]').getAttribute('aria-current'), 'true');
+      const starts = await page.evaluate(() => window.__segmentedTrace.filter((event) =>
+        event.type === 'navigationstart' && event.id === 'surround-04' && event.source === 'range-exit'
+      ));
+      assert.equal(starts.length, 1, 'the shared controller should start one exit transition');
+      await wheel(page, 100);
+      await page.clock.runFor(1600);
+      const assertLeftHandArrival = async () => {
+        await page.clock.runFor(1600);
+        await syncScroll();
+        const leftHand = await featureState();
+        assert.ok(Math.abs(leftHand.leftAnchor) <= 1, JSON.stringify(leftHand));
+        assert.equal(leftHand.progress, 1);
+        assert.ok(leftHand.left > 0 && leftHand.active === 'true');
+      };
+      await wheel(page, -100);
+      await assertLeftHandArrival();
+      await page.evaluate(() => window.__segmentedController.goTo('surround-04', { behavior: 'auto' }));
+      await page.clock.runFor(1600);
+      await swipe([240, 340, 460]);
+      await assertLeftHandArrival();
+      await wheel(page, -(geometry.exit + 460));
+      await wheel(page, -100);
+      await syncScroll();
+      await page.clock.runFor(1600);
+      const start = await featureState();
+      assert.equal(start.y, geometry.start);
+      assert.equal(start.progress, 0);
+      assert.equal(start.right, 0);
+      assert.equal(start.active, 'true');
+
+      // A history restore supersedes the still-running move to the links section.
+      await page.evaluate(() => {
+        history.replaceState(null, '', '#surround-03');
+        document.querySelector('[data-surround-target="surround-04"]').click();
+        history.back();
+      });
+      await page.waitForURL('**/#surround-03');
+      await assertLeftHandArrival();
+    }
+    for (const input of isRange ? [] : ['wheel', 'touch']) {
       for (const direction of [-1, 1]) {
         await page.evaluate(id => window.__segmentedController.goTo(id, { behavior: 'auto' }), spec.next);
         await page.clock.runFor(1400);

@@ -38,6 +38,12 @@ export interface Stop {
   readonly eventRegion?: Element;
   readonly observe?: boolean;
   readonly align?: 'start' | 'end' | 'document-end';
+  /** Allow continuous document scrolling from this section's start to its viewport-aligned end. */
+  readonly scrollWithin?: boolean;
+  /** Document offset within the range. Crossing it downward automatically advances to the next stop. */
+  readonly getForwardExitTop?: (context: StopContext) => number | null;
+  /** Document offset for a backward move into this scrollable section. Defaults to the range end. */
+  readonly getReverseEntryTop?: (context: StopContext) => number | null;
   readonly getTop?: (context: StopContext) => number | null;
   readonly activationTolerance?: number | ((context: { stop: Stop; viewportHeight: number }) => number);
   readonly contentAnchor?: string | ((context: { stop: Stop; stops: Stop[]; activeContentId: string }) => string);
@@ -75,8 +81,11 @@ export interface StopIndex {
 }
 export function createStopIndex(options?: { initialId?: string; initialContentId?: string }): StopIndex;
 
+export type StopEdge = 'start' | 'end' | 'reverse-entry';
+
 export interface NavigationOptions {
   source?: string;
+  edge?: StopEdge;
   behavior?: ScrollBehavior;
   settleMs?: number;
   fromId?: string;
@@ -136,7 +145,7 @@ export interface ScrollController {
   move(direction: -1 | 1, options?: NavigationOptions): boolean;
   /** Changes selection only; does not scroll or confirm arrival. */
   setActive(stop: string | Stop, source?: string, force?: boolean): Stop | null;
-  readStopTop(stop: Stop | null): number | null;
+  readStopTop(stop: Stop | null, edge?: StopEdge): number | null;
   getState(): ScrollState;
 }
 export function createScrollController(options: ScrollOptions): ScrollController;

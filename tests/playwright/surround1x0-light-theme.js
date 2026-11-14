@@ -1,7 +1,8 @@
 /**
  * テスト概要:
- *  - 目的: Surround1x0-AKDK の4つのコンテンツとフッタ設定の5停止位置、Three.js描画、テーマ連動モデル、レスポンシブ配置を検証する。
- *  - 期待値: 各セグメントが1 viewportに収まり、02/03で注目する片側ユニットが切り替わり、
+ *  - 目的: Surround1x0-AKDK の3つのコンテンツとフッタ設定、Three.js描画、テーマ連動モデル、レスポンシブ配置を検証する。
+ *  - 期待値: 02は説明文が縦に流れ、固定の3D表示がスクロール位置に応じて右手用から左手用へ往復する。
+ *    一度の大きなスクロールでも左手用モデルは透明度の異なる中間姿勢を複数フレーム描画する。
  *    通常移動は三次ベジェの弧にバンクと一過性の対角twistを重ね、退場側または移動量の大きい側が
  *    先行するlead-followとsmootherstep減速になり、スケールのオーバーシュートは発生しない。
  *    透明で駐機中のユニットは画面端付近のステージング姿勢からフェードインしながら再入場し、
@@ -186,7 +187,7 @@ async function verifyWebKitScrollAlignment(pageUrl) {
     await page.route('**/surround-3d.js', route => route.fulfill({ contentType: 'application/javascript', body: '' }));
     await page.goto(`${pageUrl}#surround-02`);
     await page.waitForFunction(() => window.MDWSurroundNavigation?.isSettled());
-    await page.getByRole('button', { name: '04', exact: true }).click();
+    await page.getByRole('button', { name: '03', exact: true }).click();
     await page.waitForFunction(() => window.MDWSurroundNavigation.isSettled(), null, { timeout: 15000 });
     assert(await page.evaluate(() => Math.abs(document.getElementById('surround-04').getBoundingClientRect().top) <= 1),
       'WebKit did not settle at the final section position');
@@ -197,6 +198,10 @@ async function verifyWebKitScrollAlignment(pageUrl) {
 
 async function readLayout(page) {
   return page.evaluate(() => {
+    const { surroundStop, surroundScene } = document.body.dataset;
+    const copy = surroundStop === 'surround-02'
+      ? `[data-surround-hand="${surroundScene === '1' ? 'right' : 'left'}"] .surround-copy`
+      : `#${surroundStop === 'surround-footer' ? 'surround-04' : surroundStop} .surround-copy`;
     const rect = (selector) => {
       const bounds = document.querySelector(selector).getBoundingClientRect();
       return {
@@ -217,8 +222,8 @@ async function readLayout(page) {
       },
       canvas: rect('#surround-canvas'),
       nav: rect('.surround-section-nav'),
-      title: rect('.surround-segment.is-visible .surround-display'),
-      activeCopy: rect('.surround-segment.is-visible .surround-copy'),
+      title: rect(`${copy} .surround-display`),
+      activeCopy: rect(copy),
       primaryAction: rect('.surround-action--primary'),
       footer: rect('.surround-footer'),
       selects: Array.from(document.querySelectorAll('.surround-footer select')).map((element) => {
@@ -350,10 +355,9 @@ async function assertFeaturedFit(page, label) {
   await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
   const state = await page.evaluate(() => {
     const index = window.__SURROUND_3D__.activeScene;
-    const section = document.getElementById(`surround-0${index + 1}`);
-    const copy = section.querySelector('.surround-copy');
-    const frame = section.querySelector('.surround-segment__frame');
-    const title = section.querySelector('h2');
+    const frame = document.querySelector(`[data-surround-hand="${index === 1 ? 'right' : 'left'}"]`);
+    const copy = frame.querySelector('.surround-copy');
+    const title = frame.querySelector('h2');
     const lineHeight = Number.parseFloat(getComputedStyle(title).lineHeight);
     return {
       layout: window.__SURROUND_3D__.featuredLayout,
@@ -840,76 +844,74 @@ async function main() {
     assert(motionState.scaleOvershoot === false, 'Segment 02 still used scale overshoot', motionState);
     assert(motionState.settling === 'zero-velocity', 'Segment 02 did not expose seamless settling', motionState);
     await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
-    const rightExitStart = await page.evaluate(() => ({ ...window.__SURROUND_3D__.currentPoses.right }));
-    await page.evaluate(() => {
-      window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 2, source: 'test' } }));
+    const readFeatureTransition = () => page.evaluate(() => ({
+      side: window.__SURROUND_3D__.foregroundSide,
+      poses: window.__SURROUND_3D__.currentPoses,
+      rightCopy: document.querySelector('[data-surround-hand="right"] .surround-copy').getBoundingClientRect().top,
+      leftCopy: document.querySelector('[data-surround-hand="left"] .surround-copy').getBoundingClientRect().top,
+      height: window.innerHeight,
+      active: document.querySelector('.surround-section-nav__button.is-active').dataset.surroundTarget
+    }));
+    const first = await readFeatureTransition();
+    assert(first.rightCopy >= 0 && first.rightCopy < first.height && first.leftCopy > first.height,
+      'Right-hand copy should start in the viewport', first);
+    const sample = 0.4;
+    const observedOpacity = await page.evaluateHandle(() => {
+      const samples = [];
+      const record = () => {
+        const state = window.__SURROUND_3D__;
+        samples.push(state.currentPoses.left.opacity);
+        const target = Number(document.body.dataset.surroundFeatureProgress);
+        if ((target === 0 || state.featureProgress !== target) && samples.length < 120) {
+          requestAnimationFrame(record);
+        }
+      };
+      requestAnimationFrame(record);
+      return samples;
     });
-    const [rightExitHandle] = await Promise.all([
-      page.waitForFunction((initial) => {
-        const pose = window.__SURROUND_3D__?.currentPoses?.right;
-        return pose && pose.x > 0.105 && pose.y > 0.1 && pose.z > 0.14 &&
-          pose.scale > initial.scale && pose.cornerTwist > 0.4 && pose.foreground > 0.95
-          ? { ...pose }
-          : false;
-      }, rightExitStart, { timeout: 1800 }),
-      page.waitForFunction(() => {
-        const poses = window.__SURROUND_3D__?.currentPoses;
-        return poses && poses.left.x >= -0.36 && poses.left.opacity > 0.4 && poses.right.opacity > 0.9;
-      }, null, { timeout: 1800 })
-    ]);
-    const rightExitPose = await rightExitHandle.jsonValue();
-    await rightExitHandle.dispose();
+    await surround.scrollFeatures(sample);
+    await page.waitForFunction(() => (
+      window.__SURROUND_3D__.featureProgress === Number(document.body.dataset.surroundFeatureProgress)
+    ));
+    const mid = await readFeatureTransition();
+    const opacitySamples = await observedOpacity.jsonValue();
+    await observedOpacity.dispose();
+    assert(new Set(opacitySamples.filter((opacity) => opacity > 0.002 && opacity < 0.999)).size >= 2,
+      'A single large scroll should render intermediate left-unit poses', opacitySamples);
     assert(
-      rightExitPose.x > 0.105 && rightExitPose.y > 0.1 && rightExitPose.z > 0.14 &&
-      rightExitPose.scale > rightExitStart.scale && rightExitPose.cornerTwist > 0.4 &&
-      rightExitPose.foreground > 0.95,
-      'Right unit did not visibly rise, advance, enlarge, and twist while exiting',
-      rightExitPose
+      mid.poses.right.y > first.poses.right.y &&
+      mid.poses.right.z > first.poses.right.z &&
+      mid.poses.right.scale > first.poses.right.scale &&
+      mid.poses.right.cornerTwist > 0.4 &&
+      mid.poses.left.opacity > 0.4 && mid.poses.right.opacity > 0.9 &&
+      mid.rightCopy < first.rightCopy && mid.leftCopy < first.leftCopy &&
+      mid.active === 'surround-02',
+      'Right unit and copy did not follow the scroll position', mid
     );
+    await surround.showSection(3);
+    await page.waitForFunction(() => window.__SURROUND_3D__.motionActive === false);
+    const last = await readFeatureTransition();
+    assert(
+      last.side === 'left' && last.poses.left.opacity === 1 && last.poses.right.opacity === 0 &&
+      last.rightCopy < 0 && last.leftCopy >= 0 && last.leftCopy < last.height && last.active === 'surround-02',
+      'Left-hand model and copy did not settle in the merged section', last
+    );
+
+    await surround.scrollFeatures(sample);
+    await page.waitForFunction(() => (
+      window.__SURROUND_3D__.featureProgress === Number(document.body.dataset.surroundFeatureProgress)
+    ));
+    assert(JSON.stringify(await readFeatureTransition()) === JSON.stringify(mid),
+      'Returning to the same scroll position did not reproduce the same pose and copy');
+    await surround.showSection(3);
+    await page.waitForFunction(() => window.__SURROUND_3D__.motionActive === false);
+
     const stackingState = await page.evaluate(() => ({
       content: Number.parseInt(getComputedStyle(document.querySelector('.surround-segments')).zIndex, 10),
       canvas: Number.parseInt(getComputedStyle(document.querySelector('.surround-visual')).zIndex, 10)
     }));
-    assert(
-      stackingState.content > stackingState.canvas,
-      'Segment copy was not stacked above the single 3D canvas',
-      stackingState
-    );
-    await surround.showSection(3);
-    motionState = await page.evaluate(() => window.__SURROUND_3D__);
-    assert(motionState.activeScene === 2, 'Segment 03 did not activate left-unit scene', motionState);
-    assert(motionState.foregroundSide === 'left', 'Segment 03 did not feature the left unit', motionState);
-    await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
-    const leftExitStart = await page.evaluate(() => ({ ...window.__SURROUND_3D__.currentPoses.left }));
-    await page.evaluate(() => {
-      window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 1, source: 'test' } }));
-    });
-    const [leftExitHandle] = await Promise.all([
-      page.waitForFunction((initial) => {
-        const pose = window.__SURROUND_3D__?.currentPoses?.left;
-        return pose && pose.x < -0.105 && pose.y > 0.1 && pose.z > 0.14 &&
-          pose.scale > initial.scale && pose.cornerTwist > 0.4 && pose.foreground > 0.95
-          ? { ...pose }
-          : false;
-      }, leftExitStart, { timeout: 1800 }),
-      page.waitForFunction(() => {
-        const poses = window.__SURROUND_3D__?.currentPoses;
-        return poses && poses.right.x <= 0.36 && poses.right.opacity > 0.4 && poses.left.opacity > 0.9;
-      }, null, { timeout: 1800 })
-    ]);
-    const leftExitPose = await leftExitHandle.jsonValue();
-    await leftExitHandle.dispose();
-    assert(
-      leftExitPose.x < -0.105 && leftExitPose.y > 0.1 && leftExitPose.z > 0.14 &&
-      leftExitPose.scale > leftExitStart.scale && leftExitPose.cornerTwist > 0.4 &&
-      leftExitPose.foreground > 0.95,
-      'Left unit exit did not mirror the right unit toward the upper-left camera side',
-      leftExitPose
-    );
-    await page.evaluate(() => {
-      window.dispatchEvent(new CustomEvent('surround:segment-change', { detail: { index: 2, source: 'test-restore' } }));
-    });
-    await page.waitForFunction(() => window.__SURROUND_3D__?.motionActive === false);
+    assert(stackingState.content > stackingState.canvas,
+      'Segment copy was not stacked above the single 3D canvas', stackingState);
     const collisionSafeEntryHandlePromise = page.waitForFunction(() => {
       const state = window.__SURROUND_3D__;
       const right = state?.currentPoses?.right;
@@ -1093,7 +1095,9 @@ async function main() {
         }
         : false;
     });
-    await surround.showSection(3);
+    await page.waitForFunction(() => window.MDWSurroundNavigation.isSettled());
+    await page.mouse.move(8, 400);
+    await page.mouse.wheel(0, -160);
     const reassemblyHandle = await reassemblyHandlePromise;
     const reassemblyState = await reassemblyHandle.jsonValue();
     await reassemblyHandle.dispose();
@@ -1107,6 +1111,14 @@ async function main() {
       window.__SURROUND_3D__?.motionActive === false &&
       window.__SURROUND_3D__?.explosionItemAmounts?.every((amount) => amount === 0)
     ));
+    await page.waitForFunction(() => window.MDWSurroundNavigation.isSettled());
+    const returnState = await readFeatureTransition();
+    assert(
+      returnState.active === 'surround-02' && returnState.side === 'left' &&
+      Math.abs(returnState.leftCopy - last.leftCopy) <= 1 && returnState.poses.left.opacity === 1,
+      'One upward scroll did not restore the left-hand model and its copy',
+      returnState
+    );
     await surround.showSection(4);
     await page.waitForFunction(() => (
       window.__SURROUND_3D__?.motionActive === false &&

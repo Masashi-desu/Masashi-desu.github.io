@@ -38,16 +38,21 @@ export function createScrollController(options = {}) {
   let alignmentFrame = null;
   let restTimer = null;
   let restSampleScrollY = null;
+  let previousScrollY = 0;
   let touchPointsActive = 0;
   let lastTouchEventAt = 0;
   let wheelDeltaY = 0;
   let wheelResetTimer = null;
   let lastWheelEventAt = null;
   let wheelHandled = false;
+  let wheelRangeDirection = 0;
+  let wheelRemainder = 0;
   let touchStartX = 0;
   let touchStartY = 0;
   let touchHandled = false;
   let touchStartStopId = '';
+  let touchLastY = 0;
+  let touchScrolledRange = false;
 
   function getStops() {
     return typeof options.getStops === 'function' ? options.getStops() : [];
@@ -122,8 +127,8 @@ export function createScrollController(options = {}) {
     index.setStops(getStops());
     if (navigation && !index.getById(navigation.id)) cancelNavigation('stop-removed');
     if (!index.getById(settledId)) settledId = '';
-    const activeTop = readStopTop(index.getById(index.getState().activeId));
-    if (!navigation && activeTop !== null && Math.abs(getScrollY() - activeTop) <= 1) {
+    const active = index.getById(index.getState().activeId);
+    if (!navigation && isAtStopEdge(active)) {
       settledId = index.getState().activeId;
     }
     syncManagedClasses();
@@ -158,7 +163,7 @@ export function createScrollController(options = {}) {
       if (navigation || isNavigationLocked()) {
         return;
       }
-      const positionStop = findStopAtCurrentPosition(true);
+      const positionStop = findScrollRange()?.stop || findStopAtCurrentPosition(true);
       if (positionStop) {
         activateStop(positionStop, 'position');
         return;
@@ -191,6 +196,7 @@ export function createScrollController(options = {}) {
       throw error;
     }
     if (!mounted) return getState();
+    previousScrollY = getScrollY();
     listen(eventTarget, 'wheel', handleWheel, { passive: false });
     listen(eventTarget, 'scroll', handleScroll, { passive: true });
     listen(eventTarget, 'touchstart', handleTouchStart, { passive: true });
@@ -266,6 +272,8 @@ export function createScrollController(options = {}) {
   function resetWheelGesture() {
     clearWheelAccumulation();
     wheelHandled = false;
+    wheelRangeDirection = 0;
+    wheelRemainder = 0;
     lastWheelEventAt = null;
     notifyLocks();
     if (wheelResetTimer !== null) {
@@ -318,7 +326,7 @@ export function createScrollController(options = {}) {
     const step = () => {
       alignmentFrame = null;
       if (!mounted || navigation !== current) return;
-      const targetTop = readStopTop(index.getById(current.id));
+      const targetTop = current.readTop(index.getById(current.id));
       if (targetTop === null) {
         cancelNavigation('stop-unavailable');
         return;
@@ -346,13 +354,15 @@ export function createScrollController(options = {}) {
 
   function goTo(stopOrId, navigationOptions = {}) {
     const stop = index.getById(typeof stopOrId === 'string' ? stopOrId : stopOrId?.id);
-    const top = readStopTop(stop);
+    const { edge } = navigationOptions;
+    const readTop = (candidate) => readNavigationTop(candidate, edge);
+    const top = readTop(stop);
     if (!mounted || !stop || top === null) return false;
     const sequence = ++navigationSequence;
     cancelNavigation('superseded');
     // A subscriber may synchronously start another navigation or destroy us.
     if (!mounted || sequence !== navigationSequence) return false;
-    const current = { id: stop.id, source: navigationOptions.source || 'programmatic', sequence };
+    const current = { id: stop.id, source: navigationOptions.source || 'programmatic', sequence, readTop };
     navigation = current;
     pendingId = stop.id;
     lockFor(prefersReducedMotion() ? 160 : Math.max(timings.navigationLockMs, timings.settleMs + 140));
@@ -378,14 +388,63 @@ export function createScrollController(options = {}) {
   function move(direction, navigationOptions = {}) {
     const preferredId = navigationOptions.fromId || index.getState().activeId;
     const target = index.findDirectional(direction, getScrollY(), preferredId, readStopTop);
-    return target ? goTo(target.id, navigationOptions) : false;
+    return target ? goToDirectionalStop(target, direction, navigationOptions) : false;
+  }
+
+  function readRangeEnd(stop, start) {
+    if (!stop?.scrollWithin || start === null) return start;
+    return Math.max(start, readStopTop({ ...stop, align: 'end', getTop: undefined }) ?? start);
+  }
+
+  function readNavigationTop(stop, edge) {
+    const start = readStopTop(stop);
+    if (edge !== 'end' && edge !== 'reverse-entry') return start;
+    const end = readRangeEnd(stop, start);
+    if (edge === 'end' || start === null || !stop?.scrollWithin || typeof stop.getReverseEntryTop !== 'function') return end;
+    const entry = readStopTop(stop, stop.getReverseEntryTop);
+    return entry === null ? end : Math.min(end, Math.max(start, entry));
+  }
+
+  function goToDirectionalStop(stop, direction, options) {
+    return goTo(stop.id, { ...options, edge: options.edge ?? (direction < 0 ? 'reverse-entry' : 'start') });
+  }
+
+  function isAtStopEdge(stop) {
+    const start = readStopTop(stop);
+    if (start === null) return false;
+    const y = getScrollY();
+    return Math.abs(y - start) <= 1 || Math.abs(y - readRangeEnd(stop, start)) <= 1;
+  }
+
+  function findScrollRange(tolerance = 1) {
+    const y = getScrollY();
+    for (const stop of index.getStops()) {
+      if (!stop.scrollWithin) continue;
+      const start = readStopTop(stop);
+      if (start === null) continue;
+      const end = readRangeEnd(stop, start);
+      if (end > start && y >= start - tolerance && y <= end + tolerance) return { stop, start, end };
+    }
+    return null;
+  }
+
+  function scrollWithinRange(delta, wheel = false) {
+    const range = findScrollRange(4);
+    if (!range) return false;
+    const y = getScrollY();
+    const edgeTolerance = range.end - range.start > 2 ? 1 : 0;
+    if ((delta < 0 && y <= range.start + edgeTolerance) || (delta > 0 && y >= range.end)) return false;
+    const top = Math.min(range.end, Math.max(range.start, y + delta + (wheel ? wheelRemainder : 0)));
+    adapter.scrollTo(top);
+    if (wheel) wheelRemainder = top - getScrollY();
+    return true;
   }
 
   function getDirectionalStop(direction, event, preferredId = '') {
     // Treat small position errors as being at a stop, so input does not select
     // the current section again. Cap the distance: auxiliary/custom visibility
     // tolerances can span hundreds of pixels and must not skip unvisited stops.
-    const anchorId = preferredId || getEventStopId(event)
+    const anchorId = preferredId || getEventStopId(event) || findScrollRange()?.stop.id
       || findStopAtCurrentPosition(false, getPositionTolerance())?.id || '';
     return index.findDirectional(direction, getScrollY(), anchorId, readStopTop);
   }
@@ -403,7 +462,10 @@ export function createScrollController(options = {}) {
       return true;
     }
     clearWheelAccumulation();
-    return goTo(target.id, { source: event ? event.type : 'direction', updateHistory: false });
+    return goToDirectionalStop(target, direction, {
+      source: event ? event.type : 'direction',
+      updateHistory: false
+    });
   }
 
   function normalizeWheelDelta(event) {
@@ -471,6 +533,13 @@ export function createScrollController(options = {}) {
       return;
     }
     const direction = deltaY > 0 ? 1 : -1;
+    if (scrollWithinRange(deltaY, true)) {
+      clearWheelAccumulation();
+      wheelRangeDirection = direction;
+      return;
+    }
+    wheelRemainder = 0;
+    if (wheelRangeDirection === direction) return;
     if (!getDirectionalStop(direction, event)) {
       clearWheelAccumulation();
       return;
@@ -500,6 +569,8 @@ export function createScrollController(options = {}) {
     }
     touchStartX = event.touches[0].clientX;
     touchStartY = event.touches[0].clientY;
+    touchLastY = touchStartY;
+    touchScrolledRange = false;
     touchHandled = false;
     notifyLocks();
     touchStartStopId = getEventStopId(event);
@@ -511,6 +582,8 @@ export function createScrollController(options = {}) {
       return;
     }
     const touch = event.touches[0];
+    const stepY = touchLastY - touch.clientY;
+    touchLastY = touch.clientY;
     const deltaX = touchStartX - touch.clientX;
     const deltaY = touchStartY - touch.clientY;
     const absDeltaX = Math.abs(deltaX);
@@ -532,6 +605,11 @@ export function createScrollController(options = {}) {
     if (!gesture.verticalIntent) {
       return;
     }
+    if (!touchHandled && !isNavigationLocked() && stepY !== 0 && scrollWithinRange(stepY)) {
+      touchScrolledRange = true;
+      return;
+    }
+    if (touchScrolledRange) return;
     const direction = deltaY > 0 ? 1 : -1;
     if (!getDirectionalStop(direction, event, touchStartStopId)) {
       return;
@@ -571,16 +649,30 @@ export function createScrollController(options = {}) {
   }
 
   function handleScroll() {
+    const y = getScrollY();
+    const previousY = previousScrollY;
+    previousScrollY = y;
     if (!navigation && !isNavigationLocked()) {
-      const stop = findStopAtCurrentPosition(false);
+      const stop = findScrollRange()?.stop || findStopAtCurrentPosition(false);
       if (stop) {
-        if (Math.abs(getScrollY() - readStopTop(stop)) <= 1) settledId = stop.id;
+        if (isAtStopEdge(stop)) settledId = stop.id;
         activateStop(stop, 'position');
       }
+      advanceOnForwardExit(index.getById(index.getState().activeId), previousY, y);
     }
     if (shouldMonitorRestAlignment()) {
       scheduleRestAlignmentCheck(260);
     }
+  }
+
+  function advanceOnForwardExit(stop, previousY, y) {
+    if (!stop?.scrollWithin || typeof stop.getForwardExitTop !== 'function' || y <= previousY ||
+      navigation || isNavigationLocked() || win.visualViewport?.scale > timings.zoomThreshold) return;
+    const exitTop = readStopTop(stop, stop.getForwardExitTop);
+    if (exitTop === null || previousY >= exitTop || y < exitTop) return;
+    const start = readStopTop(stop);
+    if (start === null || exitTop < start || exitTop > readRangeEnd(stop, start)) return;
+    move(1, { fromId: stop.id, source: 'range-exit' });
   }
 
   function findStopAtCurrentPosition(auxiliaryOnly, maxDistance = Infinity) {
@@ -654,13 +746,24 @@ export function createScrollController(options = {}) {
       return;
     }
     restSampleScrollY = null;
-    const nearest = index.findNearest(current, readStopTop);
+    const range = findScrollRange();
+    if (range) {
+      if (isAtStopEdge(range.stop)) settledId = range.stop.id;
+      activateStop(range.stop, 'rest');
+      return;
+    }
+    const nearest = index.findNearest(current, (stop) => {
+      const start = readStopTop(stop);
+      const end = readRangeEnd(stop, start);
+      return Math.abs(current - end) < Math.abs(current - start) ? end : start;
+    });
     if (!nearest) {
       return;
     }
     const tolerance = getPositionTolerance();
     if (nearest.distance > tolerance) {
-      goTo(nearest.stop.id, { source: 'rest', behavior: 'auto', settleMs: 0, updateHistory: false });
+      const edge = nearest.stop.top === readStopTop(nearest.stop) ? 'start' : 'end';
+      goTo(nearest.stop.id, { source: 'rest', edge, behavior: 'auto', settleMs: 0, updateHistory: false });
     } else {
       if (nearest.distance <= 1) settledId = nearest.stop.id;
       activateStop(nearest.stop, 'rest');
@@ -693,7 +796,7 @@ export function createScrollController(options = {}) {
     goTo,
     move,
     setActive: activateStop,
-    readStopTop,
+    readStopTop: readNavigationTop,
     getState
   });
   return api;

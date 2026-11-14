@@ -133,6 +133,72 @@ test('最初の 0.25px wheel をキャンセルし、WebKit の後続イベン�
   assert.equal(h.window.scrollY, 1000);
 });
 
+test('指定した区間内の位置を下向きにまたいだときだけ次の停止点へ移動する', (t) => {
+  let exitTop = 1450;
+  let h;
+  h = createWheelHarness(t, {
+    initialId: 'range',
+    getStops: () => [
+      { id: 'first', getTop: () => 0 },
+      {
+        id: 'range',
+        getTop: () => 1000,
+        scrollWithin: true,
+        element: { getBoundingClientRect: () => ({ bottom: 2600 - (h?.window.scrollY ?? 0) }) },
+        getForwardExitTop: ({ stop }) => {
+          assert.equal(stop.id, 'range');
+          return exitTop;
+        }
+      },
+      { id: 'next', getTop: () => 2600 }
+    ]
+  });
+  const scroll = (top) => {
+    h.window.scrollY = top;
+    h.listeners.get('scroll')();
+  };
+  scroll(1400);
+  assert.deepEqual(h.navigations, []);
+
+  h.window.visualViewport.scale = 1.5;
+  scroll(1500);
+  h.window.visualViewport.scale = 1;
+  scroll(1450);
+  scroll(1450);
+  assert.deepEqual(h.navigations, []);
+
+  exitTop = 1550;
+  scroll(1549);
+  assert.deepEqual(h.navigations, []);
+  scroll(1550);
+  scroll(1551);
+  assert.deepEqual(h.navigations, ['next']);
+  assert.equal(h.controller.getState().targetId, 'next');
+});
+
+test('移動中のスクロールで終了位置を通過しても次の停止点へ移動しない', (t) => {
+  let h;
+  h = createWheelHarness(t, {
+    getStops: () => [
+      { id: 'first', getTop: () => 0 },
+      {
+        id: 'range',
+        getTop: () => 1000,
+        scrollWithin: true,
+        element: { getBoundingClientRect: () => ({ bottom: 2600 - (h?.window.scrollY ?? 0) }) },
+        getForwardExitTop: () => 1450
+      },
+      { id: 'next', getTop: () => 2600 }
+    ]
+  });
+  h.controller.goTo('range');
+  h.window.scrollY = 1500;
+  h.listeners.get('scroll')();
+  h.tick(1400);
+  assert.deepEqual(h.navigations, ['range']);
+  assert.equal(h.window.scrollY, 1000);
+});
+
 test('1px 未満も累積し、86px に達するまで位置を変えない', (t) => {
   const h = createWheelHarness(t);
   for (let i = 0; i < 171; i += 1) {

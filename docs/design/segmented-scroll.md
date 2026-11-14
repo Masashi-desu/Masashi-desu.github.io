@@ -58,6 +58,10 @@ ESMの `index.js` を正本とし、同梱の `index.d.ts` でAPIを定義する
 
 根拠は WebKit の [iOS wheel の導入・キャンセル規則](https://bugs.webkit.org/show_bug.cgi?id=210071)、[WKWebViewIOS.mm](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/ios/WKWebViewIOS.mm) の `handleScrollUpdate`、[WebIOSEventFactory.mm](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/Shared/ios/WebIOSEventFactory.mm) の浮動小数 delta 変換。ユーザーの動画は製品一覧の停止位置の不安定さを示すが、実機のイベントログは含まれない。初回が小数値だったという個別端末での因果は、実機ログなしでは確定しない。
 
+## セクション内の連続スクロール
+
+`scrollWithin: true` を指定した停止点は、セクションの上端から下端がviewport下端に揃う位置まで、同じ停止点の選択を維持して連続スクロールする。長さは利用側のCSSで決める。既定では端まで進んだ入力の慣性やスワイプの残りで隣へ飛ばず、次のジェスチャーで移動する。利用側が `getForwardExitTop` で文書座標を設定した場合、下方向にその位置へ到達したスクロールを共通側が検出して隣へ進める。移動中の位置合わせやズーム中には発火しない。下側からは既定で範囲の末尾へ着地する。`getReverseEntryTop` を使うと範囲内の戻り先を指定できる。範囲内ではタッチ環境の静止補正が働かない。Surroundでは左右モデルと説明をスクロール位置に同期し、下側からは左手用の説明が読める位置へ戻す。
+
 ## 回帰検証
 
 ### 停止位置の微小なずれと方向移動

@@ -4,6 +4,10 @@
   const nav = document.querySelector('.surround-section-nav');
   const controls = Array.from(document.querySelectorAll('[data-surround-target], [data-surround-footer-target]'));
   const sections = Array.from(document.querySelectorAll('[data-surround-segment]'));
+  const features = document.getElementById('surround-02');
+  const leftHandAnchor = document.getElementById('surround-03');
+  const leftHandFrame = features.querySelector('[data-surround-hand="left"]');
+  const leftHandCopy = leftHandFrame.querySelector('.surround-copy');
   const footerControl = document.querySelector('[data-surround-footer-target]');
   const footerTarget = footerControl ? document.getElementById(footerControl.dataset.surroundFooterTarget) : null;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -35,6 +39,8 @@
   };
   const fallbackCopy = {};
   let sectionNavigation = null;
+  let featureProgress = null;
+  const atLeftHandHash = () => window.location.hash === `#${leftHandAnchor.id}`;
   let currentLocale = resolveLocale(readStoredLanguage() || 'ja');
   window.MDWSurroundNavigation = Object.freeze({
     isSettled() {
@@ -42,8 +48,10 @@
       const state = sectionNavigation.getState();
       const stop = sectionNavigation.getStop(state.activeId);
       const top = sectionNavigation.readStopTop(stop);
-      return state.mounted && state.settledId === state.activeId && !state.moving && !state.locked && !state.aligning &&
-        top !== null && Math.abs(window.scrollY - top) <= 1;
+      const atStart = top !== null && Math.abs(window.scrollY - top) <= 1;
+      const atLeftHand = stop?.id === features.id && Math.abs(leftHandAnchor.getBoundingClientRect().top) <= 1;
+      return state.mounted && !state.moving && !state.locked && !state.aligning &&
+        (atStart || atLeftHand);
     }
   });
 
@@ -106,6 +114,7 @@
     if (window.MDWProductBacklink) {
       window.MDWProductBacklink.sync(lang);
     }
+    if (sectionNavigation) syncFeatureExit();
     return lang;
   }
 
@@ -142,6 +151,9 @@
       element: section,
       align: 'start',
       role: 'content',
+      scrollWithin: section === features,
+      getForwardExitTop: section === features ? readFeatureExitTop : undefined,
+      getReverseEntryTop: section === features ? readLeftHandTop : undefined,
       observe: true
     }));
     if (footerTarget) {
@@ -163,22 +175,74 @@
 
   function resolveInitialId() {
     const hashId = window.location.hash.replace(/^#/u, '');
+    if (hashId === leftHandAnchor.id) return features.id;
     return [...sections, footerTarget].filter(Boolean).some((element) => element.id === hashId)
       ? hashId
       : (sections[0] ? sections[0].id : '');
   }
 
   function getSegmentIndex(id) {
-    return Math.max(0, sections.findIndex((section) => section.id === id));
+    if (id === features.id) return featureProgress < 0.5 ? 1 : 2;
+    return Number(document.getElementById(id)?.dataset.surroundSegment || 0);
+  }
+
+  function updateFeatureProgress() {
+    const rect = features.getBoundingClientRect();
+    const distance = Math.max(1, leftHandAnchor.getBoundingClientRect().top - rect.top);
+    let progress = Math.min(1, Math.max(0, -rect.top / distance));
+    if (rect.top >= -1) progress = 0;
+    else if (rect.top <= 1 - distance) progress = 1;
+    // Keep the text tied to document position even with reduced motion enabled.
+    if (progress !== Number(features.style.getPropertyValue('--surround-feature-progress'))) {
+      features.style.setProperty('--surround-feature-progress', String(progress));
+    }
+    if (reduceMotion.matches) progress = Number(progress >= 0.5);
+    if (progress === featureProgress) return false;
+    featureProgress = progress;
+    document.body.dataset.surroundFeatureProgress = String(progress);
+    return true;
+  }
+
+  function syncFeatureProgress() {
+    if (document.body.dataset.surroundStop !== features.id || !updateFeatureProgress()) return;
+    document.body.dataset.surroundScene = String(getSegmentIndex(features.id));
+    window.dispatchEvent(new CustomEvent('surround:feature-scroll', { detail: { progress: featureProgress } }));
+  }
+
+  function syncFeatureExit() {
+    const frameTop = leftHandFrame.getBoundingClientRect().top;
+    const copyBottom = Math.max(...Array.from(leftHandCopy.children, (element) => {
+      const text = document.createRange();
+      text.selectNodeContents(element);
+      return text.getBoundingClientRect().bottom - frameTop;
+    }));
+    const length = `${Math.max(1, Math.ceil(copyBottom))}px`;
+    if (length !== features.style.getPropertyValue('--surround-feature-exit')) {
+      features.style.setProperty('--surround-feature-exit', length);
+    }
+    syncFeatureProgress();
+  }
+
+  function readFeatureExitTop({ scrollY, viewportHeight }) {
+    // The section's trailing space is sized to the last visible line of copy.
+    return Math.round(scrollY + features.getBoundingClientRect().bottom - viewportHeight);
   }
 
   function announceSegment(id, source, contentId = id) {
+    if (contentId === features.id) updateFeatureProgress();
     const index = getSegmentIndex(contentId);
     document.body.dataset.surroundStop = id;
     document.body.dataset.surroundScene = String(index);
-    window.dispatchEvent(new CustomEvent('surround:segment-change', {
-      detail: { id, contentId, index, source }
-    }));
+    const detail = { id, contentId, index, source, featureProgress: contentId === features.id ? featureProgress : null };
+    window.dispatchEvent(new CustomEvent('surround:segment-change', { detail }));
+  }
+
+  function readLeftHandTop({ scrollY }) {
+    return Math.round(scrollY + leftHandAnchor.getBoundingClientRect().top);
+  }
+
+  function restoreLeftHand() {
+    sectionNavigation.goTo(features.id, { edge: 'reverse-entry', source: 'history', behavior: 'instant' });
   }
 
   function updateHistory(id, replace = false) {
@@ -208,13 +272,15 @@
   function setupSectionNavigation() {
     if (!window.MDWSegmentedScroll || sections.length === 0) {
       announceSegment(resolveInitialId(), 'fallback');
+      window.addEventListener('scroll', syncFeatureProgress, { passive: true });
       return;
     }
 
     const viewport = window.MDWSegmentedScroll.createViewportCssSync({
       rootElement: root,
       widthProperty: '--surround-section-width',
-      heightProperty: '--surround-section-height'
+      heightProperty: '--surround-section-height',
+      onChange: syncFeatureExit
     });
     viewport.mount();
 
@@ -264,8 +330,18 @@
 
     segments.connect(sectionNavigation);
     sectionNavigation.mount();
+    syncFeatureExit();
+    const hashId = window.location.hash.slice(1);
+    if (atLeftHandHash()) restoreLeftHand();
+    else if (hashId) sectionNavigation.goTo(resolveInitialId(), { behavior: 'auto', source: 'initial-hash' });
     const state = sectionNavigation.getState();
     announceSegment(state.activeId || resolveInitialId(), 'initial', state.activeContentId);
+    window.addEventListener('scroll', syncFeatureProgress, { passive: true });
+    reduceMotion.addEventListener('change', syncFeatureProgress);
+    const resizeObserver = new ResizeObserver(syncFeatureExit);
+    resizeObserver.observe(leftHandFrame);
+    resizeObserver.observe(leftHandCopy);
+    document.fonts.ready.then(syncFeatureExit);
   }
 
   recordFallbacks();
@@ -280,6 +356,10 @@
   });
 
   window.addEventListener('popstate', () => {
+    if (atLeftHandHash() && sectionNavigation) {
+      restoreLeftHand();
+      return;
+    }
     const id = resolveInitialId();
     goTo(id, { source: 'history', updateHistory: false });
   });
