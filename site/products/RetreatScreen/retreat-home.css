@@ -22,13 +22,7 @@
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 1rem;
-  scrollbar-width: none;
   background: var(--retreat-black);
-}
-
-html::-webkit-scrollbar {
-  width: 0;
-  height: 0;
 }
 
 body.retreat-landing,

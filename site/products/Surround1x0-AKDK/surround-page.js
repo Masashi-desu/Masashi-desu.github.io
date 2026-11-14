@@ -306,6 +306,7 @@
   }
 
   function readFeatureExitTop({ scrollY, viewportHeight }) {
+    if (root.hasAttribute('data-overlay-scroll-dragging')) return null;
     // The section's trailing space is sized to the last visible line of copy.
     return Math.round(scrollY + features.getBoundingClientRect().bottom - viewportHeight);
   }

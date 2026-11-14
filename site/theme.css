@@ -72,6 +72,84 @@ html {
   background-color: var(--page-background-color);
 }
 
+html.has-overlay-scrollbars,
+.has-overlay-scrollbars [data-overlay-scroll] {
+  scrollbar-width: none;
+}
+
+html.has-overlay-scrollbars::-webkit-scrollbar,
+.has-overlay-scrollbars [data-overlay-scroll]::-webkit-scrollbar {
+  display: none;
+}
+
+html.has-overlay-scrollbars[data-overlay-scroll-dragging],
+.has-overlay-scrollbars [data-overlay-scroll][data-overlay-scroll-dragging] {
+  scroll-snap-type: none;
+}
+
+.overlay-scrollbars {
+  position: absolute;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.overlay-scrollbars--page {
+  position: fixed;
+  z-index: 2147483645;
+  inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+.overlay-scrollbar {
+  position: absolute;
+  cursor: default;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.overlay-scrollbar--x {
+  bottom: 0;
+  left: 0;
+  height: 11px;
+}
+
+.overlay-scrollbar--y {
+  top: 0;
+  right: 0;
+  width: 11px;
+}
+
+.overlay-scrollbar::before {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid rgb(255 255 255 / 0.58);
+  border-radius: var(--radius-pill);
+  background: rgb(24 24 27 / 0.48);
+  content: "";
+}
+
+.overlay-scrollbar--x::before {
+  inset: 3px 0;
+}
+
+.overlay-scrollbar--y::before {
+  inset: 0 3px;
+}
+
+.overlay-scrollbar:hover::before,
+.overlay-scrollbar.is-dragging::before {
+  background: rgb(24 24 27 / 0.72);
+}
+
+@media (forced-colors: active) {
+  .overlay-scrollbar::before {
+    border-color: Canvas;
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+}
+
 body {
   background-color: var(--page-background-color);
   color: var(--text-primary);
@@ -627,7 +705,7 @@ body.page-product--surround .page-background {
   opacity: 1;
 }
 
-.liquidGL > * {
+.liquidGL > :where(:not(.overlay-scrollbars)) {
   pointer-events: auto;
 }
 
@@ -815,12 +893,7 @@ body.page-product--surround .page-background {
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
-  scrollbar-width: none;
   touch-action: pan-x pinch-zoom;
-}
-
-.catalog-section-nav__numbers::-webkit-scrollbar {
-  display: none;
 }
 
 .catalog-section-nav__icon-button,
@@ -1030,6 +1103,7 @@ body.page-product--surround .page-background {
 }
 
 .home-products {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, auto) auto;
   align-content: center;
@@ -1100,13 +1174,7 @@ body.page-product--surround .page-background {
   overscroll-behavior-x: contain;
   overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
   touch-action: pan-x pinch-zoom;
-}
-
-.home-product-grid::-webkit-scrollbar {
-  display: none;
 }
 
 .home-product-grid.is-pointer-dragging {

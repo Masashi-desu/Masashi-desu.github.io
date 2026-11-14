@@ -488,6 +488,7 @@ body.typefetch-landing,
 }
 
 .tf-target-window__body {
+  position: relative;
   display: flex;
   height: calc(100% - 4rem);
   flex-direction: column;

@@ -454,7 +454,6 @@ body.page-product--surround.surround-page {
   inset: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: thin;
   pointer-events: auto;
 }
 

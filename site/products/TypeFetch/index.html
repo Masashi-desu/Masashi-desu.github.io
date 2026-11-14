@@ -140,7 +140,7 @@
                 </div>
               </div>
               <div class="tf-target-window__body">
-                <textarea id="tf-target-input" autocomplete="off" spellcheck="true" aria-describedby="tf-demo-status">TypeFetch</textarea>
+                <textarea id="tf-target-input" autocomplete="off" spellcheck="true" aria-describedby="tf-demo-status" data-overlay-scroll>TypeFetch</textarea>
                 <div class="tf-target-window__footer">
                   <p id="tf-demo-status" role="status" aria-live="polite" data-i18n="demoReady">キャレット位置を選び、TypeFetchを呼び出せます。</p>
                   <button class="tf-open-button" type="button" data-open-callout>
@@ -170,6 +170,7 @@
                 autocomplete="off"
                 autocapitalize="sentences"
                 spellcheck="true"
+                data-overlay-scroll
                 data-i18n-placeholder="calloutPlaceholder"
                 placeholder="ここに入力してください"
               ></textarea>
@@ -314,6 +315,7 @@ Return単独は改行として使えます。</p>
   </div>
 
   <script vite-ignore src="../../theme.js"></script>
+  <script vite-ignore src="../../shared/overlay-scrollbars.js"></script>
   <script vite-ignore src="../../footer.js"></script>
   <script vite-ignore src="../product-backlink.js"></script>
   <script vite-ignore src="./typefetch-home.js"></script>
