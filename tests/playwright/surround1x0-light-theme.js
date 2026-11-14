@@ -8,7 +8,7 @@
  *    退場側が消える前に画面内へ入るため移動中に両ユニットが同時に画面から消えない。
  *    ダーク時は黒＋ワインレッドのBlack GLB、ライト時は白＋アイボリーのWhite GLBが選択される。
  *    04ではGLBの18個の分解レイヤーを順序メタデータどおり位相差付きの波で展開し、
- *    キーキャップ・スイッチ・ソケットは各個体にも位置順の位相差を付ける。
+ *    キーキャップ・スイッチ・ソケットは各個体にも位置順の位相差を付け、ダイオードはソケットと同じ段へ移動する。
  *    通常のセグメント移動は分解レイヤーへ波を適用せず、組み立てた左右ユニットのまま行う。
  *    04へ入る非表示ユニットは目的地スケールで再入場し、移動開始と同時に分解を開始する。
  *    キーキャップとソケットは早期に離脱し、PCB／コンスルー類は移動中も上部ケースより下へ保つ。
@@ -713,16 +713,22 @@ async function main() {
       'Exploded-view layers or spacing did not match the updated GLB metadata',
       rendererState
     );
+    const socketLayerItems = rendererState.explodedItemMetadata.filter((item) => item.layer === 'sockets');
+    const diodeItems = socketLayerItems.filter((item) => item.name.includes('_PCB_1N4148W_'));
     assert(
-      rendererState.explodedItemCount === 147 &&
+      rendererState.explodedItemCount === 192 &&
       JSON.stringify(rendererState.itemizedExplodedLayers) === JSON.stringify(['keycaps', 'sockets', 'switches']) &&
       rendererState.explodedItemMetadata.filter((item) => item.layer === 'keycaps').length === 45 &&
       rendererState.explodedItemMetadata.filter((item) => item.layer === 'switches').length === 45 &&
-      rendererState.explodedItemMetadata.filter((item) => item.layer === 'sockets').length === 45,
+      socketLayerItems.length === 90 &&
+      diodeItems.filter((item) => item.side === 'left').length === 23 &&
+      diodeItems.filter((item) => item.side === 'right').length === 22,
       'Repeated exploded-view parts were not promoted to individual wave units',
       {
         itemCount: rendererState.explodedItemCount,
-        itemizedLayers: rendererState.itemizedExplodedLayers
+        itemizedLayers: rendererState.itemizedExplodedLayers,
+        socketLayerCount: socketLayerItems.length,
+        diodeCount: diodeItems.length
       }
     );
     assert(
@@ -1024,6 +1030,10 @@ async function main() {
       amount: window.__SURROUND_3D__.explosionAmount,
       target: window.__SURROUND_3D__.explosionTarget,
       layerCount: window.__SURROUND_3D__.explodedLayerCount,
+      socketLayerOffsets: window.__SURROUND_3D__.explosionItemOffsets.filter((_, index) => (
+        window.__SURROUND_3D__.explodedItemMetadata[index].layer === 'sockets'
+      )),
+      spacingScale: window.__SURROUND_3D__.explosionSpacingScale,
       rotations: [...window.__SURROUND_3D__.explosionItemRotations]
     }));
     assert(
@@ -1031,6 +1041,12 @@ async function main() {
       explodedState.target === 1 && explodedState.layerCount === 18,
       'Segment 04 did not settle into the GLB-backed exploded view',
       explodedState
+    );
+    assert(
+      explodedState.socketLayerOffsets.length === 90 &&
+      explodedState.socketLayerOffsets.every((offset) => Math.abs(offset - 0.06 * explodedState.spacingScale) < 0.000001),
+      'Diodes and hot-swap sockets did not move to the same exploded stage',
+      explodedState.socketLayerOffsets
     );
     assert(
       explodedState.rotations.every((angle) => angle < 0.00001),

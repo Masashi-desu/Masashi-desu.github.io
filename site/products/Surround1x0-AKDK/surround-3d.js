@@ -614,7 +614,9 @@ function collectExplosionItemObjects(layer) {
   }
   if (layer.name === 'sockets') {
     const assembly = layer.object.children.find((child) => /_Sockets_Assembly$/u.test(child.name));
-    return assembly?.children.length ? [...assembly.children] : [layer.object];
+    return assembly?.children.length
+      ? layer.object.children.flatMap((child) => child === assembly ? child.children : [child])
+      : [layer.object];
   }
   return layer.object.children.length ? [...layer.object.children] : [layer.object];
 }
