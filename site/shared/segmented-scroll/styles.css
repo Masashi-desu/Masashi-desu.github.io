@@ -5,8 +5,20 @@
   touch-action: pan-x pinch-zoom;
 }
 
-:root.segmented-scroll-managed.segmented-scroll-native-range {
+.segmented-scroll-vertical {
+  overflow-y: auto;
+  overscroll-behavior-y: none;
+  scroll-behavior: auto;
+  scroll-snap-type: none;
   touch-action: pan-x pan-y pinch-zoom;
+}
+
+.segmented-scroll-vertical--document {
+  scrollbar-width: none;
+}
+
+.segmented-scroll-vertical--document::-webkit-scrollbar {
+  display: none;
 }
 
 .segmented-scroll-horizontal {

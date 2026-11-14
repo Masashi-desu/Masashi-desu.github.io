@@ -346,7 +346,24 @@ body.page-product--surround.surround-page {
 .surround-scroll-managed .surround-segment--features {
   --surround-feature-travel: max(1px, var(--surround-feature-scroll-distance));
   --surround-feature-copy-offset: max(0px, calc(var(--surround-section-height, 100dvh) - var(--surround-feature-travel)));
-  height: calc(var(--surround-section-height, 100dvh) + var(--surround-feature-travel) + var(--surround-feature-exit, 0px));
+  height: var(--surround-section-height, 100dvh);
+}
+
+.surround-feature-scroll.segmented-scroll-vertical {
+  position: absolute;
+  inset: 0;
+  overflow-x: hidden;
+  pointer-events: auto;
+}
+
+.surround-feature-scroll:focus-visible {
+  outline-offset: -3px;
+}
+
+.surround-scroll-managed .surround-feature-stage {
+  position: relative;
+  height: calc(100% + var(--surround-feature-travel) + var(--surround-feature-exit, 0px));
+  overflow: clip;
 }
 
 .surround-scroll-managed .surround-feature-anchor {
@@ -463,7 +480,8 @@ body.page-product--surround.surround-page {
   pointer-events: auto;
 }
 
-.surround-technology-scroll > .surround-interaction {
+.surround-technology-scroll > .surround-interaction,
+.surround-feature-scroll > .surround-interaction {
   position: sticky;
   inset: 0 auto auto 0;
   z-index: 1;

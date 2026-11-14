@@ -50,10 +50,9 @@ class SurroundPage extends ProductPage {
     await this.page.waitForFunction(() => (
       Number(document.body.dataset.surroundFeatureProgress) > 0 || window.MDWSurroundNavigation.isSettled()
     ));
-    await this.page.locator('#surround-02').evaluate((section, progress) => {
-      const rect = section.getBoundingClientRect();
-      const distance = section.querySelector('#surround-03').getBoundingClientRect().top - rect.top;
-      window.scrollTo({ top: scrollY + rect.top + distance * progress, behavior: 'instant' });
+    await this.page.locator('.surround-feature-scroll').evaluate((scroller, progress) => {
+      const distance = scroller.querySelector('#surround-03').offsetTop;
+      scroller.scrollTo({ top: distance * progress, behavior: 'instant' });
     }, progress);
     await this.page.waitForFunction((target) => (
       document.body.dataset.surroundStop === 'surround-02' &&

@@ -123,6 +123,31 @@ async function main() {
           return Math.abs(root.scrollTop - (root.scrollHeight - root.clientHeight)) <= 1
             && !root.hasAttribute('data-overlay-scroll-dragging');
         });
+        // The free range is part of the page thumb's travel. A drag
+        // beginning inside the range stays within it for that gesture.
+        await surround.showSection(2);
+        await page.waitForFunction(() => window.MDWSurroundNavigation?.isSettled());
+        const featureScroll = page.locator('.surround-feature-scroll');
+        const nestedThumb = page.locator('.surround-feature-scroll + .overlay-scrollbars .overlay-scrollbar--y');
+        await nestedThumb.waitFor({ state: 'hidden' });
+        const bounds = await featureScroll.evaluate(async (element) => {
+          element.scrollTop = 0;
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          return { maximum: element.scrollHeight - element.clientHeight, documentTop: window.scrollY };
+        });
+        const initialThumb = await thumb.boundingBox();
+        await featureScroll.evaluate((element, maximum) => { element.scrollTop = maximum / 2; }, bounds.maximum);
+        await page.waitForFunction((initialY) => document.querySelector('.overlay-scrollbars--page .overlay-scrollbar--y')
+          .getBoundingClientRect().y > initialY + 5, initialThumb.y);
+        await dragToEnd(page, layer, thumb, 'y');
+        assert.ok(Math.abs(await featureScroll.evaluate(element => element.scrollTop) - bounds.maximum) <= 1);
+        assert.equal(await page.evaluate(() => scrollY), bounds.documentTop);
+        // A fresh outward drag at the boundary can reach document end.
+        await dragToEnd(page, layer, thumb, 'y');
+        await page.waitForFunction(() => {
+          const root = document.scrollingElement;
+          return Math.abs(root.scrollTop - (root.scrollHeight - root.clientHeight)) <= 1;
+        });
         assert.deepEqual(errors, []);
         console.log(`Overlay scrollbar geometry and drag passed in ${type.name()}.`);
       } finally {

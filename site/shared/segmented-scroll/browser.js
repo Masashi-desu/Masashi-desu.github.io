@@ -208,9 +208,9 @@ var MDWSegmentedScroll = (function(exports) {
 		let emitting = false;
 		const ownedClasses = /* @__PURE__ */ new Set();
 		const ownedHorizontalRegions = /* @__PURE__ */ new Set();
+		const verticalRegions = /* @__PURE__ */ new Map();
 		const rootElement = options.rootElement || doc.documentElement;
 		const eventTarget = options.eventTarget || win;
-		const supportsScrollEnd = "onscrollend" in doc;
 		const observerThresholds = options.observerThresholds || DEFAULT_OBSERVER_THRESHOLDS;
 		const listenerDisposers = [];
 		let mounted = false;
@@ -226,7 +226,6 @@ var MDWSegmentedScroll = (function(exports) {
 		let alignmentFrame = null;
 		let restTimer = null;
 		let restSampleScrollY = null;
-		let previousScrollY = 0;
 		let nativeRange = null;
 		let nativeRangeTimer = null;
 		let touchPointsActive = 0;
@@ -301,7 +300,6 @@ var MDWSegmentedScroll = (function(exports) {
 		function syncManagedClasses() {
 			const managed = mounted && index.getStops().length > 0;
 			for (const name of ["segmented-scroll-managed", options.managedClass].filter(Boolean)) syncRootClass(name, managed);
-			syncNativeRangeClass(managed ? findScrollRange(4) : null);
 		}
 		function syncRootClass(name, enabled) {
 			if (enabled) {
@@ -313,12 +311,13 @@ var MDWSegmentedScroll = (function(exports) {
 		}
 		function refresh() {
 			index.setStops(getStops());
-			if (nativeRange && !index.getById(nativeRange.id)?.scrollWithin) clearNativeRange();
-			if (touchRange && !index.getById(touchRange.stop.id)?.scrollWithin) {
+			if (nativeRange && index.getById(nativeRange.id)?.scrollWithin?.element !== nativeRange.element) clearNativeRange();
+			if (touchRange && index.getById(touchRange.stop.id)?.scrollWithin?.element !== touchRange.element) {
 				touchRange = null;
 				touchRangeNative = false;
 			}
 			if (mounted) syncHorizontalRegions();
+			syncVerticalRegions();
 			if (navigation && !index.getById(navigation.id)) cancelNavigation("stop-removed");
 			if (!index.getById(settledId)) settledId = "";
 			const active = index.getById(index.getState().activeId);
@@ -344,6 +343,33 @@ var MDWSegmentedScroll = (function(exports) {
 				if (!element.classList || element.classList.contains(className)) continue;
 				element.classList.add(className);
 				ownedHorizontalRegions.add(element);
+			}
+		}
+		function syncVerticalRegions() {
+			const className = "segmented-scroll-vertical";
+			const unifiedClass = "segmented-scroll-vertical--document";
+			const regions = new Map(mounted ? index.getStops().map((stop) => stop.scrollWithin).filter((range) => range?.element).map((range) => [range.element, range.scrollbar === "document"]) : []);
+			for (const [element, { unified, dispose }] of verticalRegions) {
+				if (regions.get(element) === unified) continue;
+				dispose();
+				verticalRegions.delete(element);
+			}
+			for (const [element, unified] of regions) {
+				if (verticalRegions.has(element)) continue;
+				const classes = (unified ? [className, unifiedClass] : [className]).filter((name) => !element.classList.contains(name));
+				classes.forEach((name) => element.classList.add(name));
+				const onScroll = () => handleRangeScroll(element);
+				element.addEventListener("scroll", onScroll, { passive: true });
+				element.addEventListener("scrollend", handleNativeScrollEnd, { passive: true });
+				const dispose = () => {
+					element.removeEventListener("scroll", onScroll);
+					element.removeEventListener("scrollend", handleNativeScrollEnd);
+					classes.forEach((name) => element.classList.remove(name));
+				};
+				verticalRegions.set(element, {
+					unified,
+					dispose
+				});
 			}
 		}
 		function setupObserver() {
@@ -391,11 +417,8 @@ var MDWSegmentedScroll = (function(exports) {
 				throw error;
 			}
 			if (!mounted) return getState();
-			previousScrollY = getScrollY();
 			listen(eventTarget, "wheel", handleWheel, { passive: false });
 			listen(eventTarget, "scroll", handleScroll, { passive: true });
-			listen(doc, "scrollend", handleNativeScrollEnd, { passive: true });
-			listen(win.visualViewport || win, "resize", () => syncNativeRangeClass(), { passive: true });
 			listen(eventTarget, "touchstart", handleTouchStart, { passive: true });
 			listen(eventTarget, "touchmove", handleTouchMove, { passive: false });
 			listen(eventTarget, "touchend", handleTouchEnd, { passive: true });
@@ -422,6 +445,7 @@ var MDWSegmentedScroll = (function(exports) {
 			}
 			syncManagedClasses();
 			syncHorizontalRegions();
+			syncVerticalRegions();
 			if (navigationLockTimer !== null) win.clearTimeout(navigationLockTimer);
 			navigationLockTimer = null;
 			navigationLockUntil = 0;
@@ -474,7 +498,7 @@ var MDWSegmentedScroll = (function(exports) {
 				win.clearTimeout(wheelResetTimer);
 				wheelResetTimer = null;
 			}
-			if (mounted && nativeRange?.scrollEnded) finishNativeRange(true);
+			if (mounted && nativeRange?.scrollEnded) finishNativeRange();
 		}
 		function clearSettleTimer() {
 			if (settleTimer !== null) {
@@ -524,7 +548,7 @@ var MDWSegmentedScroll = (function(exports) {
 			const step = () => {
 				alignmentFrame = null;
 				if (!mounted || navigation !== current) return;
-				const targetTop = current.readTop(index.getById(current.id));
+				const targetTop = readStopTop(index.getById(current.id));
 				if (targetTop === null) {
 					cancelNavigation("stop-unavailable");
 					return;
@@ -547,8 +571,7 @@ var MDWSegmentedScroll = (function(exports) {
 		function goTo(stopOrId, navigationOptions = {}) {
 			const stop = index.getById(typeof stopOrId === "string" ? stopOrId : stopOrId?.id);
 			const { edge } = navigationOptions;
-			const readTop = (candidate) => readNavigationTop(candidate, edge);
-			const top = readTop(stop);
+			const top = readStopTop(stop);
 			if (!mounted || !stop || top === null) return false;
 			clearNativeRange();
 			const sequence = ++navigationSequence;
@@ -557,8 +580,7 @@ var MDWSegmentedScroll = (function(exports) {
 			const current = {
 				id: stop.id,
 				source: navigationOptions.source || "programmatic",
-				sequence,
-				readTop
+				sequence
 			};
 			navigation = current;
 			pendingId = stop.id;
@@ -567,6 +589,8 @@ var MDWSegmentedScroll = (function(exports) {
 				wheelHandled = true;
 			}
 			lockFor(prefersReducedMotion() ? 160 : Math.max(timings.navigationLockMs, timings.settleMs + 140));
+			if (navigation !== current) return false;
+			if (stop.scrollWithin?.element) scrollToRangeEdge(stop.scrollWithin, edge);
 			if (navigation !== current) return false;
 			activateStop(stop, current.source);
 			if (navigation !== current) return false;
@@ -599,21 +623,83 @@ var MDWSegmentedScroll = (function(exports) {
 			const target = index.findDirectional(direction, getScrollY(), preferredId, readStopTop);
 			return target ? goToDirectionalStop(target, direction, navigationOptions) : false;
 		}
-		function readRangeEnd(stop, start) {
-			if (!stop?.scrollWithin || start === null) return start;
-			return Math.max(start, readStopTop({
-				...stop,
-				align: "end",
-				getTop: void 0
-			}) ?? start);
+		function readRangeEnd(element) {
+			return Math.max(0, element.scrollHeight - element.clientHeight);
 		}
-		function readNavigationTop(stop, edge) {
-			const start = readStopTop(stop);
-			if (edge !== "end" && edge !== "reverse-entry") return start;
-			const end = readRangeEnd(stop, start);
-			if (edge === "end" || start === null || !stop?.scrollWithin || typeof stop.getReverseEntryTop !== "function") return end;
-			const entry = readStopTop(stop, stop.getReverseEntryTop);
-			return entry === null ? end : Math.min(end, Math.max(start, entry));
+		function getDocumentRanges() {
+			let extra = 0;
+			const documentEnd = readRangeEnd(doc.scrollingElement || doc.documentElement);
+			const stops = index.getOrderedStops((stop) => stop.scrollWithin?.scrollbar === "document" ? readStopTop(stop) : null);
+			const ranges = [];
+			for (const stop of stops) {
+				const { element } = stop.scrollWithin;
+				const length = readRangeEnd(element);
+				if (!length || stop.top > documentEnd) continue;
+				const start = stop.top + extra;
+				extra += length;
+				ranges.push({
+					element,
+					documentTop: stop.top,
+					start,
+					end: start + length,
+					length
+				});
+			}
+			return {
+				ranges,
+				end: documentEnd + extra
+			};
+		}
+		function getDocumentScroll() {
+			const { ranges, end } = getDocumentRanges();
+			const y = getScrollY();
+			let top = y;
+			for (const range of ranges) {
+				if (y < range.documentTop - .5) break;
+				if (Math.abs(y - range.documentTop) <= .5) {
+					top = range.start + Math.min(range.length, Math.max(0, range.element.scrollTop));
+					break;
+				}
+				top += range.length;
+			}
+			return {
+				top: Math.min(end, Math.max(0, top)),
+				end
+			};
+		}
+		function setDocumentScroll(top, { fromTop, direction = 0 } = {}) {
+			if (!mounted || !Number.isFinite(top)) return;
+			clearNativeRange();
+			const { ranges, end } = getDocumentRanges();
+			const fromRange = ranges.find((range) => {
+				if (direction < 0 && fromTop <= range.start + .5) return false;
+				if (direction > 0 && fromTop >= range.end - .5) return false;
+				return fromTop >= range.start && fromTop <= range.end;
+			});
+			const target = Math.min(fromRange?.end ?? end, Math.max(fromRange?.start ?? 0, top));
+			let position = target;
+			for (const range of ranges) {
+				if (target < range.start) break;
+				if (target <= range.end) {
+					range.element.scrollTo({
+						top: target - range.start,
+						behavior: "instant"
+					});
+					position = range.documentTop;
+					break;
+				}
+				position -= range.length;
+			}
+			adapter.scrollTo(position, "instant");
+		}
+		function scrollToRangeEdge({ element, getReverseEntryTop }, edge) {
+			const end = readRangeEnd(element);
+			const entry = edge === "reverse-entry" ? getReverseEntryTop?.() : null;
+			const top = Number.isFinite(entry) ? Math.min(end, Math.max(0, entry)) : end;
+			element.scrollTo({
+				top: edge === "end" || edge === "reverse-entry" ? top : 0,
+				behavior: "instant"
+			});
 		}
 		function goToDirectionalStop(stop, direction, options) {
 			return goTo(stop.id, {
@@ -623,39 +709,37 @@ var MDWSegmentedScroll = (function(exports) {
 		}
 		function isAtStopEdge(stop) {
 			const start = readStopTop(stop);
-			if (start === null) return false;
-			const y = getScrollY();
-			return Math.abs(y - start) <= 1 || Math.abs(y - readRangeEnd(stop, start)) <= 1;
+			return start !== null && Math.abs(getScrollY() - start) <= 1;
 		}
-		function findScrollRange(tolerance = 1, y = getScrollY()) {
+		function findScrollRange(tolerance = 1) {
+			const y = getScrollY();
 			for (const stop of index.getStops()) {
-				if (!stop.scrollWithin) continue;
+				const element = stop.scrollWithin?.element;
+				if (!element) continue;
 				const start = readStopTop(stop);
-				if (start === null) continue;
-				const end = readRangeEnd(stop, start);
-				if (end > start && y >= start - tolerance && y <= end + tolerance) return {
+				if (start === null || Math.abs(y - start) > tolerance) continue;
+				const end = readRangeEnd(element);
+				if (end > 0) return {
 					stop,
-					start,
-					end
+					element,
+					end,
+					y: element.scrollTop
 				};
 			}
 			return null;
 		}
-		function syncNativeRangeClass(range = findScrollRange(4)) {
-			syncRootClass("segmented-scroll-native-range", Boolean(range));
-		}
-		function canScrollIntoRange(range, y, delta) {
+		function canScrollIntoRange(range, delta) {
 			if (!range) return false;
-			const edgeTolerance = Math.min(4, (range.end - range.start) / 2);
-			return delta > 0 ? y < range.end - edgeTolerance : delta < 0 && y > range.start + edgeTolerance;
+			return delta > 0 ? range.y < range.end - .5 : delta < 0 && range.y > .5;
 		}
-		function yieldToNativeRange(id) {
-			nativeRange ??= {
-				id,
+		function yieldToNativeRange(stop) {
+			const { element } = stop.scrollWithin;
+			if (nativeRange?.id !== stop.id) nativeRange = {
+				id: stop.id,
+				element,
+				startTop: element.scrollTop,
 				moved: false,
-				scrollEnded: false,
-				forwardExit: false,
-				outward: 0
+				scrollEnded: false
 			};
 			scheduleNativeRangeEnd();
 		}
@@ -667,38 +751,32 @@ var MDWSegmentedScroll = (function(exports) {
 		function scheduleNativeRangeEnd() {
 			if (nativeRangeTimer !== null) win.clearTimeout(nativeRangeTimer);
 			nativeRangeTimer = null;
-			if (supportsScrollEnd && nativeRange?.moved) return;
 			nativeRangeTimer = win.setTimeout(finishNativeRange, 260);
 		}
-		function handleNativeScrollEnd(event) {
-			if (event.target !== doc || !nativeRange?.moved) return;
-			nativeRange.scrollEnded = true;
-			if (!wheelRangeId) finishNativeRange(true);
+		function handleRangeScroll(element) {
+			if (nativeRange?.element !== element) return;
+			nativeRange.moved = true;
+			nativeRange.scrollEnded = false;
+			scheduleNativeRangeEnd();
 		}
-		function finishNativeRange(ended = false) {
+		function handleNativeScrollEnd(event) {
+			if (event.target !== nativeRange?.element || !nativeRange.moved) return;
+			nativeRange.scrollEnded = true;
+			if (!wheelRangeId && !touchPointsActive) finishNativeRange();
+		}
+		function finishNativeRange() {
 			if (!nativeRange) return;
-			if (!ended && touchPointsActive > 0 && Date.now() - lastTouchEventAt < timings.touchActivityStaleMs) {
+			if (wheelRangeId || touchPointsActive > 0 && Date.now() - lastTouchEventAt < timings.touchActivityStaleMs) {
 				scheduleNativeRangeEnd();
 				return;
 			}
-			const { id, forwardExit, outward } = nativeRange;
+			const { id, element, startTop, moved } = nativeRange;
 			const stop = index.getById(id);
 			clearNativeRange();
-			if (!stop?.scrollWithin || navigation || win.visualViewport?.scale > timings.zoomThreshold) return;
-			const start = readStopTop(stop);
-			const end = readRangeEnd(stop, start);
-			if (start === null || end <= start) return;
-			const y = getScrollY();
-			const exitTop = readForwardExitTop(stop, start, end);
-			if (forwardExit && exitTop !== null && y >= exitTop && move(1, {
-				fromId: stop.id,
+			if (moved && stop?.scrollWithin?.advanceAtEnd && !navigation && !isNavigationLocked() && !(win.visualViewport?.scale > timings.zoomThreshold) && findScrollRange(4)?.stop.id === id && element.scrollTop > startTop && element.scrollTop >= readRangeEnd(element) - .5) move(1, {
+				fromId: id,
 				source: "range-exit"
-			})) return;
-			if (outward && (outward < 0 ? y < start - 1 : y > end + 1) && move(outward, {
-				fromId: stop.id,
-				source: "touch"
-			})) return;
-			if (y < start - 1 || y > end + 1) adapter.scrollTo(y < start ? start : end, "instant");
+			});
 		}
 		function getDirectionalStop(direction, event, preferredId = "") {
 			const anchorId = preferredId || getEventStopId(event) || findScrollRange()?.stop.id || findStopAtCurrentPosition(false, getPositionTolerance())?.id || "";
@@ -776,14 +854,18 @@ var MDWSegmentedScroll = (function(exports) {
 			if (wheelAxis === "x" && region?.mode === "free" && horizontal) return;
 			if (wheelAxis === "x" && !region && !wheelHandled) return;
 			if (wheelRangeId) {
-				if (!navigation && index.getById(wheelRangeId)?.scrollWithin) yieldToNativeRange(wheelRangeId);
+				const stop = index.getById(wheelRangeId);
+				if (stop?.scrollWithin && eventIncludesElement(event, stop.scrollWithin.element)) yieldToNativeRange(stop);
+				else if (event.cancelable) event.preventDefault();
 				return;
 			}
 			if (firstWheelEvent && deltaY && wheelAxis !== "x" && !navigation && !isNavigationLocked()) {
 				const range = findScrollRange(4);
-				if (nativeRange || canScrollIntoRange(range, getScrollY(), deltaY)) {
-					wheelRangeId = nativeRange?.id || range.stop.id;
-					yieldToNativeRange(wheelRangeId);
+				if (range && (nativeRange?.id === range.stop.id || canScrollIntoRange(range, deltaY))) {
+					if (eventIncludesElement(event, range.element)) {
+						wheelRangeId = range.stop.id;
+						yieldToNativeRange(range.stop);
+					} else if (event.cancelable) event.preventDefault();
 					return;
 				}
 			}
@@ -840,14 +922,7 @@ var MDWSegmentedScroll = (function(exports) {
 			notifyLocks();
 			touchStartStopId = getEventStopId(event);
 			touchHorizontalScroll = getHorizontalScroll(event);
-			if (!navigation && !isNavigationLocked()) {
-				const y = getScrollY();
-				const range = findScrollRange(4, y);
-				if (range) touchRange = {
-					...range,
-					y
-				};
-			}
+			if (!navigation && !isNavigationLocked()) touchRange = findScrollRange(4);
 		}
 		function handleTouchMove(event) {
 			markTouchActivity(event);
@@ -867,10 +942,7 @@ var MDWSegmentedScroll = (function(exports) {
 			};
 			if (typeof options.shouldYieldTouch === "function" && options.shouldYieldTouch(event, gesture)) return;
 			if (touchRangeNative) {
-				if (!navigation) {
-					yieldToNativeRange(touchRange.stop.id);
-					trackNativeTouchBoundary(gesture);
-				}
+				if (!navigation) yieldToNativeRange(touchRange.stop);
 				return;
 			}
 			if (touchHorizontalScroll) {
@@ -894,10 +966,11 @@ var MDWSegmentedScroll = (function(exports) {
 			if (touchRange && !navigation && !isNavigationLocked()) {
 				if (!deltaY) return;
 				if (win.visualViewport?.scale > timings.zoomThreshold) return;
-				if (canScrollIntoRange(touchRange, touchRange.y, deltaY) || !event.cancelable) {
-					touchRangeNative = true;
-					yieldToNativeRange(touchRange.stop.id);
-					trackNativeTouchBoundary(gesture);
+				if (canScrollIntoRange(touchRange, deltaY) || nativeRange?.id === touchRange.stop.id) {
+					if (eventIncludesElement(event, touchRange.element)) {
+						touchRangeNative = true;
+						yieldToNativeRange(touchRange.stop);
+					} else if (event.cancelable) event.preventDefault();
 					return;
 				}
 				touchRange = null;
@@ -910,9 +983,6 @@ var MDWSegmentedScroll = (function(exports) {
 			touchHandled = true;
 			navigateDirection(direction, event, touchStartStopId);
 			notifyLocks();
-		}
-		function trackNativeTouchBoundary({ deltaY, absDeltaY, verticalIntent }) {
-			if (verticalIntent && absDeltaY >= timings.touchThreshold && !canScrollIntoRange(touchRange, touchRange.y, deltaY)) nativeRange.outward = Math.sign(deltaY);
 		}
 		function handleTouchEnd(event) {
 			markTouchActivity(event);
@@ -928,7 +998,8 @@ var MDWSegmentedScroll = (function(exports) {
 			touchRange = null;
 			touchRangeNative = false;
 			notifyLocks();
-			if (nativeRange) scheduleNativeRangeEnd();
+			if (nativeRange?.scrollEnded && !touchPointsActive) finishNativeRange();
+			else if (nativeRange) scheduleNativeRangeEnd();
 			if (touchPointsActive === 0) scheduleRestAlignmentCheck(timings.touchMomentumSettleMs + 200);
 		}
 		function getEventStopId(event) {
@@ -940,41 +1011,14 @@ var MDWSegmentedScroll = (function(exports) {
 			return stop ? stop.id : "";
 		}
 		function handleScroll() {
-			const y = getScrollY();
-			const previousY = previousScrollY;
-			previousScrollY = y;
-			if (nativeRange && y !== previousY) {
-				nativeRange.moved = true;
-				nativeRange.scrollEnded = false;
-			}
-			const range = findScrollRange(4, y);
-			syncNativeRangeClass(range);
 			if (!navigation && !isNavigationLocked()) {
-				const stop = index.getById(nativeRange?.id) || range?.stop || findStopAtCurrentPosition(false);
+				const stop = findScrollRange(4)?.stop || findStopAtCurrentPosition(false);
 				if (stop) {
 					if (isAtStopEdge(stop)) settledId = stop.id;
 					activateStop(stop, "position");
 				}
-				const exitStop = stop || index.getById(index.getState().activeId);
-				if (!navigation && !isNavigationLocked() && crossedForwardExit(exitStop, previousY, y)) if (nativeRange) nativeRange.forwardExit = true;
-				else move(1, {
-					fromId: exitStop.id,
-					source: "range-exit"
-				});
 			}
-			if (nativeRange) scheduleNativeRangeEnd();
-			else if (shouldMonitorRestAlignment()) scheduleRestAlignmentCheck(260);
-		}
-		function crossedForwardExit(stop, previousY, y) {
-			if (!stop?.scrollWithin || typeof stop.getForwardExitTop !== "function" || y <= previousY || win.visualViewport?.scale > timings.zoomThreshold) return false;
-			const start = readStopTop(stop);
-			const exitTop = readForwardExitTop(stop, start, readRangeEnd(stop, start));
-			return exitTop !== null && previousY < exitTop && y >= exitTop;
-		}
-		function readForwardExitTop(stop, start, end) {
-			if (start === null || typeof stop.getForwardExitTop !== "function") return null;
-			const top = readStopTop(stop, stop.getForwardExitTop);
-			return top !== null && top >= start && top <= end ? top : null;
+			if (!nativeRange && shouldMonitorRestAlignment()) scheduleRestAlignmentCheck(260);
 		}
 		function findStopAtCurrentPosition(auxiliaryOnly, maxDistance = Infinity) {
 			const current = getScrollY();
@@ -1037,23 +1081,16 @@ var MDWSegmentedScroll = (function(exports) {
 				activateStop(range.stop, "rest");
 				return;
 			}
-			const nearest = index.findNearest(current, (stop) => {
-				const start = readStopTop(stop);
-				const end = readRangeEnd(stop, start);
-				return Math.abs(current - end) < Math.abs(current - start) ? end : start;
-			});
+			const nearest = index.findNearest(current, readStopTop);
 			if (!nearest) return;
 			const tolerance = getPositionTolerance();
-			if (nearest.distance > tolerance) {
-				const edge = nearest.stop.top === readStopTop(nearest.stop) ? "start" : "end";
-				goTo(nearest.stop.id, {
-					source: "rest",
-					edge,
-					behavior: "auto",
-					settleMs: 0,
-					updateHistory: false
-				});
-			} else {
+			if (nearest.distance > tolerance) goTo(nearest.stop.id, {
+				source: "rest",
+				behavior: "auto",
+				settleMs: 0,
+				updateHistory: false
+			});
+			else {
 				if (nearest.distance <= 1) settledId = nearest.stop.id;
 				activateStop(nearest.stop, "rest");
 			}
@@ -1083,7 +1120,9 @@ var MDWSegmentedScroll = (function(exports) {
 			goTo,
 			move,
 			setActive: activateStop,
-			readStopTop: readNavigationTop,
+			readStopTop,
+			getDocumentScroll,
+			setDocumentScroll,
 			getState
 		});
 		return api;

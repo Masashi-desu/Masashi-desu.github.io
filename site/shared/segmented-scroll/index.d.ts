@@ -38,6 +38,16 @@ export type HorizontalScroll = {
   | { readonly mode: 'threshold'; readonly getSnapPoints: () => readonly number[] }
 );
 
+export interface VerticalScrollRange {
+  readonly element: HTMLElement;
+  /** Include this range in the host's document scrollbar. Defaults to 'separate'. */
+  readonly scrollbar?: 'document' | 'separate';
+  /** Advance once a downward native gesture settles at the bottom edge. */
+  readonly advanceAtEnd?: boolean;
+  /** Offset inside the element for a backward move. Defaults to its bottom edge. */
+  readonly getReverseEntryTop?: () => number | null;
+}
+
 export interface Stop {
   readonly id: string;
   readonly role?: 'content' | 'auxiliary';
@@ -47,12 +57,8 @@ export interface Stop {
   readonly horizontalScroll?: HorizontalScroll;
   readonly observe?: boolean;
   readonly align?: 'start' | 'end' | 'document-end';
-  /** Allow native document scrolling from this section's start to its viewport-aligned end. */
-  readonly scrollWithin?: boolean;
-  /** Document offset within the range. Passing it downward advances once native scrolling has ended. */
-  readonly getForwardExitTop?: (context: StopContext) => number | null;
-  /** Document offset for a backward move into this scrollable section. Defaults to the range end. */
-  readonly getReverseEntryTop?: (context: StopContext) => number | null;
+  /** Native vertical scrolling bounded by the element's scrollable content. */
+  readonly scrollWithin?: VerticalScrollRange;
   readonly getTop?: (context: StopContext) => number | null;
   readonly activationTolerance?: number | ((context: { stop: Stop; viewportHeight: number }) => number);
   readonly contentAnchor?: string | ((context: { stop: Stop; stops: Stop[]; activeContentId: string }) => string);
@@ -154,7 +160,11 @@ export interface ScrollController {
   move(direction: -1 | 1, options?: NavigationOptions): boolean;
   /** Changes selection only; does not scroll or confirm arrival. */
   setActive(stop: string | Stop, source?: string, force?: boolean): Stop | null;
-  readStopTop(stop: Stop | null, edge?: StopEdge): number | null;
+  readStopTop(stop: Stop | null): number | null;
+  /** The document scrollbar position and maximum, including ranges marked 'document'. */
+  getDocumentScroll(): { top: number; end: number };
+  /** Seek on the document scrollbar. Pass the drag's start and initial direction to honor range boundaries. */
+  setDocumentScroll(top: number, options?: { fromTop?: number; direction?: -1 | 0 | 1 }): void;
   getState(): ScrollState;
 }
 export function createScrollController(options: ScrollOptions): ScrollController;

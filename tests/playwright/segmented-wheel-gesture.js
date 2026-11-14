@@ -34,12 +34,12 @@ async function state(page, spec) {
   }, spec);
 }
 
-async function wheel(page, deltaY, init = {}) {
-  return page.evaluate(({ deltaY, init }) => {
+async function wheel(page, deltaY, init = {}, target = 'body') {
+  return page.evaluate(({ deltaY, init, target }) => {
     const event = new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true, ...init });
-    document.body.dispatchEvent(event);
+    document.querySelector(target).dispatchEvent(event);
     return event.defaultPrevented;
-  }, { deltaY, init });
+  }, { deltaY, init, target });
 }
 
 async function waitAt(page, id) {
@@ -123,16 +123,17 @@ async function verifyPage(context, spec, baseURL, profile) {
         const controller = window.__segmentedController;
         const stop = controller.getStop('surround-02');
         stop.element.style.setProperty('--surround-feature-scroll-distance', '360px');
-        const frame = stop.element.querySelector('[data-surround-hand="left"]');
+        const scroller = stop.scrollWithin.element;
+        const frame = scroller.querySelector('[data-surround-hand="left"]');
         const text = document.createRange();
         text.selectNodeContents(frame.querySelector('.surround-copy > :last-child'));
         return {
           start: controller.readStopTop(stop),
-          end: controller.readStopTop(stop, 'end'),
+          end: scroller.scrollHeight - scroller.clientHeight,
           exit: Math.ceil(text.getBoundingClientRect().bottom - frame.getBoundingClientRect().top)
         };
       });
-      assert.equal(geometry.end - geometry.start, 360 + geometry.exit);
+      assert.equal(geometry.end, 360 + geometry.exit);
       await page.evaluate(() => window.__segmentedController.goTo('surround-02', { behavior: 'auto' }));
       await page.clock.runFor(1600);
       const featureState = () => page.evaluate(() => {
@@ -140,6 +141,7 @@ async function verifyPage(context, spec, baseURL, profile) {
         text.selectNodeContents(document.querySelector('[data-surround-hand="left"] .surround-copy > :last-child'));
         return {
           y: scrollY,
+          top: document.querySelector('.surround-feature-scroll').scrollTop,
           progress: Number(document.body.dataset.surroundFeatureProgress),
           leftAnchor: document.getElementById('surround-03').getBoundingClientRect().top,
           right: document.querySelector('[data-surround-hand="right"]').getBoundingClientRect().top,
@@ -147,21 +149,30 @@ async function verifyPage(context, spec, baseURL, profile) {
           active: document.querySelector('[data-surround-target="surround-02"]').getAttribute('aria-current')
         };
       });
-      // Let the browser deliver compositor scroll events even while the test clock is paused.
-      const syncScroll = () => page.evaluate(() => window.dispatchEvent(new Event('scroll')));
-      const scrollByBrowser = (delta) => page.evaluate(delta => window.scrollBy({ top: delta, behavior: 'instant' }), delta);
+      const range = '.surround-feature-scroll';
+      const rangeWheel = (delta) => wheel(page, delta, {}, range);
+      const syncScroll = () => page.locator(range).dispatchEvent('scroll');
+      const scrollByBrowser = (delta) => page.locator(range).evaluate((element, top) =>
+        element.scrollBy({ top, behavior: 'instant' }), delta);
+      const finishScroll = async () => {
+        await page.locator(range).dispatchEvent('scrollend');
+        await page.clock.runFor(300);
+      };
       // Dispatching a DOM WheelEvent does not perform its default scroll.
-      assert.equal(await wheel(page, 144), false);
-      assert.equal((await featureState()).y, geometry.start);
+      assert.equal(await rangeWheel(144), false);
+      assert.equal((await featureState()).top, 0);
       await scrollByBrowser(144);
       await syncScroll();
+      await finishScroll();
       await page.clock.runFor(1500);
       const middle = await featureState();
-      assert.equal(middle.y, geometry.start + 144);
+      assert.equal(middle.y, geometry.start);
+      assert.equal(middle.top, 144);
       assert.equal(middle.progress, 0.4);
       assert.ok(middle.right < -144 && middle.left > 216 && middle.active === 'true');
       const swipe = async (steps) => page.evaluate((steps) => {
-        const target = document.querySelector('.surround-feature-stage');
+        const target = document.body.dataset.surroundStop === 'surround-02'
+          ? document.querySelector('.surround-feature-stage') : document.querySelector('.surround-technology-scroll');
         const prevented = [];
         for (const [index, y] of steps.entries()) {
           const event = new Event(index === 0 ? 'touchstart' : 'touchmove', { cancelable: true, bubbles: true });
@@ -175,27 +186,29 @@ async function verifyPage(context, spec, baseURL, profile) {
         return prevented;
       }, steps);
       assert.deepEqual(await swipe([600, 480, 340, 200]), [false, false, false]);
-      assert.equal((await featureState()).y, middle.y);
+      assert.equal((await featureState()).top, middle.top);
       await scrollByBrowser(400);
       await syncScroll();
-      await page.clock.runFor(1500);
+      await finishScroll();
       const trailing = await featureState();
-      assert.equal(trailing.y, geometry.start + 544);
+      assert.equal(trailing.y, geometry.start);
+      assert.equal(trailing.top, 544);
       assert.equal(trailing.progress, 1);
       assert.ok(trailing.left > 0 && trailing.active === 'true');
-      assert.ok(geometry.end > trailing.y + 16, JSON.stringify({ geometry, trailing }));
-      assert.equal(await wheel(page, geometry.end - trailing.y - 16), false);
-      await scrollByBrowser(geometry.end - trailing.y - 16);
+      assert.ok(geometry.end > trailing.top + 16, JSON.stringify({ geometry, trailing }));
+      assert.equal(await rangeWheel(geometry.end - trailing.top - 16), false);
+      await scrollByBrowser(geometry.end - trailing.top - 16);
       await syncScroll();
-      assert.ok((await featureState()).left > 0, 'the final line should still be visible before the threshold');
+      assert.ok((await featureState()).left > 0, 'the final line should still be visible before the boundary');
       assert.equal((await featureState()).active, 'true');
-      assert.equal(await wheel(page, 16), false);
+      assert.equal(await rangeWheel(16), false);
       await scrollByBrowser(16);
       await syncScroll();
-      assert.ok((await featureState()).left <= 0, 'the final line should be above the viewport when the transition starts');
-      await page.clock.runFor(260);
-      await page.evaluate(() => document.dispatchEvent(new Event('scrollend')));
-      assert.equal((await featureState()).active, 'false', 'settling past the exit must start the next transition');
+      const boundary = await featureState();
+      assert.equal(boundary.y, geometry.start);
+      assert.ok(boundary.left <= 0 && boundary.active === 'true', JSON.stringify(boundary));
+      await finishScroll();
+      assert.equal((await featureState()).active, 'false', 'settling at the end must start the next transition');
       assert.equal(await page.locator('[data-surround-target="surround-technology"]').getAttribute('aria-current'), 'true');
       const starts = await page.evaluate(() => window.__segmentedTrace.filter((event) =>
         event.type === 'navigationstart' && event.id === 'surround-technology' && event.source === 'range-exit'
@@ -217,17 +230,17 @@ async function verifyPage(context, spec, baseURL, profile) {
       await page.clock.runFor(1600);
       await swipe([240, 340, 460]);
       await assertLeftHandArrival();
-      assert.equal(await wheel(page, -(geometry.exit + 460)), false);
-      await scrollByBrowser(-(geometry.exit + 460));
+      assert.equal(await rangeWheel(-460), false);
+      await scrollByBrowser(-460);
       await syncScroll();
-      assert.equal(await wheel(page, -100), false, 'a native gesture retains ownership beyond the boundary');
+      assert.equal(await rangeWheel(-100), false, 'a native gesture retains ownership at the boundary');
       await scrollByBrowser(-100);
       await syncScroll();
-      await page.clock.runFor(260);
-      await page.evaluate(() => document.dispatchEvent(new Event('scrollend')));
+      await finishScroll();
       await page.clock.runFor(1600);
       const start = await featureState();
       assert.equal(start.y, geometry.start);
+      assert.equal(start.top, 0);
       assert.equal(start.progress, 0);
       assert.equal(start.right, 0);
       assert.equal(start.active, 'true');
@@ -320,6 +333,7 @@ async function verifyPage(context, spec, baseURL, profile) {
       await page.mouse.wheel(0, 120);
       await waitAt(page, spec.next);
       assert.equal((await state(page, spec)).active, spec.next);
+      if (isRange) await verifyNativeRange(page);
     }
     if (process.env.SEGMENTED_EVIDENCE === '1') {
       const evidence = path.join(ROOT, '.temp/ipad-trackpad/evidence');
@@ -337,6 +351,47 @@ async function verifyPage(context, spec, baseURL, profile) {
     await page.clock.resume();
     await page.close();
   }
+}
+
+async function verifyNativeRange(page) {
+  const range = page.locator('.surround-feature-scroll');
+  await page.waitForFunction(() => {
+    const { locked, moving } = window.__segmentedController.getState();
+    return !locked && !moving;
+  });
+  await page.mouse.move(100, 300);
+
+  // One real wheel tick has enough delta to cross either boundary.
+  for (const delta of [-450, 450]) {
+    await range.evaluate(async (element, atEnd) => {
+      const end = element.scrollHeight - element.clientHeight;
+      element.scrollTop = atEnd ? end - 16 : 16;
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const documentTop = scrollY;
+      const expected = atEnd ? end : 0;
+      window.__rangeBoundary = null;
+      element.addEventListener('scroll', function onScroll() {
+        if (Math.abs(element.scrollTop - expected) > 0.5) return;
+        element.removeEventListener('scroll', onScroll);
+        window.__rangeBoundary = {
+          rangeTop: element.scrollTop,
+          rootOffset: scrollY - documentTop,
+          nextTop: document.getElementById('surround-technology').getBoundingClientRect().top,
+          viewportHeight: innerHeight,
+          expected,
+          stop: window.__segmentedController.getState().activeId
+        };
+      });
+    }, delta > 0);
+    await page.mouse.wheel(0, delta);
+    const result = await page.waitForFunction(() => window.__rangeBoundary).then(handle => handle.jsonValue());
+    assert.equal(result.rangeTop, result.expected, JSON.stringify(result));
+    assert.equal(result.rootOffset, 0, JSON.stringify(result));
+    assert.ok(result.nextTop >= result.viewportHeight - 1, JSON.stringify(result));
+    assert.equal(result.stop, 'surround-02');
+    if (delta < 0) await page.waitForTimeout(300);
+  }
+  await waitAt(page, 'surround-technology');
 }
 
 async function main() {

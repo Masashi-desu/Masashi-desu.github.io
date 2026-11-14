@@ -194,142 +194,128 @@ test('横方向のしきい値はホイール・スワイプごとに隣の停�
   assert.deepEqual(h.navigations, ['next']);
 });
 
-test('指定した区間内の位置を下向きにまたいだときだけ次の停止点へ移動する', (t) => {
-  let exitTop = 1450;
-  let h;
-  h = createWheelHarness(t, {
-    initialId: 'range',
-    getStops: () => [
-      { id: 'first', getTop: () => 0 },
-      {
-        id: 'range',
-        getTop: () => 1000,
-        scrollWithin: true,
-        element: { getBoundingClientRect: () => ({ bottom: 2600 - (h?.window.scrollY ?? 0) }) },
-        getForwardExitTop: ({ stop }) => {
-          assert.equal(stop.id, 'range');
-          return exitTop;
-        }
-      },
-      { id: 'next', getTop: () => 2600 }
-    ]
-  });
-  const scroll = (top) => {
-    h.window.scrollY = top;
-    h.listeners.get('scroll')();
+function createRange(t, { advanceAtEnd, supportsScrollEnd, scrollbar } = {}) {
+  const listeners = new Map();
+  const element = {
+    classList: createFakeClassList(), clientHeight: 1000, scrollHeight: 1600, scrollTop: 0,
+    addEventListener: (type, handler) => listeners.set(type, handler),
+    removeEventListener: (type) => listeners.delete(type),
+    scrollTo({ top }) { this.scrollTop = top; }
   };
-  scroll(1400);
-  assert.deepEqual(h.navigations, []);
-
-  h.window.visualViewport.scale = 1.5;
-  scroll(1500);
-  h.window.visualViewport.scale = 1;
-  scroll(1450);
-  scroll(1450);
-  assert.deepEqual(h.navigations, []);
-
-  exitTop = 1550;
-  scroll(1549);
-  assert.deepEqual(h.navigations, []);
-  scroll(1550);
-  scroll(1551);
-  assert.deepEqual(h.navigations, ['next']);
-  assert.equal(h.controller.getState().targetId, 'next');
-});
-
-test('移動中のスクロールで終了位置を通過しても次の停止点へ移動しない', (t) => {
-  let h;
-  h = createWheelHarness(t, {
+  if (supportsScrollEnd) element.onscrollend = null;
+  const h = createWheelHarness(t, {
     getStops: () => [
       { id: 'first', getTop: () => 0 },
-      {
-        id: 'range',
-        getTop: () => 1000,
-        scrollWithin: true,
-        element: { getBoundingClientRect: () => ({ bottom: 2600 - (h?.window.scrollY ?? 0) }) },
-        getForwardExitTop: () => 1450
-      },
-      { id: 'next', getTop: () => 2600 }
-    ]
-  });
-  h.controller.goTo('range');
-  h.window.scrollY = 1500;
-  h.listeners.get('scroll')();
-  h.tick(1400);
-  assert.deepEqual(h.navigations, ['range']);
-  assert.equal(h.window.scrollY, 1000);
-});
-
-test('自由区間の小数wheelと慣性は既定動作に任せ、終了後にだけ境界を揃える', (t) => {
-  let h;
-  h = createWheelHarness(t, {
-    getStops: () => [
-      { id: 'first', getTop: () => 0 },
-      {
-        id: 'range',
-        getTop: () => 1000,
-        scrollWithin: true,
-        element: { getBoundingClientRect: () => ({ bottom: 2600 - (h?.window.scrollY ?? 0) }) },
-        getForwardExitTop: () => 1600
-      },
-      { id: 'next', getTop: () => 2600 }
-    ]
-  });
-  const root = h.window.document.documentElement;
-  const scroll = (top) => {
-    h.window.scrollY = top;
-    h.listeners.get('scroll')();
-  };
-  scroll(1050);
-  assert.equal(root.classList.contains('segmented-scroll-native-range'), true);
-  assert.equal(h.wheel(-0.25).defaultPrevented, false);
-  assert.equal(h.window.scrollY, 1050);
-  scroll(930);
-  assert.equal(h.wheel(-100).defaultPrevented, false);
-  assert.equal(h.window.scrollY, 930);
-  assert.deepEqual(h.navigations, []);
-  h.tick(300);
-  assert.equal(h.window.scrollY, 1000);
-  assert.deepEqual(h.navigations, []);
-  // The browser can land a few pixels inside an otherwise aligned stop.
-  scroll(1003);
-  assert.equal(h.wheel(-85).defaultPrevented, true);
-  assert.equal(h.window.scrollY, 1003);
-  h.wheel(-1);
-  assert.deepEqual(h.navigations, ['first']);
-  scroll(h.window.scrollY);
-  for (let frame = 0; frame < 90; frame += 1) h.tick(16);
-  assert.equal(root.classList.contains('segmented-scroll-native-range'), false);
-
-  scroll(1500);
-  assert.equal(h.wheel(95).defaultPrevented, false);
-  scroll(1700);
-  assert.deepEqual(h.navigations, ['first']);
-  h.tick(300);
-  assert.deepEqual(h.navigations, ['first', 'next']);
-  h.controller.destroy();
-  assert.equal(root.classList.contains('segmented-scroll-native-range'), false);
-});
-
-test('自由区間から明示移動したら後続のwheelを新しい停止点へ流さない', (t) => {
-  let h;
-  h = createWheelHarness(t, {
-    getStops: () => [
-      {
-        id: 'range',
-        getTop: () => 0,
-        scrollWithin: true,
-        element: { getBoundingClientRect: () => ({ bottom: 2000 - (h?.window.scrollY ?? 0) }) }
-      },
+      { id: 'range', getTop: () => 1000, scrollWithin: { element, advanceAtEnd, scrollbar } },
       { id: 'next', getTop: () => 2000 },
       { id: 'last', getTop: () => 3000 }
     ]
   });
-  assert.equal(h.wheel(20).defaultPrevented, false);
+  return {
+    ...h, element, rangeListeners: listeners,
+    rangeWheel: (deltaY) => h.wheel(deltaY, { composedPath: () => [element] }),
+    scroll(top) {
+      element.scrollTop = top;
+      listeners.get('scroll')();
+    },
+    end: () => listeners.get('scrollend')({ target: element })
+  };
+}
+
+for (const supportsScrollEnd of [true, false]) {
+  test(`自由区間の末尾が静止したときだけ次へ進む (scrollend=${supportsScrollEnd})`, (t) => {
+    const h = createRange(t, { advanceAtEnd: true, supportsScrollEnd });
+    h.window.scrollY = 1000;
+    h.scroll(450);
+    assert.equal(h.rangeWheel(0.25).defaultPrevented, false);
+    h.scroll(550);
+    if (supportsScrollEnd) h.end();
+    h.tick(300);
+    assert.deepEqual(h.navigations, []);
+    assert.equal(h.window.scrollY, 1000);
+
+    assert.equal(h.rangeWheel(100).defaultPrevented, false);
+    h.scroll(600);
+    assert.equal(h.rangeWheel(80).defaultPrevented, false);
+    if (supportsScrollEnd) h.end();
+    assert.deepEqual(h.navigations, []);
+    h.tick(300);
+    assert.deepEqual(h.navigations, ['next']);
+  });
+}
+
+test('自由区間の位置調整やズーム中の末尾到着では移動しない', (t) => {
+  const h = createRange(t, { advanceAtEnd: true, supportsScrollEnd: true });
+  h.controller.goTo('range', { edge: 'end' });
+  h.scroll(600);
+  h.end();
+  for (let frame = 0; frame < 100; frame += 1) h.tick(16);
+  assert.deepEqual(h.navigations, ['range']);
+
+  h.scroll(550);
+  assert.equal(h.rangeWheel(100).defaultPrevented, false);
+  h.scroll(600);
+  h.window.visualViewport.scale = 1.5;
+  h.end();
+  h.tick(300);
+  assert.deepEqual(h.navigations, ['range']);
+});
+
+test('自由区間の端から外向きに始めた入力には既存のしきい値を適用する', (t) => {
+  const h = createRange(t);
+  h.window.scrollY = 1000;
+  assert.equal(h.element.classList.contains('segmented-scroll-vertical'), true);
+  h.scroll(10);
+  assert.equal(h.wheel(-100).defaultPrevented, true, 'input outside the scroller must not scroll the document');
+  h.tick(300);
+  assert.equal(h.rangeWheel(-20).defaultPrevented, false);
+  h.scroll(0);
+  assert.equal(h.rangeWheel(-100).defaultPrevented, false, 'the scroller retains the gesture at the edge');
+  h.tick(300);
+  assert.equal(h.window.scrollY, 1000);
+  assert.deepEqual(h.navigations, []);
+  h.rangeWheel(-85);
+  assert.deepEqual(h.navigations, []);
+  h.rangeWheel(-1);
+  assert.deepEqual(h.navigations, ['first']);
+  h.controller.destroy();
+  assert.equal(h.element.classList.contains('segmented-scroll-vertical'), false);
+  assert.equal(h.rangeListeners.size, 0);
+});
+
+test('自由区間から明示移動したら後続のwheelを新しい停止点へ流さない', (t) => {
+  const h = createRange(t);
+  h.window.scrollY = 1000;
+  assert.equal(h.rangeWheel(20).defaultPrevented, false);
   h.controller.goTo('next');
   assert.equal(h.wheel(100).defaultPrevented, true);
   assert.deepEqual(h.navigations, ['next']);
 });
+
+for (const scrollbar of ['document', 'separate']) {
+  test(`自由区間の長さを全体のスクロール量に含めるかを選べる (${scrollbar})`, (t) => {
+    const { controller, element, window } = createRange(t, { scrollbar });
+    const unified = scrollbar === 'document';
+    assert.equal(element.classList.contains('segmented-scroll-vertical--document'), unified);
+    assert.deepEqual(controller.getDocumentScroll(), { top: 0, end: unified ? 3600 : 3000 });
+    controller.setDocumentScroll(1300);
+    assert.equal(window.scrollY, unified ? 1000 : 1300);
+    assert.equal(element.scrollTop, unified ? 300 : 0);
+    assert.equal(controller.getDocumentScroll().top, 1300);
+    controller.setDocumentScroll(2200, { fromTop: 1300 });
+    assert.equal(window.scrollY, unified ? 1000 : 2200);
+    assert.equal(controller.getDocumentScroll().top, unified ? 1600 : 2200);
+    controller.setDocumentScroll(2200, { fromTop: 1600, direction: -1 });
+    assert.equal(controller.getDocumentScroll().top, unified ? 1600 : 2200, 'an inward drag can reverse up to the end');
+    controller.setDocumentScroll(2200, { fromTop: 1600, direction: 1 });
+    assert.equal(window.scrollY, unified ? 1600 : 2200);
+    assert.equal(controller.getDocumentScroll().top, 2200);
+    controller.setDocumentScroll(800, { fromTop: 1000, direction: -1 });
+    assert.equal(controller.getDocumentScroll().top, 800);
+    element.scrollHeight += 200;
+    assert.equal(controller.getDocumentScroll().end, unified ? 3800 : 3000);
+  });
+}
 
 test('1px 未満も累積し、86px に達するまで位置を変えない', (t) => {
   const h = createWheelHarness(t);

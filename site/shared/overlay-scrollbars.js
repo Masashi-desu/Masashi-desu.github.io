@@ -5,6 +5,7 @@
   const corner = 11;
   const minimumThumb = 28;
   let frame = 0;
+  let documentScroll = null;
 
   function mount(target, isPage) {
     const layer = document.createElement('div');
@@ -25,7 +26,8 @@
       let travel = 0;
       let range = 0;
       const readPointer = (event) => horizontal ? event.clientX : event.clientY;
-      const readOffset = () => horizontal ? target.scrollLeft : target.scrollTop;
+      const readOffset = () => horizontal ? target.scrollLeft
+        : isPage && documentScroll ? documentScroll.getDocumentScroll().top : target.scrollTop;
 
       thumb.addEventListener('pointerdown', (event) => {
         if (!event.isPrimary || event.button !== 0 || travel <= 0 || target.hasAttribute('data-overlay-scroll-dragging')) return;
@@ -36,7 +38,7 @@
 
         event.preventDefault();
         thumb.setPointerCapture(event.pointerId);
-        drag = { id: event.pointerId, start: readPointer(event), offset: readOffset(), scale };
+        drag = { id: event.pointerId, start: readPointer(event), offset: readOffset(), scale, direction: 0 };
         target.setAttribute('data-overlay-scroll-dragging', '');
         thumb.classList.add('is-dragging');
       });
@@ -45,9 +47,12 @@
         if (drag?.id !== event.pointerId || travel <= 0) return;
         const delta = (readPointer(event) - drag.start) / drag.scale;
         const offset = drag.offset + delta * range / travel;
-        target.scrollTo(horizontal
-          ? { left: offset, behavior: 'instant' }
-          : { top: offset, behavior: 'instant' });
+        if (isPage && !horizontal && documentScroll) {
+          if (!drag.direction) drag.direction = Math.sign(delta);
+          documentScroll.setDocumentScroll(offset, { fromTop: drag.offset, direction: drag.direction });
+        } else {
+          target.scrollTo(horizontal ? { left: offset, behavior: 'instant' } : { top: offset, behavior: 'instant' });
+        }
       });
 
       thumb.addEventListener('lostpointercapture', () => {
@@ -100,13 +105,16 @@
         return () => { layer.hidden = true; };
       }
       const maxX = visible && !['hidden', 'clip'].includes(overflow.overflowX) ? target.scrollWidth - width : 0;
-      const maxY = visible && !['hidden', 'clip'].includes(overflow.overflowY) ? target.scrollHeight - height : 0;
+      const unified = isPage ? documentScroll?.getDocumentScroll() : null;
+      const hasVerticalThumb = visible && !['hidden', 'clip'].includes(overflow.overflowY) &&
+        !target.classList.contains('segmented-scroll-vertical--document');
+      const maxY = hasVerticalThumb ? unified?.end ?? target.scrollHeight - height : 0;
       const layerWidth = isPage ? layer.clientWidth : width;
       const layerHeight = isPage ? layer.clientHeight : height;
       const left = isPage ? 0 : target.offsetLeft + target.clientLeft;
       const top = isPage ? 0 : target.offsetTop + target.clientTop;
       const x = target.scrollLeft + (style.direction === 'rtl' ? maxX : 0);
-      const y = target.scrollTop;
+      const y = unified?.top ?? target.scrollTop;
 
       return () => {
         if (!isPage) {
@@ -136,6 +144,13 @@
     function schedule() {
       if (!frame) frame = requestAnimationFrame(update);
     }
+
+    window.MDWOverlayScrollbars = Object.freeze({
+      setDocumentScroll(model) {
+        documentScroll = model;
+        schedule();
+      }
+    });
 
     const resizeObserver = new ResizeObserver(schedule);
     resizeObserver.observe(root);

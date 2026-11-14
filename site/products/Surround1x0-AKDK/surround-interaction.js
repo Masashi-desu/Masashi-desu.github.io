@@ -3,6 +3,7 @@ import * as THREE from 'three';
 export function createModelInteraction({ models, camera, state, reset, frameRotation }) {
   const root = document.querySelector('.surround-interaction');
   const originalNextElement = root.nextElementSibling;
+  const featureScroll = document.querySelector('.surround-feature-scroll');
   const technologyScroll = document.querySelector('.surround-technology-scroll');
   const canvas = document.getElementById('surround-canvas');
   const areas = [...root.querySelectorAll('[data-surround-model]')];
@@ -163,9 +164,12 @@ export function createModelInteraction({ models, camera, state, reset, frameRota
     status.enabled = Boolean(canInteract());
     root.hidden = !status.enabled;
     if (!status.enabled) { endDrag(); return; }
-    // Route wheel input over the model through the horizontal scroll region.
-    if (document.body.dataset.surroundStop === 'surround-technology') {
-      if (root.parentElement !== technologyScroll) technologyScroll.prepend(root);
+    // Let wheel input over a model reach the active section's native scroller.
+    const stop = document.body.dataset.surroundStop;
+    const scrollRegion = stop === 'surround-technology' ? technologyScroll
+      : stop === 'surround-02' ? featureScroll : null;
+    if (scrollRegion) {
+      if (root.parentElement !== scrollRegion) scrollRegion.prepend(root);
     } else if (root.nextElementSibling !== originalNextElement) {
       originalNextElement.before(root);
     }

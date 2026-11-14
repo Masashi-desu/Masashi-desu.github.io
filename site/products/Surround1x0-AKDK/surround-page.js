@@ -5,6 +5,7 @@
   const controls = Array.from(document.querySelectorAll('[data-surround-target], [data-surround-footer-target]'));
   const sections = Array.from(document.querySelectorAll('[data-surround-segment]'));
   const features = document.getElementById('surround-02');
+  const featureScroll = features.querySelector('.surround-feature-scroll');
   const leftHandAnchor = document.getElementById('surround-03');
   const leftHandFrame = features.querySelector('[data-surround-hand="left"]');
   const leftHandCopy = leftHandFrame.querySelector('.surround-copy');
@@ -60,10 +61,10 @@
       const state = sectionNavigation.getState();
       const stop = sectionNavigation.getStop(state.activeId);
       const top = sectionNavigation.readStopTop(stop);
-      const atStart = top !== null && Math.abs(window.scrollY - top) <= 1;
-      const atLeftHand = stop?.id === features.id && Math.abs(leftHandAnchor.getBoundingClientRect().top) <= 1;
-      return state.mounted && !state.moving && !state.locked && !state.aligning &&
-        (atStart || atLeftHand);
+      const aligned = top !== null && Math.abs(window.scrollY - top) <= 1;
+      const featureAligned = stop?.id !== features.id || featureScroll.scrollTop <= 1 ||
+        Math.abs(featureScroll.scrollTop - readLeftHandTop()) <= 1;
+      return state.mounted && !state.moving && !state.locked && !state.aligning && aligned && featureAligned;
     }
   });
 
@@ -233,9 +234,12 @@
         mode: 'threshold',
         getSnapPoints: () => technologyItems.map((_, index) => index * technologyScroll.clientWidth)
       } : undefined,
-      scrollWithin: section === features,
-      getForwardExitTop: section === features ? readFeatureExitTop : undefined,
-      getReverseEntryTop: section === features ? readLeftHandTop : undefined,
+      scrollWithin: section === features ? {
+        element: featureScroll,
+        scrollbar: 'document',
+        advanceAtEnd: true,
+        getReverseEntryTop: readLeftHandTop
+      } : undefined,
       observe: true
     }));
     if (footerTarget) {
@@ -269,12 +273,13 @@
   }
 
   function updateFeatureProgress() {
-    const rect = features.getBoundingClientRect();
-    const distance = Math.max(1, leftHandAnchor.getBoundingClientRect().top - rect.top);
-    let progress = Math.min(1, Math.max(0, -rect.top / distance));
-    if (rect.top >= -1) progress = 0;
-    else if (rect.top <= 1 - distance) progress = 1;
-    // Keep the text tied to document position even with reduced motion enabled.
+    const managed = featureScroll.classList.contains('segmented-scroll-vertical');
+    const distance = Math.max(1, readLeftHandTop());
+    const top = managed ? featureScroll.scrollTop : -features.getBoundingClientRect().top;
+    let progress = Math.min(1, Math.max(0, top / distance));
+    if (top <= 1) progress = 0;
+    else if (top >= distance - 1) progress = 1;
+    // Keep the text tied to the scroll position even with reduced motion enabled.
     if (progress !== Number(features.style.getPropertyValue('--surround-feature-progress'))) {
       features.style.setProperty('--surround-feature-progress', String(progress));
     }
@@ -305,12 +310,6 @@
     syncFeatureProgress();
   }
 
-  function readFeatureExitTop({ scrollY, viewportHeight }) {
-    if (root.hasAttribute('data-overlay-scroll-dragging')) return null;
-    // The section's trailing space is sized to the last visible line of copy.
-    return Math.round(scrollY + features.getBoundingClientRect().bottom - viewportHeight);
-  }
-
   function announceSegment(id, source, contentId = id) {
     if (contentId === features.id) updateFeatureProgress();
     const index = getSegmentIndex(contentId);
@@ -320,8 +319,8 @@
     window.dispatchEvent(new CustomEvent('surround:segment-change', { detail }));
   }
 
-  function readLeftHandTop({ scrollY }) {
-    return Math.round(scrollY + leftHandAnchor.getBoundingClientRect().top);
+  function readLeftHandTop() {
+    return leftHandAnchor.offsetTop;
   }
 
   function restoreLeftHand() {
@@ -413,13 +412,14 @@
 
     segments.connect(sectionNavigation);
     sectionNavigation.mount();
+    window.MDWOverlayScrollbars?.setDocumentScroll(sectionNavigation);
     syncFeatureExit();
     const hashId = window.location.hash.slice(1);
     if (atLeftHandHash()) restoreLeftHand();
     else if (hashId) sectionNavigation.goTo(resolveInitialId(), { behavior: 'auto', source: 'initial-hash' });
     const state = sectionNavigation.getState();
     announceSegment(state.activeId || resolveInitialId(), 'initial', state.activeContentId);
-    window.addEventListener('scroll', syncFeatureProgress, { passive: true });
+    featureScroll.addEventListener('scroll', syncFeatureProgress, { passive: true });
     reduceMotion.addEventListener('change', syncFeatureProgress);
     const resizeObserver = new ResizeObserver(syncFeatureExit);
     resizeObserver.observe(leftHandFrame);
