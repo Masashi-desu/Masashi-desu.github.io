@@ -884,16 +884,10 @@ body.page-product--surround .page-background {
 .catalog-section-nav__numbers {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: var(--catalog-nav-control-size);
+  grid-auto-columns: minmax(0, var(--catalog-nav-control-size));
   gap: 0.25rem;
-  width: max-content;
-  max-width: min(100%, clamp(11.625rem, 32vh, 12.875rem));
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
-  touch-action: pan-x pinch-zoom;
+  overflow: clip;
 }
 
 .catalog-section-nav__icon-button,
@@ -919,7 +913,7 @@ body.page-product--surround .page-background {
 }
 
 .catalog-section-nav__number {
-  scroll-snap-align: center;
+  width: 100%;
   font-size: 0.875rem;
   font-weight: 800;
   letter-spacing: 0;
@@ -3231,10 +3225,6 @@ body.page-transition-visible .page-transition-target {
 
   .catalog-section-nav__track {
     --catalog-nav-control-size: 2.125rem;
-  }
-
-  .catalog-section-nav__numbers {
-    max-width: min(100%, 11.625rem);
   }
 
   .catalog-section {

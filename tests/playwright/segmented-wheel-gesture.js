@@ -282,12 +282,17 @@ async function verifyPage(context, spec, baseURL, profile) {
     await page.clock.runFor(1400);
 
     if (spec.url === '/products/') {
-      const yielded = await page.locator('.catalog-section-nav__numbers').evaluate((element) => {
-        const event = new WheelEvent('wheel', { deltaX: 100, deltaY: 1, bubbles: true, cancelable: true });
-        element.dispatchEvent(event);
-        return !event.defaultPrevented;
+      const before = (await state(page, spec)).y;
+      const navScrollLeft = await page.locator('.catalog-section-nav__numbers').evaluate((element) => {
+        element.dispatchEvent(new WheelEvent('wheel', { deltaX: 120, deltaY: 100, bubbles: true, cancelable: true }));
+        element.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, shiftKey: true, bubbles: true, cancelable: true }));
+        return element.scrollLeft;
       });
-      assert.equal(yielded, true, 'horizontal number navigation must remain available');
+      assert.equal(navScrollLeft, 0, 'the number row must not scroll');
+      await page.clock.runFor(1400);
+      const after = await state(page, spec);
+      assert.equal(after.y, before, 'horizontal wheel gestures over the number row must not scroll the page');
+      assert.equal(after.active, spec.first);
     }
     if (profile === 'desktop') {
       await page.clock.resume();

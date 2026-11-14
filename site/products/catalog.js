@@ -429,30 +429,9 @@
     }
   }
 
-  function isNumberNavTarget(target) {
-    return Boolean(numberNav && target instanceof Node && numberNav.contains(target));
-  }
-
   function shouldYieldCatalogWheel(event, gesture) {
-    return isNumberNavTarget(event.target) && (gesture.shiftKey || gesture.horizontalDominant);
-  }
-
-  function shouldYieldCatalogTouch(event, gesture) {
-    const intentThreshold = window.MDWSegmentedScroll.DEFAULT_TIMINGS.touchIntentThreshold;
-    return isNumberNavTarget(event.target)
-      && gesture.absDeltaX >= intentThreshold
-      && gesture.horizontalDominant;
-  }
-
-  function revealCatalogControl(control) {
-    if (!numberNav || !numberNav.contains(control)) {
-      return;
-    }
-    control.scrollIntoView({
-      behavior: reduceMotion.matches ? 'auto' : 'smooth',
-      block: 'nearest',
-      inline: 'center'
-    });
+    return event.target instanceof Node && numberNav?.contains(event.target)
+      && (gesture.shiftKey || gesture.horizontalDominant);
   }
 
   function handleCatalogActiveChange({ stop, activeContentId } = {}) {
@@ -518,8 +497,7 @@
     const segments = window.MDWSegmentedScroll.createSegmentView({
       track: sectionNav,
       getControls: getCatalogNavControls,
-      getTargetId: getCatalogNavControlTarget,
-      revealControl: revealCatalogControl
+      getTargetId: getCatalogNavControlTarget
     });
     sectionNavigation = window.MDWSegmentedScroll.createScrollController({
       initialId: searchSection ? searchSection.id : '',
@@ -528,7 +506,6 @@
       managedClass: 'catalog-scroll-managed',
       visibleClass: 'is-visible',
       shouldYieldWheel: shouldYieldCatalogWheel,
-      shouldYieldTouch: shouldYieldCatalogTouch,
       onActiveChange: handleCatalogActiveChange,
       onNavigate: updateCatalogNavigationHistory
     });

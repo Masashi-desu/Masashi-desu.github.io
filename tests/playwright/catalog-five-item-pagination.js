@@ -1,7 +1,7 @@
 /**
  * テスト概要:
  *  - 目的: 製品一覧が全件を同時描画せず5件単位でページ切り替えし、アニメーション背景をLiquidGLのリアルタイム動画経路へ渡すことを確認する。
- *  - 期待値: 6件中1ページ目は1〜5の5section、2ページ目は6のみを描画する。前後ボタン・現在ページ・全体通番が同期し、最後の通番タブのfocus ringは横スクロール領域内でクリップしない。Bartical、TypeFetch、WinKinesis背景はposter付きMP4をミュート・ループ・インライン再生する。Bartical背景は画面比率にかかわらず上端を基準に切り抜く。LiquidGLセグメントは暗色tintで動画の明部を抑え、検索sectionとの切替を640ms linearで補間する。DOM差し替え後は除去済み動画を破棄して、1ページ目へ戻したときに新しいvideo要素を再検出する。
+ *  - 期待値: 6件中1ページ目は1〜5の5section、2ページ目は6のみを描画する。前後ボタン・現在ページ・全体通番が同期する。番号列はデスクトップと320px幅で横スクロールを発生させず、5個すべて操作できる。最後の番号のフォーカスリングはボタンの内側に表示する。Bartical、TypeFetch、WinKinesis背景はposter付きMP4をミュート・ループ・インライン再生する。Bartical背景は画面比率にかかわらず上端を基準に切り抜く。LiquidGLセグメントは暗色tintで動画の明部を抑え、検索sectionとの切替を640ms linearで補間する。DOM差し替え後は除去済み動画を破棄して、1ページ目へ戻したときに新しいvideo要素を再検出する。
  *  - 検証方法: ローカル静的サーバーで /products/ をChromiumまたはWebKitに開き、DOM数、ナビ番号、ページ状態、動画属性とLiquidGL rendererの動画一覧を取得する。viewport変更後、実際のrefreshを維持したspyを使って前後ページを操作し、rendererが現在のDOMだけを追跡することを確認する。codec・GPU・実時間に依存する動画frame更新はmacOS専用のnative-media-liquidgl.jsで検証する。
  */
 const { CatalogPage } = require('./pages/catalog-page');
@@ -88,7 +88,7 @@ async function main() {
       focusedNumberOutline.outlineOffset === '-2px'
         && focusedNumberOutline.outlineWidth === '2px'
         && focusedNumberOutline.outlineStyle === 'solid',
-      'Last catalog number focus ring was not kept inside the scroll container',
+      'Last catalog number focus ring was not kept inside its button',
       focusedNumberOutline
     );
     assert(firstPage.page === '1' && firstPage.pageLabel === '1 / 2', 'First page status was incorrect', firstPage);
@@ -198,10 +198,20 @@ async function main() {
     });
 
     for (const viewport of [
+      { width: 1137, height: 608 },
+      { width: 320, height: 568 },
       { width: 1278, height: 619 },
       { width: 573, height: 550 }
     ]) {
       await page.setViewportSize(viewport);
+      const nav = await catalog.readNumberNavLayout();
+      assert(
+        nav.scrollWidth === nav.clientWidth && nav.scrollLeft === 0 && nav.overflowX === 'clip'
+          && !nav.overlay && nav.buttons.length === 5
+          && nav.buttons.every(({ width, left, right, clickable }) => width > 0 && left >= -0.5 && right <= 0.5 && clickable),
+        'All five catalog numbers must fit and be clickable without scrolling',
+        { viewport, nav }
+      );
       const responsiveState = await catalog.readPaginationState();
       assert(
         responsiveState.video?.objectPosition === '50% 0%'

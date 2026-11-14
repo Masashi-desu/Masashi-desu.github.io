@@ -28,6 +28,29 @@ class CatalogPage extends SitePage {
   async nextPage() { await this.nextButton.click(); }
   async previousPage() { await this.previousButton.click(); }
   async filterCategory(category) { await this.categoryFilter.selectOption(category); }
+  async readNumberNavLayout() {
+    return this.numberTrack.evaluate((track) => {
+      const bounds = track.getBoundingClientRect();
+      const buttons = Array.from(track.children, button => {
+        const rect = button.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+        return {
+          width: rect.width,
+          left: rect.left - bounds.left,
+          right: rect.right - bounds.right,
+          clickable: button.contains(hit)
+        };
+      });
+      return {
+        buttons,
+        clientWidth: track.clientWidth,
+        scrollWidth: track.scrollWidth,
+        scrollLeft: track.scrollLeft,
+        overflowX: getComputedStyle(track).overflowX,
+        overlay: track.nextElementSibling?.matches('.overlay-scrollbars') ?? false
+      };
+    });
+  }
   async readOverflowState() {
     return this.page.evaluate(() => {
       const copy = document.querySelector('.section-copy');
