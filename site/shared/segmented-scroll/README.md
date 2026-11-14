@@ -67,6 +67,7 @@ navigation.mount();
 - `styles.css` はmanaged classがある間の `touch-action`、明示的なスクロール挙動、タッチ環境のnative snap抑制を担当します。利用側からこれらを上書きしないでください。
 - 1つのwindowにmountできるcontrollerは1つです。`destroy()` はlistener、observer、timer、補正処理、購読とライブラリが追加したclassを除去します。既存のclassは保持します。
 - `shouldYieldWheel` / `shouldYieldTouch` はカルーセル、フォーム、3D操作など利用側に委譲する領域を決めます。委譲する操作は利用側が処理してください。
+- 停止点の `horizontalScroll` で横スクロール要素とモードを指定できます。`{ element, mode: 'free' }` はブラウザ標準の横スクロールを使い、任意の位置で止まれます。`{ element, mode: 'threshold', getSnapPoints }` は横方向の入力が `timings.wheelThreshold` または `timings.touchThreshold` に達すると、前後の停止点へ1ジェスチャーにつき1回移動します。`getSnapPoints()` は要素内の `scrollLeft` 座標をピクセルで返します（左から右のスクロールを想定し、既定のしきい値は86pxと48px）。共通CSSの `.segmented-scroll-horizontal` が横オーバーフローとスナップ解除を設定します。要素の幅、項目の位置、ボタン操作、スクロール量に応じた演出は利用側で定義します。縦方向の入力は縦の停止点を操作し、委譲フックは横モードにも優先します。
 - URL/history、ルーティング、製品情報、LiquidGL、3D、分析イベントは利用側の責務です。`onNavigate` と `onActiveChange` は組み込み用コールバックとして利用できます。
 - `rootElement` / `eventTarget` はclass・listenerの接続先です。要素スクローラーを指定するAPIではありません。必須CSSのclassはdocumentElementへ付く構成で使ってください。
 - `createViewportCssSync` は任意の補助機能です。CSS変数へのviewport寸法同期を行い、`destroy()` は同期listenerを解除します。書き込んだ変数の値は残します。

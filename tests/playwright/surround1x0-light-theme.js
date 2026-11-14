@@ -1,6 +1,6 @@
 /**
  * テスト概要:
- *  - 目的: Surround1x0-AKDK の3つのコンテンツとフッタ設定、Three.js描画、テーマ連動モデル、レスポンシブ配置を検証する。
+ *  - 目的: Surround1x0-AKDK の4つのコンテンツとフッタ設定、Three.js描画、テーマ連動モデル、レスポンシブ配置を検証する。
  *  - 期待値: 02は説明文が縦に流れ、固定の3D表示がスクロール位置に応じて右手用から左手用へ往復する。
  *    一度の大きなスクロールでも左手用モデルは透明度の異なる中間姿勢を複数フレーム描画する。
  *    通常移動は三次ベジェの弧にバンクと一過性の対角twistを重ね、退場側または移動量の大きい側が
@@ -13,7 +13,8 @@
  *    通常のセグメント移動は分解レイヤーへ波を適用せず、組み立てた左右ユニットのまま行う。
  *    04へ入る非表示ユニットは目的地スケールで再入場し、移動開始と同時に分解を開始する。
  *    キーキャップとソケットは早期に離脱し、PCB／コンスルー類は移動中も上部ケースより下へ保つ。
- *    04から離れるときは即時復元せず、ユニット移動と並行して逆順の波で組み立てる。
+ *    03では横スクロールで部品の透過が切り替わり、分解位置を保ったままモデルをドラッグで回転できる。
+ *    02へ戻るときは移動中に右手用を組み立てる。
  *    分解状態で半体を捻る間は、部品ごとに小さな回転追従差を付け、終端では追加回転を0へ戻す。
  *    縦長モバイル04では左右間にマージンを残して平行配置し、手前へ寄せて拡大しながら上下左右の余白を抑える。
  *    横長04は部品の軸を揃えて左下／右上へ分解し、キー配列を横倒しにせず画面幅を使って最大まで拡大する。
@@ -22,9 +23,9 @@
  *    第1と縦長・正方形の第4セグメントは全メッシュの投影範囲で四辺と左右間にPC24px／モバイル16px以上を確保し、
  *    最小間隔まで中央へ寄せる。縦長PC、幅の境界、モバイル、リサイズでも両側を同率で縮小する。
  *    横長の01は固定の拡大率上限を使わず、ナビ・案内から余白を残した領域いっぱいへ拡大し、上下を中央揃えする。
- *    02/03は説明文・ナビ・画面端から同じ余白を保ち、実形状の投影外形が収まる最大サイズを使用する。
+ *    02の右手用・左手用は説明文・ナビ・画面端から同じ余白を保ち、実形状の投影外形が収まる最大サイズを使用する。
  *    縦長モバイルでは説明の上、横長では横へ配置し、言語や画面サイズの変更にも追従する。
- *    02/03のコピーは左右の画面端へ最低PC24px／モバイル16pxの余白で追従し、
+ *    02のコピーは左右の画面端へ最低PC24px／モバイル16pxの余白で追従し、
  *    大画面でも中央に留まらず、見出しを意図しない位置で折り返さない。
  *    GLB読込失敗、WebGL初期化失敗、context喪失でも写真へ切り替えない。
  *    GLB読込中にセクションを変更した場合も、読込完了時に最新の選択へモデルを配置する。
@@ -170,7 +171,7 @@ async function verifyNavigationDuringModelLoad(browser, pageUrl) {
       scene: window.__SURROUND_3D__.activeScene,
       explosion: window.__SURROUND_3D__.explosionAmount
     }));
-    assert(state.selected === '3' && state.scene === 3 && state.explosion === 1,
+    assert(state.selected === '4' && state.scene === 4 && state.explosion === 1,
       'Model initialization ignored navigation completed during GLB loading', state);
   } finally {
     releaseModels();
@@ -187,7 +188,7 @@ async function verifyWebKitScrollAlignment(pageUrl) {
     await page.route('**/surround-3d.js', route => route.fulfill({ contentType: 'application/javascript', body: '' }));
     await page.goto(`${pageUrl}#surround-02`);
     await page.waitForFunction(() => window.MDWSurroundNavigation?.isSettled());
-    await page.getByRole('button', { name: '03', exact: true }).click();
+    await page.getByRole('button', { name: '04', exact: true }).click();
     await page.waitForFunction(() => window.MDWSurroundNavigation.isSettled(), null, { timeout: 15000 });
     assert(await page.evaluate(() => Math.abs(document.getElementById('surround-04').getBoundingClientRect().top) <= 1),
       'WebKit did not settle at the final section position');
@@ -270,7 +271,7 @@ async function assertPairFit(page, label) {
   }));
   const { layout, poses, width, height, scene } = state;
   const margin = width <= 672 ? 16 : 24;
-  const edgeToEdge = scene === 3 && width > height;
+  const edgeToEdge = scene === 4 && width > height;
   assert(layout?.fits && layout.minGapPx === (edgeToEdge ? 0 : margin), `${label} did not fit the pair`, state);
   for (const box of Object.values(layout.bounds)) {
     assert(
@@ -304,7 +305,7 @@ async function assertPairFit(page, label) {
     `${label} lost symmetric placement or common scale`, poses
   );
   assert(layout.maximize === (width > height), `${label} used the wrong landscape sizing policy`, layout);
-  if (scene === 3) {
+  if (scene === 4) {
     assert(state.orientation === (width > height ? 'horizontal' : 'vertical'),
       `${label} used the wrong explosion orientation`, state);
     assert(state.lateralDrift < 1e-9, `${label} moved parts sideways off their shared separation axis`, state);
@@ -545,6 +546,23 @@ async function verifyModelInteraction(browser, pageUrl) {
   assert(await left.isHidden(), 'The exited model retained an interactive area');
   await dragModel('right');
 
+  await surround.showTechnology();
+  await waitInteractive();
+  const technologyPose = (await readPoses()).right;
+  await dragModel('right');
+  const rotatedTechnologyPose = (await readPoses()).right;
+  assert(Math.abs(rotatedTechnologyPose.rotationY - technologyPose.rotationY) > 0.1,
+    'Dragging the specifications model did not rotate it');
+  const technologyPoint = await pointOnModel('right');
+  await page.mouse.move(technologyPoint.x, technologyPoint.y);
+  await page.mouse.wheel(120, 25);
+  await page.waitForFunction(() => Math.abs(window.__SURROUND_3D__.technologyPcbOpacity - 0.5) < 0.01);
+  const nextTechnologyPose = (await readPoses()).right;
+  assert(nextTechnologyPose.rotationX === rotatedTechnologyPose.rotationX &&
+    nextTechnologyPose.rotationY === rotatedTechnologyPose.rotationY &&
+    nextTechnologyPose.rotationZ === rotatedTechnologyPose.rotationZ && nextTechnologyPose.scale > rotatedTechnologyPose.scale,
+    'Changing specifications did not reframe the model while preserving the user rotation', nextTechnologyPose);
+
   await surround.showSection(4);
   await waitInteractive();
   const offsets = await page.evaluate(() => [...window.__SURROUND_3D__.explosionItemOffsets]);
@@ -601,6 +619,26 @@ async function verifyModelInteraction(browser, pageUrl) {
     'Two-finger translation also rotated the keyboard');
   await touchDrag(5, 730, 0, -150);
   await touchPage.waitForFunction(() => window.__SURROUND_3D__.activeScene === 1);
+  const touchSurround = new SurroundPage(touchPage);
+  await touchSurround.showTechnology();
+  const touchModelPoint = await touchPage.waitForFunction(() => {
+    const { interaction, technologyFitArea } = window.__SURROUND_3D__;
+    if (!interaction.enabled || !technologyFitArea) return false;
+    const area = document.querySelector('.surround-technology-scroll [data-surround-model="right"]');
+    if (!area) return false;
+    const box = area.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    return Math.abs(box.top - technologyFitArea.top) < 1 && document.elementFromPoint(x, y) === area && { x, y };
+  });
+  const { x, y } = await touchModelPoint.jsonValue();
+  await touchModelPoint.dispose();
+  await touchDrag(x, y, 25, -30);
+  await touchPage.waitForFunction(() => window.__SURROUND_3D__.interaction.modified);
+  assert(await touchPage.evaluate(() => document.getElementById('surround-technology').dataset.surroundSpecProgress === '0'),
+    'Touch rotation scrolled the specifications');
+  await touchDrag(340, 720, -280, 0);
+  await touchPage.waitForFunction(() => Number(document.getElementById('surround-technology').dataset.surroundSpecProgress) > 0.1);
   await mobile.close();
 }
 
@@ -915,7 +953,7 @@ async function main() {
     const collisionSafeEntryHandlePromise = page.waitForFunction(() => {
       const state = window.__SURROUND_3D__;
       const right = state?.currentPoses?.right;
-      return state?.activeScene === 3 && state.motionActive && right?.opacity > 0.2
+      return state?.activeScene === 4 && state.motionActive && right?.opacity > 0.2
         ? {
           right: { ...right }, left: { ...state.currentPoses.left },
           amounts: [...state.explosionLayerAmounts], destinationScale: state.pairLayout.scale
@@ -1039,7 +1077,7 @@ async function main() {
       rotations: [...window.__SURROUND_3D__.explosionItemRotations]
     }));
     assert(
-      explodedState.scene === 3 && explodedState.amount === 1 &&
+      explodedState.scene === 4 && explodedState.amount === 1 &&
       explodedState.target === 1 && explodedState.layerCount === 18,
       'Segment 04 did not settle into the GLB-backed exploded view',
       explodedState
@@ -1081,22 +1119,86 @@ async function main() {
       actionOrder
     );
 
+    await surround.showTechnology();
+    await page.waitForFunction(() => !window.__SURROUND_3D__.motionActive);
+    const technology = await page.evaluate(() => {
+      const state = window.__SURROUND_3D__;
+      return {
+        scene: state.activeScene,
+        poses: state.currentPoses,
+        parts: state.explodedItemMetadata.map(({ side }, index) => ({
+          side, amount: state.explosionItemAmounts[index]
+        }))
+      };
+    });
+    assert(technology.scene === 3 && technology.poses.right.opacity === 1 && technology.poses.left.opacity === 0 &&
+      technology.parts.every(({ side, amount }) => amount === (side === 'right' ? 1 : 0)),
+      'Technology stack did not show the exploded right unit alone', technology);
+    const stackLabels = (await surround.technologies.getByRole('heading').allTextContents()).map((label) => label.trim());
+    assert(JSON.stringify(stackLabels) === JSON.stringify([
+      'Auto-KDK （Auto-Keyboard-Design-Kit）',
+      'ZMK Firmware Powered by Zephyr™',
+      'Kailh Choc V2',
+      'KeycapMaker'
+    ]), 'Technology stack labels did not match the specification', stackLabels);
+
+    const specs = surround.technology.locator('.surround-technology-scroll');
+    const waitForSpec = (index, layers, pcbOpacity) => page.waitForFunction(({ index, layers, pcbOpacity }) => {
+      const section = document.getElementById('surround-technology');
+      const scroll = section.querySelector('.surround-technology-scroll');
+      const focus = window.__SURROUND_3D__.technologyFocus || {};
+      const visibleLayers = Object.keys(focus).filter((layer) => focus[layer] > 0.01);
+      return document.body.dataset.surroundStop === section.id &&
+        Math.abs(Number(section.dataset.surroundSpecProgress) - index) < 0.005 &&
+        Math.abs(scroll.scrollLeft - index * scroll.clientWidth) <= 1 &&
+        visibleLayers.length === layers.length && layers.every((layer) => focus[layer] > 0.99) &&
+        Math.abs(window.__SURROUND_3D__.technologyPcbOpacity - pcbOpacity) < 0.01;
+    }, { index, layers, pcbOpacity });
+    const autoKdkLayers = ['controller', 'pcb', 'bottom_case', 'top_case', 'sockets', 'conthrough', 'mouse_sensor'];
+    await waitForSpec(0, autoKdkLayers, 1);
+    const technologyLinks = specs.locator('.surround-technology-link');
+    const linkDetails = await technologyLinks.evaluateAll((links) => links.map((link) => ({
+      url: link.href,
+      newTab: link.target === '_blank' && link.relList.contains('noopener'),
+      tabIndex: link.tabIndex
+    })));
+    assert(JSON.stringify(linkDetails.map(({ url }) => url)) === JSON.stringify([
+      'https://auto-kdk.pages.dev/',
+      'https://zmk.dev/',
+      'https://www.kailh.net/products/kailh-choc-v2-low-profile-switch-set',
+      'https://masashi-desu.github.io/KeycapMaker/'
+    ]) && linkDetails.every(({ newTab, tabIndex }, index) => newTab && tabIndex === (index === 0 ? 0 : -1)),
+    'Specification links must open the official sites in new tabs and keep inactive items out of the tab order', linkDetails);
+    await surround.technology.locator('[data-surround-spec-step="1"]').click();
+    await waitForSpec(1, ['controller'], 0.5);
+    assert(await technologyLinks.evaluateAll((links) => links.every((link, index) => link.tabIndex === (index === 1 ? 0 : -1))),
+      'The official link did not follow the active specification');
+    const desktopViewport = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await waitForSpec(1, ['controller'], 0.5);
+    await page.setViewportSize(desktopViewport);
+    await waitForSpec(1, ['controller'], 0.5);
+    const surface = await specs.boundingBox();
+    await page.mouse.move(surface.x + surface.width * 0.79, surface.y + surface.height * 0.52);
+    await page.mouse.wheel(120, 0);
+    await waitForSpec(2, ['switches'], 0.16);
+    await specs.press('ArrowRight');
+    await waitForSpec(3, ['keycaps'], 0.16);
+    await specs.press('Home');
+    await waitForSpec(0, autoKdkLayers, 1);
+
+    await page.mouse.move(8, 400);
     const reassemblyHandlePromise = page.waitForFunction(() => {
       const state = window.__SURROUND_3D__;
-      const amounts = state?.explosionItemAmounts || [];
+      const amounts = state?.explodedItemMetadata.flatMap(({ side }, index) => (
+        side === 'right' ? [state.explosionItemAmounts[index]] : []
+      )) || [];
       const spread = amounts.length ? Math.max(...amounts) - Math.min(...amounts) : 0;
       return state?.explosionTarget === 0 && state.motionActive &&
         Math.max(...amounts) > 0.1 && Math.min(...amounts) < 0.9 && spread > 0.08
-        ? {
-          amounts: [...amounts],
-          offsets: [...state.explosionItemOffsets],
-          target: state.explosionTarget,
-          scene: state.activeScene
-        }
+        ? { amounts, target: state.explosionTarget, scene: state.activeScene }
         : false;
     });
-    await page.waitForFunction(() => window.MDWSurroundNavigation.isSettled());
-    await page.mouse.move(8, 400);
     await page.mouse.wheel(0, -160);
     const reassemblyHandle = await reassemblyHandlePromise;
     const reassemblyState = await reassemblyHandle.jsonValue();
@@ -1104,7 +1206,7 @@ async function main() {
     assert(
       reassemblyState.scene === 2 && reassemblyState.target === 0 &&
       Math.max(...reassemblyState.amounts) > 0.1 && Math.min(...reassemblyState.amounts) < 0.9,
-      'Leaving segment 04 snapped the exploded view together instead of reassembling during transit',
+      'Leaving the technology stack snapped the exploded view together instead of reassembling during transit',
       reassemblyState
     );
     await page.waitForFunction(() => (
@@ -1143,7 +1245,7 @@ async function main() {
     });
     assert(
       footerState.active && footerState.ariaCurrent === 'true' && footerState.hash === '#surround-footer' &&
-      footerState.scene === '3' && footerState.stop === 'surround-footer',
+      footerState.scene === '4' && footerState.stop === 'surround-footer',
       'Footer settings segment did not activate at document end while preserving scene 04',
       footerState
     );

@@ -111,7 +111,8 @@
       <span class="surround-section-nav__indicator" aria-hidden="true"></span>
       <button class="surround-section-nav__button is-active" type="button" data-surround-target="surround-01" aria-current="true">01</button>
       <button class="surround-section-nav__button" type="button" data-surround-target="surround-02" aria-current="false">02</button>
-      <button class="surround-section-nav__button" type="button" data-surround-target="surround-04" aria-current="false">03</button>
+      <button class="surround-section-nav__button" type="button" data-surround-target="surround-technology" aria-current="false">03</button>
+      <button class="surround-section-nav__button" type="button" data-surround-target="surround-04" aria-current="false">04</button>
       <a href="#surround-footer" class="surround-section-nav__footer-link" data-surround-footer-target="surround-footer" aria-label="フッタ設定" aria-current="false" title="フッタ設定">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"></path>
@@ -180,7 +181,64 @@
       </div>
     </section>
 
-    <section id="surround-04" class="surround-segment surround-segment--links" data-surround-segment="3" aria-labelledby="surround-links-title">
+    <section id="surround-technology" class="surround-segment surround-segment--technology" data-surround-segment="3" aria-labelledby="surround-technology-title">
+      <h2 id="surround-technology-title" class="surround-display surround-technology-title" data-i18n="technologyTitle">技術的仕様</h2>
+      <div class="surround-technology-scroll" role="group" aria-labelledby="surround-technology-title" tabindex="0">
+        <ol class="surround-technology-list" role="list">
+          <li data-surround-part="boards">
+            <div class="surround-technology-copy">
+              <h3 id="surround-technology-auto-kdk">Auto-KDK <span>（Auto-Keyboard-Design-Kit）</span></h3>
+              <p class="surround-body" data-i18n="technologyAutoKdk">キー配置やマイコンとの接続を含め、キーボード基板を設計するためのツールキットです。</p>
+              <a class="surround-action surround-action--secondary surround-technology-link" href="https://auto-kdk.pages.dev/" target="_blank" rel="noopener noreferrer" aria-describedby="surround-technology-auto-kdk">
+                <img src="./assets/favicons/auto-kdk.png" width="18" height="18" alt="">
+                <span data-i18n="technologyOfficial">公式サイト</span><span aria-hidden="true">↗</span><span class="surround-interaction__sr-only" data-i18n="technologyNewTab">（新しいタブで開く）</span>
+              </a>
+            </div>
+          </li>
+          <li data-surround-part="controller">
+            <div class="surround-technology-copy">
+              <h3 id="surround-technology-zmk">ZMK Firmware <span>Powered by Zephyr™</span></h3>
+              <p class="surround-body" data-i18n="technologyZmk">マイコンで動作するファームウェア。キー入力、レイヤー切り替え、ポインター操作を処理します。</p>
+              <a class="surround-action surround-action--secondary surround-technology-link" href="https://zmk.dev/" target="_blank" rel="noopener noreferrer" aria-describedby="surround-technology-zmk">
+                <img src="./assets/favicons/zmk.png" width="18" height="18" alt="">
+                <span data-i18n="technologyOfficial">公式サイト</span><span aria-hidden="true">↗</span><span class="surround-interaction__sr-only" data-i18n="technologyNewTab">（新しいタブで開く）</span>
+              </a>
+            </div>
+          </li>
+          <li data-surround-part="switches">
+            <div class="surround-technology-copy">
+              <h3 id="surround-technology-choc">Kailh Choc V2</h3>
+              <p class="surround-body" data-i18n="technologyChoc">キーの押下を検出する薄型メカニカルスイッチ。キーキャップと基板の間に配置しています。</p>
+              <a class="surround-action surround-action--secondary surround-technology-link" href="https://www.kailh.net/products/kailh-choc-v2-low-profile-switch-set" target="_blank" rel="noopener noreferrer" aria-describedby="surround-technology-choc">
+                <img src="./assets/favicons/kailh.png" width="18" height="18" alt="">
+                <span data-i18n="technologyOfficial">公式サイト</span><span aria-hidden="true">↗</span><span class="surround-interaction__sr-only" data-i18n="technologyNewTab">（新しいタブで開く）</span>
+              </a>
+            </div>
+          </li>
+          <li data-surround-part="keycaps">
+            <div class="surround-technology-copy">
+              <h3 id="surround-technology-keycap-maker">KeycapMaker</h3>
+              <p class="surround-body" data-i18n="technologyKeycaps">指が触れるキーキャップの形状を設計するためのツールです。</p>
+              <a class="surround-action surround-action--secondary surround-technology-link" href="https://masashi-desu.github.io/KeycapMaker/" target="_blank" rel="noopener noreferrer" aria-describedby="surround-technology-keycap-maker">
+                <img src="./assets/favicons/keycap-maker.png" width="18" height="18" alt="">
+                <span data-i18n="technologyOfficial">公式サイト</span><span aria-hidden="true">↗</span><span class="surround-interaction__sr-only" data-i18n="technologyNewTab">（新しいタブで開く）</span>
+              </a>
+            </div>
+          </li>
+        </ol>
+      </div>
+      <div class="surround-technology-controls" hidden>
+        <button type="button" data-surround-spec-step="-1" aria-disabled="true">
+          <span aria-hidden="true">←</span><span class="surround-interaction__sr-only" data-i18n="technologyPrevious">前の仕様</span>
+        </button>
+        <span class="surround-technology-position">1 / 4</span>
+        <button type="button" data-surround-spec-step="1" aria-disabled="false">
+          <span aria-hidden="true">→</span><span class="surround-interaction__sr-only" data-i18n="technologyNext">次の仕様</span>
+        </button>
+      </div>
+    </section>
+
+    <section id="surround-04" class="surround-segment surround-segment--links" data-surround-segment="4" aria-labelledby="surround-links-title">
       <div class="surround-segment__frame surround-segment__frame--center surround-segment__frame--links">
         <div class="surround-copy surround-copy--links" data-surround-animate>
           <p class="surround-eyebrow" data-i18n="linksEyebrow">Open hardware prototype</p>

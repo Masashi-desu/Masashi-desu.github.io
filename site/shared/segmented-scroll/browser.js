@@ -207,6 +207,7 @@ var MDWSegmentedScroll = (function(exports) {
 		const eventQueue = [];
 		let emitting = false;
 		const ownedClasses = /* @__PURE__ */ new Set();
+		const ownedHorizontalRegions = /* @__PURE__ */ new Set();
 		const rootElement = options.rootElement || doc.documentElement;
 		const eventTarget = options.eventTarget || win;
 		const observerThresholds = options.observerThresholds || DEFAULT_OBSERVER_THRESHOLDS;
@@ -227,7 +228,8 @@ var MDWSegmentedScroll = (function(exports) {
 		let previousScrollY = 0;
 		let touchPointsActive = 0;
 		let lastTouchEventAt = 0;
-		let wheelDeltaY = 0;
+		let wheelDelta = 0;
+		let wheelAxis = "";
 		let wheelResetTimer = null;
 		let lastWheelEventAt = null;
 		let wheelHandled = false;
@@ -237,6 +239,8 @@ var MDWSegmentedScroll = (function(exports) {
 		let touchStartY = 0;
 		let touchHandled = false;
 		let touchStartStopId = "";
+		let touchHorizontalScroll = null;
+		let touchAxis = "";
 		let touchLastY = 0;
 		let touchScrolledRange = false;
 		function getStops() {
@@ -302,6 +306,7 @@ var MDWSegmentedScroll = (function(exports) {
 		}
 		function refresh() {
 			index.setStops(getStops());
+			if (mounted) syncHorizontalRegions();
 			if (navigation && !index.getById(navigation.id)) cancelNavigation("stop-removed");
 			if (!index.getById(settledId)) settledId = "";
 			const active = index.getById(index.getState().activeId);
@@ -314,6 +319,20 @@ var MDWSegmentedScroll = (function(exports) {
 				stop: null
 			});
 			return getState();
+		}
+		function syncHorizontalRegions() {
+			const className = "segmented-scroll-horizontal";
+			const regions = new Set(mounted ? index.getStops().map((stop) => stop.horizontalScroll?.element).filter(Boolean) : []);
+			for (const element of ownedHorizontalRegions) {
+				if (regions.has(element)) continue;
+				element.classList.remove(className);
+				ownedHorizontalRegions.delete(element);
+			}
+			for (const element of regions) {
+				if (!element.classList || element.classList.contains(className)) continue;
+				element.classList.add(className);
+				ownedHorizontalRegions.add(element);
+			}
 		}
 		function setupObserver() {
 			if (observer) {
@@ -387,6 +406,7 @@ var MDWSegmentedScroll = (function(exports) {
 				restTimer = null;
 			}
 			syncManagedClasses();
+			syncHorizontalRegions();
 			if (navigationLockTimer !== null) win.clearTimeout(navigationLockTimer);
 			navigationLockTimer = null;
 			navigationLockUntil = 0;
@@ -396,6 +416,8 @@ var MDWSegmentedScroll = (function(exports) {
 			lastTouchEventAt = 0;
 			touchHandled = false;
 			touchStartStopId = "";
+			touchHorizontalScroll = null;
+			touchAxis = "";
 			settledId = "";
 			notifyLocks();
 			emit("destroy");
@@ -422,11 +444,12 @@ var MDWSegmentedScroll = (function(exports) {
 			notifyLocks();
 		}
 		function clearWheelAccumulation() {
-			wheelDeltaY = 0;
+			wheelDelta = 0;
 		}
 		function resetWheelGesture() {
 			clearWheelAccumulation();
 			wheelHandled = false;
+			wheelAxis = "";
 			wheelRangeDirection = 0;
 			wheelRemainder = 0;
 			lastWheelEventAt = null;
@@ -626,10 +649,31 @@ var MDWSegmentedScroll = (function(exports) {
 				updateHistory: false
 			});
 		}
-		function normalizeWheelDelta(event) {
-			if (event.deltaMode === 1) return event.deltaY * 16;
-			if (event.deltaMode === 2) return event.deltaY * getViewportHeight();
-			return event.deltaY;
+		function normalizeWheelDelta(event, delta, pageSize) {
+			if (event.deltaMode === 1) return delta * 16;
+			if (event.deltaMode === 2) return delta * pageSize;
+			return delta;
+		}
+		function getHorizontalScroll(event) {
+			return index.getStops().find((stop) => eventIncludesElement(event, stop.horizontalScroll?.element))?.horizontalScroll;
+		}
+		function moveHorizontally(scroll, direction) {
+			const { element } = scroll;
+			const end = Math.max(0, element.scrollWidth - element.clientWidth);
+			const current = Math.min(end, Math.max(0, element.scrollLeft));
+			const points = scroll.getSnapPoints().filter(Number.isFinite).map((left) => Math.min(end, Math.max(0, left))).sort((a, b) => a - b);
+			const next = direction > 0 ? points.find((left) => left > current + 1) : points.reverse().find((left) => left < current - 1);
+			if (next !== void 0) element.scrollTo({
+				left: next,
+				behavior: prefersReducedMotion() ? "instant" : "smooth"
+			});
+		}
+		function accumulateWheel(delta) {
+			if (wheelDelta && Math.sign(wheelDelta) !== Math.sign(delta)) clearWheelAccumulation();
+			wheelDelta += delta;
+			if (Math.abs(wheelDelta) < timings.wheelThreshold) return false;
+			wheelHandled = true;
+			return true;
 		}
 		function handleWheel(event) {
 			if (event.ctrlKey || win.visualViewport && win.visualViewport.scale > timings.zoomThreshold) return;
@@ -640,9 +684,12 @@ var MDWSegmentedScroll = (function(exports) {
 				shiftKey: event.shiftKey
 			};
 			if (typeof options.shouldYieldWheel === "function" && options.shouldYieldWheel(event, gesture)) return;
-			const deltaY = normalizeWheelDelta(event);
+			const region = getHorizontalScroll(event);
+			const horizontal = gesture.horizontalDominant || gesture.shiftKey;
+			const mayScrollHorizontally = region && (wheelAxis === "x" || horizontal);
+			const deltaY = normalizeWheelDelta(event, event.deltaY, getViewportHeight());
 			if (!Number.isFinite(deltaY) || index.getStops().length === 0) return;
-			if (deltaY === 0 && event.deltaX !== 0) return;
+			if (!mayScrollHorizontally && deltaY === 0 && event.deltaX !== 0) return;
 			const now = Date.now();
 			if (lastWheelEventAt !== null && now - lastWheelEventAt >= timings.wheelResetMs) {
 				resetWheelGesture();
@@ -651,6 +698,12 @@ var MDWSegmentedScroll = (function(exports) {
 			lastWheelEventAt = now;
 			if (wheelResetTimer !== null) win.clearTimeout(wheelResetTimer);
 			wheelResetTimer = win.setTimeout(resetWheelGesture, timings.wheelResetMs);
+			if (!wheelAxis && region && (event.deltaX || event.deltaY)) {
+				if (horizontal) clearWheelAccumulation();
+				wheelAxis = horizontal ? "x" : "y";
+			}
+			if (wheelAxis === "x" && region?.mode === "free" && horizontal) return;
+			if (wheelAxis === "x" && !region && !wheelHandled) return;
 			if (!event.cancelable) {
 				wheelHandled = true;
 				notifyLocks();
@@ -662,7 +715,17 @@ var MDWSegmentedScroll = (function(exports) {
 				wheelHandled = true;
 				notifyLocks();
 			}
-			if (wheelHandled || deltaY === 0) return;
+			if (wheelHandled) return;
+			if (wheelAxis === "x" && region) {
+				if (region.mode === "free") return;
+				const delta = normalizeWheelDelta(event, event.deltaX || (event.shiftKey ? event.deltaY : 0), region.element.clientWidth);
+				if (Number.isFinite(delta) && delta && accumulateWheel(delta)) {
+					moveHorizontally(region, Math.sign(delta));
+					notifyLocks();
+				}
+				return;
+			}
+			if (deltaY === 0) return;
 			const direction = deltaY > 0 ? 1 : -1;
 			if (scrollWithinRange(deltaY, true)) {
 				clearWheelAccumulation();
@@ -675,10 +738,7 @@ var MDWSegmentedScroll = (function(exports) {
 				clearWheelAccumulation();
 				return;
 			}
-			if (wheelDeltaY !== 0 && Math.sign(wheelDeltaY) !== direction) wheelDeltaY = 0;
-			wheelDeltaY += deltaY;
-			if (Math.abs(wheelDeltaY) >= timings.wheelThreshold) {
-				wheelHandled = true;
+			if (accumulateWheel(deltaY)) {
 				navigateDirection(direction, event);
 				notifyLocks();
 			}
@@ -690,6 +750,8 @@ var MDWSegmentedScroll = (function(exports) {
 		function handleTouchStart(event) {
 			markTouchActivity(event);
 			scheduleRestAlignmentCheck(timings.touchActivityStaleMs + 320);
+			touchHorizontalScroll = null;
+			touchAxis = "";
 			if (!event.touches || event.touches.length !== 1) {
 				touchStartStopId = "";
 				return;
@@ -701,6 +763,7 @@ var MDWSegmentedScroll = (function(exports) {
 			touchHandled = false;
 			notifyLocks();
 			touchStartStopId = getEventStopId(event);
+			touchHorizontalScroll = getHorizontalScroll(event);
 		}
 		function handleTouchMove(event) {
 			markTouchActivity(event);
@@ -721,6 +784,24 @@ var MDWSegmentedScroll = (function(exports) {
 				verticalIntent: absDeltaY >= timings.touchIntentThreshold && absDeltaY >= absDeltaX * timings.verticalIntentRatio
 			};
 			if (typeof options.shouldYieldTouch === "function" && options.shouldYieldTouch(event, gesture)) return;
+			if (touchHorizontalScroll) {
+				if (!touchAxis) if (gesture.verticalIntent) touchAxis = "y";
+				else if (gesture.horizontalDominant && absDeltaX >= timings.touchIntentThreshold) touchAxis = "x";
+				else {
+					if (touchHorizontalScroll.mode === "threshold" && event.cancelable) event.preventDefault();
+					return;
+				}
+				if (touchAxis === "x") {
+					if (touchHorizontalScroll.mode === "free" || !event.cancelable) return;
+					event.preventDefault();
+					if (!touchHandled && absDeltaX >= timings.touchThreshold) {
+						touchHandled = true;
+						if (!isNavigationLocked()) moveHorizontally(touchHorizontalScroll, Math.sign(deltaX));
+						notifyLocks();
+					}
+					return;
+				}
+			}
 			if (event.cancelable) event.preventDefault();
 			if (!gesture.verticalIntent) return;
 			if (!touchHandled && !isNavigationLocked() && stepY !== 0 && scrollWithinRange(stepY)) {
@@ -744,6 +825,8 @@ var MDWSegmentedScroll = (function(exports) {
 			}
 			touchHandled = false;
 			touchStartStopId = "";
+			touchHorizontalScroll = null;
+			touchAxis = "";
 			notifyLocks();
 			if (touchPointsActive === 0) scheduleRestAlignmentCheck(timings.touchMomentumSettleMs + 200);
 		}

@@ -8,6 +8,9 @@
   const leftHandAnchor = document.getElementById('surround-03');
   const leftHandFrame = features.querySelector('[data-surround-hand="left"]');
   const leftHandCopy = leftHandFrame.querySelector('.surround-copy');
+  const technology = document.getElementById('surround-technology');
+  const technologyScroll = technology.querySelector('.surround-technology-scroll');
+  const technologyItems = [...technologyScroll.querySelectorAll('li')];
   const footerControl = document.querySelector('[data-surround-footer-target]');
   const footerTarget = footerControl ? document.getElementById(footerControl.dataset.surroundFooterTarget) : null;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -27,6 +30,15 @@
       layerTitle: 'Input at full speed.',
       layerBody: 'A brain for switching layers.',
       layerDetail: 'A small move changes the entire input surface.\nEvery operation layered into a 40% outline.',
+      technologyTitle: 'Technical specifications',
+      technologyZmk: 'Firmware running on the microcontroller handles key input, layer switching, and pointer control.',
+      technologyAutoKdk: 'A toolkit for designing the keyboard PCB, including the key layout and microcontroller connections.',
+      technologyChoc: 'Low-profile mechanical switches register each keypress. They sit between the keycaps and the PCB.',
+      technologyKeycaps: 'A tool for designing the shape of the keycaps your fingers touch.',
+      technologyOfficial: 'Official website',
+      technologyNewTab: '(opens in a new tab)',
+      technologyPrevious: 'Previous specification',
+      technologyNext: 'Next specification',
       linksEyebrow: 'Open hardware prototype',
       linksBody: 'Explore the current design and its complete implementation.',
       repositoryLink: 'GitHub Repository',
@@ -145,12 +157,82 @@
     });
   }
 
+  function setupTechnologyScroll() {
+    const items = technologyItems;
+    const officialLinks = items.map((item) => item.querySelector('.surround-technology-link'));
+    const controls = technology.querySelector('.surround-technology-controls');
+    const previous = controls.querySelector('[data-surround-spec-step="-1"]');
+    const next = controls.querySelector('[data-surround-spec-step="1"]');
+    const position = controls.querySelector('.surround-technology-position');
+    let active = 0;
+    let requested = null;
+    let previousWidth = technologyScroll.clientWidth;
+
+    function syncPosition() {
+      const width = technologyScroll.clientWidth;
+      if (!width) return;
+      if (width !== previousWidth) {
+        // The old pixel offset may point to a different item after resizing.
+        technologyScroll.scrollTo({ left: (requested ?? active) * width, behavior: 'instant' });
+        previousWidth = width;
+      }
+      const raw = Math.min(items.length - 1, Math.max(0, technologyScroll.scrollLeft / width));
+      const index = Math.round(raw);
+      // A button's target can resolve to a fractional pixel on high-DPI displays.
+      const progress = Math.abs(raw - index) * width <= 1 ? index : raw;
+      technology.dataset.surroundSpecProgress = String(progress);
+      if (index === active && items[index].hasAttribute('aria-current')) return;
+      items[active].removeAttribute('aria-current');
+      active = index;
+      if (active === requested) requested = null;
+      items[active].setAttribute('aria-current', 'true');
+      officialLinks.forEach((link, linkIndex) => { link.tabIndex = linkIndex === active ? 0 : -1; });
+      position.textContent = `${active + 1} / ${items.length}`;
+      previous.setAttribute('aria-disabled', String(active === 0));
+      next.setAttribute('aria-disabled', String(active === items.length - 1));
+    }
+
+    function show(index) {
+      const target = Math.min(items.length - 1, Math.max(0, index));
+      requested = target === active ? null : target;
+      technologyScroll.scrollTo({
+        left: target * technologyScroll.clientWidth,
+        behavior: reduceMotion.matches ? 'instant' : 'smooth'
+      });
+    }
+
+    controls.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-surround-spec-step]');
+      if (button) show((requested ?? active) + Number(button.dataset.surroundSpecStep));
+    });
+    technologyScroll.addEventListener('keydown', (event) => {
+      if (event.target !== technologyScroll) return;
+      const index = requested ?? active;
+      const targets = { ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: items.length - 1 };
+      if (!Object.hasOwn(targets, event.key)) return;
+      event.preventDefault();
+      show(targets[event.key]);
+    });
+    technologyScroll.addEventListener('scroll', syncPosition, { passive: true });
+    new ResizeObserver(syncPosition).observe(technologyScroll);
+    for (const type of ['pointerdown', 'wheel', 'touchstart']) {
+      technologyScroll.addEventListener(type, () => { requested = null; }, { passive: true });
+    }
+    controls.hidden = false;
+    syncPosition();
+  }
+
   function getScrollStops() {
     const stops = sections.map((section) => ({
       id: section.id,
       element: section,
       align: 'start',
       role: 'content',
+      horizontalScroll: section === technology ? {
+        element: technologyScroll,
+        mode: 'threshold',
+        getSnapPoints: () => technologyItems.map((_, index) => index * technologyScroll.clientWidth)
+      } : undefined,
       scrollWithin: section === features,
       getForwardExitTop: section === features ? readFeatureExitTop : undefined,
       getReverseEntryTop: section === features ? readLeftHandTop : undefined,
@@ -347,6 +429,7 @@
   recordFallbacks();
   applyLanguage(currentLocale);
   setupLanguageSelector();
+  setupTechnologyScroll();
   setupSectionNavigation();
 
   window.addEventListener('mdw:footer-loaded', () => {

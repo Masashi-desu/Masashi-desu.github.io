@@ -20,6 +20,16 @@ Masahi Desu User Site が公開物、ビルド、テストで直接または間�
 | [Simple Icons](https://simpleicons.org/) | 16 | BarticalとTypeFetchのitch.ioアイコン、およびSurround1x0-AKDKのGitHubアイコン。jsDelivr CDNからSVGを読み込み | [CC0-1.0](https://spdx.org/licenses/CC0-1.0.html) |
 | [three.js](https://threejs.org/) | 0.180.0 | Surround1x0-AKDKページの3D表示。Viteが配信用JavaScriptへbundle | [MIT](https://spdx.org/licenses/MIT.html) |
 
+## 公式リンクのアイコン
+
+Surround1x0-AKDKの技術的仕様で、リンク先を示すために公式サイトのファビコンを48pxのPNGとして配信します。
+
+| 名称 | 取得元 | 権利・ライセンスの参照先 |
+| --- | --- | --- |
+| ZMK Firmware | [公式サイトのファビコン](https://zmk.dev/img/favicon.ico) | [上流リポジトリのMITライセンス](https://github.com/zmkfirmware/zmk/blob/main/LICENSE) |
+| Auto-KDK | [公式サイトのファビコン](https://auto-kdk.pages.dev/assets/icon-CbC68dT3.svg) | [公式リポジトリ](https://github.com/sekigon-gonnoc/auto-kdk/blob/master/icon.svg)。アイコン固有のライセンス表記は確認できていない |
+| Kailh | [Kailh公式ストアのファビコン](https://www.kailh.net/cdn/shop/files/Kailh_Favicon.png) | [Kailhの公式サイト](https://www.kailh.net/)。アイコン固有のライセンス表記は確認できていない |
+
 ## Google Fontsから読み込むWebフォント
 
 次のフォントはリポジトリへ複製せず、各ページがGoogle Fontsから読み込みます。OS標準フォントとフォールバックフォントは対象外です。

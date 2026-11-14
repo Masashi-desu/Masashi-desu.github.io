@@ -31,11 +31,20 @@ export interface StopContext {
   documentBottom: number;
 }
 
+export type HorizontalScroll = {
+  readonly element: HTMLElement;
+} & (
+  | { readonly mode: 'free' }
+  | { readonly mode: 'threshold'; readonly getSnapPoints: () => readonly number[] }
+);
+
 export interface Stop {
   readonly id: string;
   readonly role?: 'content' | 'auxiliary';
   readonly element?: Element;
   readonly eventRegion?: Element;
+  /** Optional horizontal scrolling inside this stop. Vertical input still moves the document. */
+  readonly horizontalScroll?: HorizontalScroll;
   readonly observe?: boolean;
   readonly align?: 'start' | 'end' | 'document-end';
   /** Allow continuous document scrolling from this section's start to its viewport-aligned end. */

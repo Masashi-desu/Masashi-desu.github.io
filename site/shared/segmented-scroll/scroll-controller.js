@@ -20,6 +20,7 @@ export function createScrollController(options = {}) {
   const eventQueue = [];
   let emitting = false;
   const ownedClasses = new Set();
+  const ownedHorizontalRegions = new Set();
   const rootElement = options.rootElement || doc.documentElement;
   const eventTarget = options.eventTarget || win;
   const observerThresholds = options.observerThresholds || DEFAULT_OBSERVER_THRESHOLDS;
@@ -41,7 +42,8 @@ export function createScrollController(options = {}) {
   let previousScrollY = 0;
   let touchPointsActive = 0;
   let lastTouchEventAt = 0;
-  let wheelDeltaY = 0;
+  let wheelDelta = 0;
+  let wheelAxis = '';
   let wheelResetTimer = null;
   let lastWheelEventAt = null;
   let wheelHandled = false;
@@ -51,6 +53,8 @@ export function createScrollController(options = {}) {
   let touchStartY = 0;
   let touchHandled = false;
   let touchStartStopId = '';
+  let touchHorizontalScroll = null;
+  let touchAxis = '';
   let touchLastY = 0;
   let touchScrolledRange = false;
 
@@ -125,6 +129,7 @@ export function createScrollController(options = {}) {
 
   function refresh() {
     index.setStops(getStops());
+    if (mounted) syncHorizontalRegions();
     if (navigation && !index.getById(navigation.id)) cancelNavigation('stop-removed');
     if (!index.getById(settledId)) settledId = '';
     const active = index.getById(index.getState().activeId);
@@ -136,6 +141,21 @@ export function createScrollController(options = {}) {
     if (index.getState().activeId) activateStop(index.getState().activeId, 'refresh', true);
     else emit('activechange', { source: 'refresh', stop: null });
     return getState();
+  }
+
+  function syncHorizontalRegions() {
+    const className = 'segmented-scroll-horizontal';
+    const regions = new Set(mounted ? index.getStops().map((stop) => stop.horizontalScroll?.element).filter(Boolean) : []);
+    for (const element of ownedHorizontalRegions) {
+      if (regions.has(element)) continue;
+      element.classList.remove(className);
+      ownedHorizontalRegions.delete(element);
+    }
+    for (const element of regions) {
+      if (!element.classList || element.classList.contains(className)) continue;
+      element.classList.add(className);
+      ownedHorizontalRegions.add(element);
+    }
   }
 
   function setupObserver() {
@@ -224,6 +244,7 @@ export function createScrollController(options = {}) {
       restTimer = null;
     }
     syncManagedClasses();
+    syncHorizontalRegions();
     if (navigationLockTimer !== null) win.clearTimeout(navigationLockTimer);
     navigationLockTimer = null;
     navigationLockUntil = 0;
@@ -233,6 +254,8 @@ export function createScrollController(options = {}) {
     lastTouchEventAt = 0;
     touchHandled = false;
     touchStartStopId = '';
+    touchHorizontalScroll = null;
+    touchAxis = '';
     settledId = '';
     notifyLocks();
     emit('destroy');
@@ -266,12 +289,13 @@ export function createScrollController(options = {}) {
   }
 
   function clearWheelAccumulation() {
-    wheelDeltaY = 0;
+    wheelDelta = 0;
   }
 
   function resetWheelGesture() {
     clearWheelAccumulation();
     wheelHandled = false;
+    wheelAxis = '';
     wheelRangeDirection = 0;
     wheelRemainder = 0;
     lastWheelEventAt = null;
@@ -468,14 +492,38 @@ export function createScrollController(options = {}) {
     });
   }
 
-  function normalizeWheelDelta(event) {
+  function normalizeWheelDelta(event, delta, pageSize) {
     if (event.deltaMode === 1) {
-      return event.deltaY * 16;
+      return delta * 16;
     }
     if (event.deltaMode === 2) {
-      return event.deltaY * getViewportHeight();
+      return delta * pageSize;
     }
-    return event.deltaY;
+    return delta;
+  }
+
+  function getHorizontalScroll(event) {
+    return index.getStops().find((stop) => eventIncludesElement(event, stop.horizontalScroll?.element))?.horizontalScroll;
+  }
+
+  function moveHorizontally(scroll, direction) {
+    const { element } = scroll;
+    const end = Math.max(0, element.scrollWidth - element.clientWidth);
+    const current = Math.min(end, Math.max(0, element.scrollLeft));
+    const points = scroll.getSnapPoints().filter(Number.isFinite)
+      .map((left) => Math.min(end, Math.max(0, left))).sort((a, b) => a - b);
+    const next = direction > 0
+      ? points.find((left) => left > current + 1)
+      : points.reverse().find((left) => left < current - 1);
+    if (next !== undefined) element.scrollTo({ left: next, behavior: prefersReducedMotion() ? 'instant' : 'smooth' });
+  }
+
+  function accumulateWheel(delta) {
+    if (wheelDelta && Math.sign(wheelDelta) !== Math.sign(delta)) clearWheelAccumulation();
+    wheelDelta += delta;
+    if (Math.abs(wheelDelta) < timings.wheelThreshold) return false;
+    wheelHandled = true;
+    return true;
   }
 
   function handleWheel(event) {
@@ -491,11 +539,14 @@ export function createScrollController(options = {}) {
     if (typeof options.shouldYieldWheel === 'function' && options.shouldYieldWheel(event, gesture)) {
       return;
     }
-    const deltaY = normalizeWheelDelta(event);
+    const region = getHorizontalScroll(event);
+    const horizontal = gesture.horizontalDominant || gesture.shiftKey;
+    const mayScrollHorizontally = region && (wheelAxis === 'x' || horizontal);
+    const deltaY = normalizeWheelDelta(event, event.deltaY, getViewportHeight());
     if (!Number.isFinite(deltaY) || index.getStops().length === 0) {
       return;
     }
-    if (deltaY === 0 && event.deltaX !== 0) {
+    if (!mayScrollHorizontally && deltaY === 0 && event.deltaX !== 0) {
       return;
     }
 
@@ -514,6 +565,13 @@ export function createScrollController(options = {}) {
       win.clearTimeout(wheelResetTimer);
     }
     wheelResetTimer = win.setTimeout(resetWheelGesture, timings.wheelResetMs);
+    // Keep the configured region's leading axis through diagonal inertia.
+    if (!wheelAxis && region && (event.deltaX || event.deltaY)) {
+      if (horizontal) clearWheelAccumulation();
+      wheelAxis = horizontal ? 'x' : 'y';
+    }
+    if (wheelAxis === 'x' && region?.mode === 'free' && horizontal) return;
+    if (wheelAxis === 'x' && !region && !wheelHandled) return;
     if (!event.cancelable) {
       // A gesture already owned by the browser cannot be taken over halfway.
       // Let the existing rest alignment recover after native scrolling ends.
@@ -529,9 +587,19 @@ export function createScrollController(options = {}) {
     }
     // Navigation animation time and wheel gesture lifetime are independent.
     // Keep consuming inertia until there has been a full quiet interval.
-    if (wheelHandled || deltaY === 0) {
+    if (wheelHandled) {
       return;
     }
+    if (wheelAxis === 'x' && region) {
+      if (region.mode === 'free') return;
+      const delta = normalizeWheelDelta(event, event.deltaX || (event.shiftKey ? event.deltaY : 0), region.element.clientWidth);
+      if (Number.isFinite(delta) && delta && accumulateWheel(delta)) {
+        moveHorizontally(region, Math.sign(delta));
+        notifyLocks();
+      }
+      return;
+    }
+    if (deltaY === 0) return;
     const direction = deltaY > 0 ? 1 : -1;
     if (scrollWithinRange(deltaY, true)) {
       clearWheelAccumulation();
@@ -544,12 +612,7 @@ export function createScrollController(options = {}) {
       clearWheelAccumulation();
       return;
     }
-    if (wheelDeltaY !== 0 && Math.sign(wheelDeltaY) !== direction) {
-      wheelDeltaY = 0;
-    }
-    wheelDeltaY += deltaY;
-    if (Math.abs(wheelDeltaY) >= timings.wheelThreshold) {
-      wheelHandled = true;
+    if (accumulateWheel(deltaY)) {
       navigateDirection(direction, event);
       notifyLocks();
     }
@@ -563,6 +626,8 @@ export function createScrollController(options = {}) {
   function handleTouchStart(event) {
     markTouchActivity(event);
     scheduleRestAlignmentCheck(timings.touchActivityStaleMs + 320);
+    touchHorizontalScroll = null;
+    touchAxis = '';
     if (!event.touches || event.touches.length !== 1) {
       touchStartStopId = '';
       return;
@@ -574,6 +639,7 @@ export function createScrollController(options = {}) {
     touchHandled = false;
     notifyLocks();
     touchStartStopId = getEventStopId(event);
+    touchHorizontalScroll = getHorizontalScroll(event);
   }
 
   function handleTouchMove(event) {
@@ -598,6 +664,26 @@ export function createScrollController(options = {}) {
     };
     if (typeof options.shouldYieldTouch === 'function' && options.shouldYieldTouch(event, gesture)) {
       return;
+    }
+    if (touchHorizontalScroll) {
+      if (!touchAxis) {
+        if (gesture.verticalIntent) touchAxis = 'y';
+        else if (gesture.horizontalDominant && absDeltaX >= timings.touchIntentThreshold) touchAxis = 'x';
+        else {
+          if (touchHorizontalScroll.mode === 'threshold' && event.cancelable) event.preventDefault();
+          return;
+        }
+      }
+      if (touchAxis === 'x') {
+        if (touchHorizontalScroll.mode === 'free' || !event.cancelable) return;
+        event.preventDefault();
+        if (!touchHandled && absDeltaX >= timings.touchThreshold) {
+          touchHandled = true;
+          if (!isNavigationLocked()) moveHorizontally(touchHorizontalScroll, Math.sign(deltaX));
+          notifyLocks();
+        }
+        return;
+      }
     }
     if (event.cancelable) {
       event.preventDefault();
@@ -631,6 +717,8 @@ export function createScrollController(options = {}) {
     }
     touchHandled = false;
     touchStartStopId = '';
+    touchHorizontalScroll = null;
+    touchAxis = '';
     notifyLocks();
     if (touchPointsActive === 0) {
       scheduleRestAlignmentCheck(timings.touchMomentumSettleMs + 200);

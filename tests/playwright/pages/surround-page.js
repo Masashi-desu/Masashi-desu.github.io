@@ -8,10 +8,17 @@ class SurroundPage extends ProductPage {
     this.primaryAction = page.locator('.surround-action--primary');
     this.footerTab = page.locator('[data-surround-footer-target="surround-footer"]');
     this.featureTab = this.sectionTab(2);
+    this.technology = page.locator('#surround-technology');
+    this.technologies = this.technology.getByRole('listitem');
   }
 
   model(side) { return this.page.locator(`[data-surround-model="${side}"]`); }
   sectionTab(number) { return this.page.locator(`[data-surround-target="surround-0${number}"]`); }
+  async showTechnology() {
+    await this.page.locator('[data-surround-target="surround-technology"]').click();
+    await this.page.waitForFunction(() => document.body.dataset.surroundStop === 'surround-technology' &&
+      window.MDWSurroundNavigation.isSettled());
+  }
   async selectSection(number) { await this.sectionTab(number).click(); }
   async showSection(number) {
     if (number === 3) {
@@ -23,8 +30,9 @@ class SurroundPage extends ProductPage {
     try {
       await this.page.waitForFunction(({ id, index }) => (
         document.body.dataset.surroundScene === String(index)
-        && Math.abs(document.getElementById(id).getBoundingClientRect().top) <= 1
-      ), { id, index: number - 1 });
+        // The controller aligns to a rounded scroll position. The section can start on a fractional CSS pixel.
+        && Math.abs(document.getElementById(id).getBoundingClientRect().top) <= 2
+      ), { id, index: number === 4 ? 4 : number - 1 });
     } catch (error) {
       const position = await this.page.evaluate((id) => ({
         stop: document.body.dataset.surroundStop,

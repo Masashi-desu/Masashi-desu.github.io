@@ -133,6 +133,66 @@ test('最初の 0.25px wheel をキャンセルし、WebKit の後続イベン�
   assert.equal(h.window.scrollY, 1000);
 });
 
+test('横方向の自由スクロールはブラウザに任せ、斜め入力の残りで縦へ移動しない', (t) => {
+  const element = { classList: createFakeClassList() };
+  const horizontalScroll = { element, mode: 'free' };
+  const h = createWheelHarness(t, { getStops: () => [
+    { id: 'first', getTop: () => 0, horizontalScroll },
+    { id: 'next', getTop: () => 1000 }
+  ] });
+  const event = { composedPath: () => [element] };
+  assert.equal(element.classList.contains('segmented-scroll-horizontal'), true);
+  assert.equal(h.wheel(0, { ...event, deltaX: 4 }).defaultPrevented, false);
+  assert.equal(h.wheel(100, event).defaultPrevented, true);
+  assert.equal(h.window.scrollY, 0);
+  h.tick(DEFAULT_TIMINGS.wheelResetMs + 1);
+  assert.equal(h.wheel(86, event).defaultPrevented, true);
+  assert.deepEqual(h.navigations, ['next']);
+  h.controller.destroy();
+  assert.equal(element.classList.contains('segmented-scroll-horizontal'), false);
+});
+
+test('横方向のしきい値はホイール・スワイプごとに隣の停止点へ1回だけ進める', (t) => {
+  const positions = [];
+  const element = {
+    classList: createFakeClassList(), clientWidth: 100, scrollWidth: 400, scrollLeft: 0,
+    scrollTo({ left }) { this.scrollLeft = left; positions.push(left); }
+  };
+  const horizontalScroll = { element, mode: 'threshold', getSnapPoints: () => [300, 0, 100, 200] };
+  const h = createWheelHarness(t, { getStops: () => [
+    { id: 'first', getTop: () => 0, horizontalScroll },
+    { id: 'next', getTop: () => 1000 }
+  ] });
+  const event = { composedPath: () => [element] };
+  assert.equal(h.wheel(0, { ...event, deltaX: 85.5 }).defaultPrevented, true);
+  assert.deepEqual(positions, []);
+  h.wheel(0, { ...event, deltaX: 0.5 });
+  h.wheel(0, { ...event, deltaX: 400 });
+  h.wheel(400, event);
+  assert.deepEqual(positions, [100]);
+  assert.equal(h.window.scrollY, 0);
+  h.tick(DEFAULT_TIMINGS.wheelResetMs + 1);
+  h.wheel(-86, { ...event, shiftKey: true });
+  assert.deepEqual(positions, [100, 0]);
+
+  const touch = (type, x, y) => h.listeners.get(type)({
+    ...event, touches: type === 'touchend' ? [] : [{ clientX: x, clientY: y }],
+    cancelable: true, preventDefault() {}
+  });
+  touch('touchstart', 100, 100);
+  touch('touchmove', 96, 100);
+  touch('touchmove', 53, 100);
+  assert.deepEqual(positions, [100, 0]);
+  touch('touchmove', 52, 100);
+  touch('touchmove', 0, 40);
+  assert.deepEqual(positions, [100, 0, 100]);
+  assert.equal(h.window.scrollY, 0);
+  touch('touchend');
+  touch('touchstart', 100, 100);
+  touch('touchmove', 100, 40);
+  assert.deepEqual(h.navigations, ['next']);
+});
+
 test('指定した区間内の位置を下向きにまたいだときだけ次の停止点へ移動する', (t) => {
   let exitTop = 1450;
   let h;

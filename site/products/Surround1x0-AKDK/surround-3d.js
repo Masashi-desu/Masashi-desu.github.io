@@ -12,6 +12,19 @@ const PAIR_MARGIN_PX = Object.freeze({ desktop: 24, mobile: 16 });
 const FEATURE_SCROLL_DAMPING = 14;
 const FEATURE_SCROLL_MAX_SPEED = 2.5;
 const FEATURE_SCROLL_EPSILON = 0.001;
+const TECHNOLOGY_SCENE = 3;
+const LINKS_SCENE = 4;
+const technology = document.getElementById('surround-technology');
+const technologyParts = [...technology.querySelectorAll('[data-surround-part]')].map(({ dataset }) => dataset.surroundPart);
+const TECHNOLOGY_LAYERS = {
+  controller: ['controller'],
+  // The sockets layer includes the diodes, and the sensor layer includes the flex cable.
+  boards: ['controller', 'pcb', 'bottom_case', 'top_case', 'sockets', 'conthrough', 'mouse_sensor'],
+  switches: ['switches'],
+  keycaps: ['keycaps']
+};
+const TECHNOLOGY_BACKGROUND_OPACITY = 0.16;
+const ZMK_PCB_OPACITY = 0.5;
 // Section 04, landscape only. Edit these XYZ Euler angles in degrees to adjust
 // each keyboard's orientation. No additional per-side roll is applied later.
 const LANDSCAPE_EXPLODED_ROTATION_DEG = Object.freeze({
@@ -245,14 +258,24 @@ async function start() {
     targetPointerY: 0,
     lastTime: performance.now()
   };
+  let technologyFraming = null;
+  let technologyPlacement = null;
   const interaction = createModelInteraction({
     models, camera, state: publicState,
-    reset: () => refreshScene()
+    reset: () => refreshScene(),
+    frameRotation(pose) {
+      if (!technologyFraming) return;
+      const next = readTechnologyPlacement(technologyFraming, technologyProgress, pose);
+      applyTechnologyPlacement(pose, next, technologyPlacement);
+      technologyPlacement = next;
+    }
   });
   let featuredLayouts;
   let featuredMotions;
   let targetFeatureProgress = null;
   let pendingFeaturedLayout = false;
+  let technologyStrength = 0;
+  let technologyProgress = 0;
   const modelList = Object.values(models);
 
   function syncTheme() {
@@ -266,7 +289,7 @@ async function start() {
   }
 
   function setScene(index, immediate = false) {
-    const normalized = Math.min(3, Math.max(0, Number(index) || 0));
+    const normalized = Math.min(LINKS_SCENE, Math.max(0, Number(index) || 0));
     if (!immediate && normalized === publicState.activeScene) {
       return false;
     }
@@ -276,6 +299,7 @@ async function start() {
     const previous = publicState.activeScene;
     const waveDirection = normalized >= previous ? 1 : -1;
     const featured = normalized === 1 || normalized === 2;
+    const specifications = normalized === TECHNOLOGY_SCENE;
     const layout = featured ? getFeaturedLayouts()[normalized - 1] : null;
     const state = layout?.state ?? getLayoutState(
       normalized,
@@ -283,9 +307,21 @@ async function start() {
       window.innerWidth,
       window.visualViewport?.height || window.innerHeight
     );
-    publicState.pairLayout = normalized === 0 || normalized === 3
+    publicState.pairLayout = normalized === 0 || normalized === LINKS_SCENE
       ? fitPairLayout(state, models, camera)
       : null;
+    technologyFraming = specifications ? fitTechnologyModel(state.right, models, camera) : null;
+    technologyPlacement = null;
+    publicState.technologyFitArea = technologyFraming?.fitArea ?? null;
+    if (technologyFraming) {
+      technologyProgress = readTechnologyProgress();
+      const placement = readTechnologyPlacement(technologyFraming, technologyProgress, state.right);
+      technologyPlacement = placement;
+      Object.assign(state.right, placement);
+    }
+    if (immediate) {
+      technologyStrength = Number(specifications);
+    }
     setForegroundScene(normalized, layout?.fit);
     publicState.explosionOrientation = state.explosion ? (state.explosionOrientation || 'vertical') : null;
     publicState.heroSpread = normalized === 0 ? Math.abs(state.left.x) : null;
@@ -410,7 +446,29 @@ async function start() {
       if (pendingFeaturedLayout) refreshScene();
       updateFeatureMotion(delta);
     }
-    modelList.forEach((model) => updateModel(model, time));
+    const technologyTarget = Number(publicState.activeScene === TECHNOLOGY_SCENE);
+    const technologyDelta = technologyTarget - technologyStrength;
+    technologyStrength = reduceMotion.matches || Math.abs(technologyDelta) < 0.001
+      ? technologyTarget : technologyStrength + technologyDelta * (1 - Math.exp(-delta * 11));
+    if (technologyFraming && !hasSceneMotion()) {
+      const nextProgress = readTechnologyProgress();
+      if (nextProgress !== technologyProgress) {
+        technologyProgress = nextProgress;
+        const current = models[publicState.theme].halves.right.current;
+        const next = readTechnologyPlacement(technologyFraming, technologyProgress, current);
+        // Apply the framing delta so an intentional pan remains relative to the subject.
+        for (const model of modelList) {
+          const half = model.halves.right;
+          applyTechnologyPlacement(half.current, next, technologyPlacement);
+          Object.assign(half.target, next);
+        }
+        technologyPlacement = next;
+      }
+    }
+    const technologyAppearance = getTechnologyAppearance(technologyProgress, technologyStrength);
+    publicState.technologyFocus = technologyAppearance?.focus ?? {};
+    publicState.technologyPcbOpacity = technologyAppearance?.opacity('pcb') ?? 1;
+    modelList.forEach((model) => updateModel(model, time, technologyAppearance?.opacity));
     const progress = publicState.featureProgress;
     publicState.motionActive = (progress > 0 && progress < 1) || progress !== targetFeatureProgress || hasSceneMotion();
 
@@ -427,6 +485,11 @@ async function start() {
     publishPoseSnapshot(models[publicState.theme]);
     interaction.update();
     window.requestAnimationFrame(render);
+  }
+
+  function readTechnologyProgress() {
+    const progress = Number(technology.dataset.surroundSpecProgress) || 0;
+    return reduceMotion.matches ? Math.round(progress) : progress;
   }
 
   // Navigation remains available while the GLBs load. Start at the latest
@@ -575,19 +638,30 @@ function createHalfState(object, side, sourceName) {
     if (!child.isMesh || !child.material) {
       return;
     }
+    let layer = '';
+    if (side === 'right') {
+      for (let parent = child.parent; parent !== object; parent = parent.parent) {
+        if (!Number.isFinite(parent.userData.exploded_view_order)) continue;
+        layer = parent.userData.exploded_view_layer;
+        break;
+      }
+    }
+    if (!clonedMaterials.has(layer)) clonedMaterials.set(layer, new Map());
+    const materials = clonedMaterials.get(layer);
     const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
     const childMaterials = sourceMaterials.map((source) => {
-      if (!clonedMaterials.has(source)) {
+      if (!materials.has(source)) {
         const material = source.clone();
-        clonedMaterials.set(source, material);
+        materials.set(source, material);
         materialStates.push({
           material,
+          layer,
           baseOpacity: source.opacity,
           baseTransparent: source.transparent,
           baseDepthWrite: source.depthWrite
         });
       }
-      return clonedMaterials.get(source);
+      return materials.get(source);
     });
     child.material = Array.isArray(child.material) ? childMaterials : childMaterials[0];
   });
@@ -707,6 +781,7 @@ function createExplosionState(halves, metadata) {
     spacing,
     current: 0,
     target: 0,
+    rightOnly: false,
     motion: null,
     maxWaveDelay,
     maxOffset: Math.max(...layers.map((layer) => layer.order * spacing)) * MODEL_UNIT_SCALE
@@ -765,6 +840,7 @@ function createPairLayoutPoints(halves, explosion) {
     }
     for (const point of vertices) {
       points.exploded[layer.side].push({
+        layer: layer.name,
         position: point.clone().applyMatrix4(inverse),
         explosionAxis,
         rise: order * explosion.spacing * MODEL_UNIT_SCALE
@@ -849,12 +925,89 @@ function fitFeaturedLayout(state, index, models, camera) {
   } else {
     fitArea.right = Math.min(fitArea.right, copy.left - margin);
   }
-  const pose = state[side];
+  const points = Object.values(models).flatMap((model) => model.featuredLayoutPoints[side]);
+  const result = fitSingleModel(state[side], points, camera, fitArea, { width, height, compact });
+  return { ...result, side, stacked, edgeMarginPx: margin, copy, fitArea };
+}
+
+function fitTechnologyModel(pose, models, camera) {
+  const width = window.innerWidth;
+  const height = window.visualViewport?.height || window.innerHeight;
+  const compact = compactLayout.matches;
+  const margin = compact ? PAIR_MARGIN_PX.mobile : PAIR_MARGIN_PX.desktop;
+  const spacing = getExplosionSpacingScale();
+  const points = Object.values(models).flatMap((model) => model.layoutPoints.exploded.right.map((point) => ({
+    layer: point.layer,
+    position: point.position.clone().addScaledVector(point.explosionAxis, point.rise * spacing)
+  })));
+  const landscape = width > height;
+  const fitArea = {
+    left: landscape ? width * 0.51 : margin,
+    right: width - margin,
+    top: document.querySelector('.surround-topbar').getBoundingClientRect().bottom + margin + (landscape ? 0 : 36),
+    bottom: landscape ? height - margin : height * 0.56
+  };
+  const frames = Object.fromEntries(Object.entries(TECHNOLOGY_LAYERS).map(([part, layers]) => {
+    const selected = points.filter((point) => layers.includes(point.layer)).map((point) => point.position);
+    const pivot = new THREE.Box3().setFromPoints(selected).getCenter(new THREE.Vector3());
+    const frame = { ...pose, x: 0, y: 0, z: 0 };
+    const centered = selected.map((point) => point.clone().sub(pivot));
+    const wholeModel = points.map((point) => point.position.clone().sub(pivot));
+    fitSingleModel(frame, centered, camera, fitArea, { width, height, compact, depthPoints: wholeModel });
+    return [part, { pivot, anchor: new THREE.Vector3(frame.x, frame.y, frame.z), scale: frame.scale }];
+  }));
+  return { frames, fitArea };
+}
+
+function readTechnologyPlacement({ frames }, progress, pose) {
+  const from = frames[technologyParts[Math.floor(progress)]];
+  const to = frames[technologyParts[Math.ceil(progress)]];
+  const blend = smootherStep(progress % 1);
+  const scale = THREE.MathUtils.lerp(from.scale, to.scale, blend);
+  const rotation = new THREE.Euler(pose.rotationX, pose.rotationY, pose.rotationZ);
+  const pivot = from.pivot.clone().multiplyScalar(from.scale * (1 - blend))
+    .addScaledVector(to.pivot, to.scale * blend).applyEuler(rotation);
+  const { x, y, z } = from.anchor.clone().lerp(to.anchor, blend).sub(pivot);
+  return { x, y, z, scale };
+}
+
+function applyTechnologyPlacement(pose, next, previous) {
+  pose.x += next.x - previous.x;
+  pose.y += next.y - previous.y;
+  pose.z += next.z - previous.z;
+  pose.scale = next.scale;
+}
+
+function getTechnologyAppearance(progress, strength) {
+  if (strength === 0) return null;
+  const from = technologyParts[Math.floor(progress)];
+  const to = technologyParts[Math.ceil(progress)];
+  const blend = smootherStep(progress % 1);
+  const focus = {};
+  for (const layer of TECHNOLOGY_LAYERS[from]) focus[layer] = (1 - blend) * strength;
+  for (const layer of TECHNOLOGY_LAYERS[to]) focus[layer] = (focus[layer] ?? 0) + blend * strength;
+  const zmkWeight = (from === 'controller' ? 1 - blend : 0) + (to === 'controller' ? blend : 0);
+  return {
+    focus,
+    opacity(layer) {
+      const unfocused = strength - (focus[layer] ?? 0);
+      const pcbOpacity = layer === 'pcb' ? strength * zmkWeight * (ZMK_PCB_OPACITY - TECHNOLOGY_BACKGROUND_OPACITY) : 0;
+      return 1 - unfocused * (1 - TECHNOLOGY_BACKGROUND_OPACITY) + pcbOpacity;
+    }
+  };
+}
+
+function fitSingleModel(pose, sourcePoints, camera, fitArea, { width, height, compact, depthPoints }) {
   const views = createLayoutViews(camera, compact);
   const rotation = new THREE.Euler(pose.rotationX, pose.rotationY, pose.rotationZ);
-  const points = Object.values(models).flatMap((model) => model.featuredLayoutPoints[side].map((point) => (
-    point.clone().applyEuler(rotation)
-  )));
+  const points = sourcePoints.map((point) => point.clone().applyEuler(rotation));
+  // Keep the surrounding translucent geometry clear of the camera while the
+  // screen-space fit is determined by the selected parts.
+  const closestPoints = depthPoints && views.map((view) => {
+    const e = view.elements;
+    const zAxis = new THREE.Vector3(e[3], e[7], e[11]);
+    return Math.min(...depthPoints.map((point) => point.clone().applyEuler(rotation).dot(zAxis)));
+  });
   const cameraUp = new THREE.Vector3(0, compact ? 0.88 : 0.56, compact ? -0.515 : -0.34).normalize();
   const e = views[0].elements;
   const depth = e[3] * pose.x + e[7] * pose.y + e[11] * pose.z + e[15];
@@ -863,7 +1016,13 @@ function fitFeaturedLayout(state, index, models, camera) {
   const evaluate = (scale, offsetX, offsetY) => {
     const bounds = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
     let depthFits = true;
-    for (const view of views) {
+    for (const [index, view] of views.entries()) {
+      if (closestPoints) {
+        const e = view.elements;
+        const distance = closestPoints[index] * scale + e[15] + e[3] * (pose.x + offsetX) +
+          e[7] * (pose.y + cameraUp.y * offsetY) + e[11] * (pose.z + cameraUp.z * offsetY);
+        depthFits = depthFits && distance >= camera.near * 4;
+      }
       for (const point of points) {
         projected.copy(point).multiplyScalar(scale);
         projected.x += pose.x + offsetX;
@@ -907,7 +1066,7 @@ function fitFeaturedLayout(state, index, models, camera) {
   pose.x += result.offsetX;
   pose.y += cameraUp.y * result.offsetY;
   pose.z += cameraUp.z * result.offsetY;
-  return { ...result, side, stacked, edgeMarginPx: margin, copy, fitArea };
+  return result;
 }
 
 function fitPairLayout(state, models, camera) {
@@ -1133,7 +1292,21 @@ function getLayoutState(
   viewportWidth = window.innerWidth,
   viewportHeight = window.visualViewport?.height || window.innerHeight
 ) {
-  if (index === 3 && viewportWidth > viewportHeight) {
+  if (index === TECHNOLOGY_SCENE) {
+    const angles = LANDSCAPE_EXPLODED_ROTATION_DEG.right;
+    return {
+      explosion: 1,
+      rightOnly: true,
+      explosionOrientation: 'horizontal',
+      left: createPose((compact ? EXIT_TARGETS.mobile : EXIT_TARGETS.desktop).left),
+      right: createPose({
+        rotationX: THREE.MathUtils.degToRad(angles.x),
+        rotationY: THREE.MathUtils.degToRad(angles.y),
+        rotationZ: THREE.MathUtils.degToRad(viewportWidth > viewportHeight ? angles.z : -18)
+      })
+    };
+  }
+  if (index === LINKS_SCENE && viewportWidth > viewportHeight) {
     // Compensate only for the mobile camera pitch, preserving the same view.
     const cameraPitchCorrection = compact ? Math.atan2(0.34, 0.56) - Math.atan2(0.515, 0.88) : 0;
     const poses = Object.fromEntries(['left', 'right'].map((side) => {
@@ -1167,11 +1340,6 @@ function getLayoutState(
       explosion: 0,
       left: createPose({ x: -0.095, y: 0.018, z: 0.105, scale: 1.86, rotationX: -0.12, rotationY: 0.44, rotationZ: 0.13, foreground: 1 }),
       right: createPose(EXIT_TARGETS.desktop.right)
-    },
-    {
-      explosion: 1,
-      left: createPose({ y: -0.09, z: 0.02, scale: 0.92, rotationX: 0.16 }),
-      right: createPose({ y: -0.09, z: 0.02, scale: 0.92, rotationX: 0.16 })
     }
   ];
   const mobile = [
@@ -1189,14 +1357,16 @@ function getLayoutState(
       explosion: 0,
       left: createPose({ x: -0.014, y: 0.105, z: 0.035, scale: 2.2, rotationX: -0.05, rotationY: 0.26, rotationZ: 0.08 }),
       right: createPose(EXIT_TARGETS.mobile.right)
-    },
-    {
-      explosion: 1,
-      left: createPose({ y: mobileExplosionY, z: 0.035, scale: mobileExplosionScale, rotationX: mobileExplosionPitch }),
-      right: createPose({ y: mobileExplosionY, z: 0.035, scale: mobileExplosionScale, rotationX: mobileExplosionPitch })
     }
   ];
-  return (compact ? mobile : desktop)[index] || (compact ? mobile[0] : desktop[0]);
+  if (index === LINKS_SCENE) {
+    const pose = compact
+      ? { y: mobileExplosionY, z: 0.035, scale: mobileExplosionScale, rotationX: mobileExplosionPitch }
+      : { y: -0.09, z: 0.02, scale: 0.92, rotationX: 0.16 };
+    return { explosion: 1, left: createPose(pose), right: createPose(pose) };
+  }
+  const poses = compact ? mobile : desktop;
+  return poses[index] || poses[0];
 }
 
 function createPose(overrides = {}) {
@@ -1260,6 +1430,7 @@ function createCollisionSafeStagingPose(side, target, compact = false) {
 
 function setModelTarget(model, state, immediate, waveDirection = 1) {
   const explosionTarget = state.explosion || 0;
+  const { rightOnly = false } = state;
   if (immediate) {
     Object.entries(model.halves).forEach(([side, half]) => {
       Object.assign(half.target, state[side]);
@@ -1268,7 +1439,7 @@ function setModelTarget(model, state, immediate, waveDirection = 1) {
       resetPartMotion(half);
       applyHalfState(half);
     });
-    setExplosionTarget(model.explosion, explosionTarget, true, waveDirection);
+    setExplosionTarget(model.explosion, explosionTarget, true, waveDirection, rightOnly);
     return;
   }
   const delays = planMotionDelays(model, state);
@@ -1283,40 +1454,39 @@ function setModelTarget(model, state, immediate, waveDirection = 1) {
     half.motion = createCurvedMotion(half, half.target, now + delays[side], explosionTarget > 0);
   });
   if (explosionTarget > 0) {
-    setExplosionTarget(model.explosion, explosionTarget, false, waveDirection, now);
+    setExplosionTarget(model.explosion, explosionTarget, false, waveDirection, rightOnly, now);
   } else if (model.explosion.current > 0 || model.explosion.target > 0 || model.explosion.motion) {
-    setExplosionTarget(model.explosion, explosionTarget, false, waveDirection, now);
+    setExplosionTarget(model.explosion, explosionTarget, false, waveDirection, false, now);
   } else {
     // Ordinary scenes stay assembled without starting another exploded-view wave.
-    setExplosionTarget(model.explosion, explosionTarget, true, waveDirection, now);
+    setExplosionTarget(model.explosion, explosionTarget, true, waveDirection);
   }
 }
 
-function setExplosionTarget(explosion, target, immediate, waveDirection, now = performance.now()) {
+function setExplosionTarget(explosion, target, immediate, waveDirection, rightOnly = false, now = performance.now()) {
+  const targetFor = (unit) => rightOnly && unit.side === 'left' ? 0 : target;
   if (immediate || reduceMotion.matches) {
     explosion.target = target;
-    explosion.current = target;
+    explosion.rightOnly = rightOnly;
     explosion.motion = null;
     explosion.units.forEach((unit) => {
-      unit.explosionAmount = target;
+      unit.explosionAmount = targetFor(unit);
     });
     syncExplosionAmounts(explosion);
     applyExplosionState(explosion);
     return;
   }
-  if (target === explosion.target && !explosion.motion) {
-    return;
-  }
-  if (target === explosion.target && explosion.motion) {
+  if (target === explosion.target && rightOnly === explosion.rightOnly) {
     return;
   }
   explosion.target = target;
+  explosion.rightOnly = rightOnly;
   explosion.motion = {
     start: now,
-    target,
     units: explosion.units.map((unit) => ({
       unit,
       from: unit.explosionAmount,
+      target: targetFor(unit),
       delay: waveDirection >= 0 ? unit.waveDelay : explosion.maxWaveDelay - unit.waveDelay
     }))
   };
@@ -1447,10 +1617,10 @@ function createCurvedMotion(half, target, start = performance.now(), explodedDes
   };
 }
 
-function updateModel(model, time) {
+function updateModel(model, time, technologyOpacity) {
   Object.values(model.halves).forEach((half) => {
     updateHalfMotion(half, time);
-    applyHalfState(half);
+    applyHalfState(half, half.side === 'right' ? technologyOpacity : undefined);
   });
   updateExplosionState(model.explosion, time);
 }
@@ -1458,26 +1628,20 @@ function updateModel(model, time) {
 function updateExplosionState(explosion, time) {
   if (explosion.motion) {
     let finished = true;
-    explosion.motion.units.forEach(({ unit, from, delay }) => {
+    explosion.motion.units.forEach(({ unit, from, target, delay }) => {
       const progress = THREE.MathUtils.clamp(
         (time - explosion.motion.start - delay) / EXPLOSION_WAVE_DURATION,
         0,
         1
       );
-      unit.explosionAmount = THREE.MathUtils.lerp(from, explosion.motion.target, smootherStep(progress));
+      unit.explosionAmount = progress === 1 ? target : THREE.MathUtils.lerp(from, target, smootherStep(progress));
       finished = finished && progress >= 1;
     });
     if (finished) {
-      explosion.units.forEach((unit) => {
-        unit.explosionAmount = explosion.target;
-      });
       explosion.motion = null;
     }
   }
   syncExplosionAmounts(explosion);
-  if (!explosion.motion) {
-    explosion.current = explosion.target;
-  }
   applyExplosionState(explosion);
 }
 
@@ -1628,7 +1792,7 @@ function smootherStep(progress) {
   return progress * progress * progress * (progress * (progress * 6 - 15) + 10);
 }
 
-function applyHalfState(half) {
+function applyHalfState(half, layerOpacity) {
   const {
     object,
     current,
@@ -1655,16 +1819,18 @@ function applyHalfState(half) {
     .multiply(cornerTwistQuaternion);
   const opacity = THREE.MathUtils.clamp(current.opacity, 0, 1);
   object.visible = opacity > 0.002;
-  materialStates.forEach((state) => {
-    const { material } = state;
-    const transparent = state.baseTransparent || opacity < 0.999;
-    if (material.transparent !== transparent) {
-      material.transparent = transparent;
-      material.needsUpdate = true;
-    }
-    material.opacity = state.baseOpacity * opacity;
-    material.depthWrite = state.baseDepthWrite && opacity > 0.35;
-  });
+  materialStates.forEach((state) => setMaterialOpacity(state, opacity * (layerOpacity?.(state.layer) ?? 1)));
+}
+
+function setMaterialOpacity(state, opacity) {
+  const { material } = state;
+  const transparent = state.baseTransparent || opacity < 0.999;
+  if (material.transparent !== transparent) {
+    material.transparent = transparent;
+    material.needsUpdate = true;
+  }
+  material.opacity = state.baseOpacity * opacity;
+  material.depthWrite = state.baseDepthWrite && opacity > 0.35;
 }
 
 function publishPoseSnapshot(model) {

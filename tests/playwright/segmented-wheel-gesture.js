@@ -3,7 +3,7 @@
  *  - 目的: 共通スクロールを使うホーム・製品一覧・Surround の wheel 入力が、しきい値とジェスチャーロックを守ることを確認する。
  *  - 期待値: 0.25px の初回からキャンセルし、85.5px では動かず86pxで1区間移動する。1.5秒以上入力が続いても再移動せず、180ms以上の無入力後は逆方向へ戻れる。停止点から3pxずれた位置でも wheel/touch で隣へ進む。
  *    フッターの表示がactiveでも、移動の許容差を超える手前からwheelで末尾へ到達できる。
- *    Surroundでは、分解表示から上方向のwheelまたはスワイプ1回で左手用の説明全体が見える位置へ着地する。
+ *    Surroundでは、技術スタックから上方向のwheelまたはスワイプ1回で左手用の説明全体が見える位置へ着地する。
  *  - 検証方法: 隔離した Chromium/WebKit の実ページと制御可能な時計で合成 WheelEvent を dispatch し、キャンセル可否・scrollY・active nav を確認する。デスクトップでは実時間の実 wheel 入力も確認する。
  *    WebKit の iPad 設定はレイアウトと入力契約の検証であり、UIKit のイベント生成や実機トラックパッドそのものを再現するものではない。
  */
@@ -181,9 +181,9 @@ async function verifyPage(context, spec, baseURL, profile) {
       await syncScroll();
       assert.ok((await featureState()).left <= 0, 'the final line should be above the viewport when the transition starts');
       assert.equal((await featureState()).active, 'false', 'crossing the threshold must start the transition immediately');
-      assert.equal(await page.locator('[data-surround-target="surround-04"]').getAttribute('aria-current'), 'true');
+      assert.equal(await page.locator('[data-surround-target="surround-technology"]').getAttribute('aria-current'), 'true');
       const starts = await page.evaluate(() => window.__segmentedTrace.filter((event) =>
-        event.type === 'navigationstart' && event.id === 'surround-04' && event.source === 'range-exit'
+        event.type === 'navigationstart' && event.id === 'surround-technology' && event.source === 'range-exit'
       ));
       assert.equal(starts.length, 1, 'the shared controller should start one exit transition');
       await wheel(page, 100);
@@ -198,7 +198,7 @@ async function verifyPage(context, spec, baseURL, profile) {
       };
       await wheel(page, -100);
       await assertLeftHandArrival();
-      await page.evaluate(() => window.__segmentedController.goTo('surround-04', { behavior: 'auto' }));
+      await page.evaluate(() => window.__segmentedController.goTo('surround-technology', { behavior: 'auto' }));
       await page.clock.runFor(1600);
       await swipe([240, 340, 460]);
       await assertLeftHandArrival();
@@ -212,10 +212,10 @@ async function verifyPage(context, spec, baseURL, profile) {
       assert.equal(start.right, 0);
       assert.equal(start.active, 'true');
 
-      // A history restore supersedes the still-running move to the links section.
+      // A history restore supersedes the still-running move to the technology stack.
       await page.evaluate(() => {
         history.replaceState(null, '', '#surround-03');
-        document.querySelector('[data-surround-target="surround-04"]').click();
+        document.querySelector('[data-surround-target="surround-technology"]').click();
         history.back();
       });
       await page.waitForURL('**/#surround-03');

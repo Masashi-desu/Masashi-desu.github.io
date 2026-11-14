@@ -5,6 +5,12 @@
   touch-action: pan-x pinch-zoom;
 }
 
+.segmented-scroll-horizontal {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: none;
+}
+
 @media (any-pointer: coarse) {
   :root.segmented-scroll-managed {
     /* Avoid native snap pulling programmatic navigation back on mobile WebKit. */

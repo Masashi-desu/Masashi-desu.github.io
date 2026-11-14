@@ -1,5 +1,9 @@
 import { createScrollController, createSegmentView, createStopIndex, createViewportCssSync, DEFAULT_TIMINGS, type Stop } from '@masahi-desu/segmented-scroll';
-const stops: Stop[] = [{ id: 'intro', element: document.body }, { id: 'footer', role: 'auxiliary', align: 'document-end', contentAnchor: 'previous' }];
+const stops: Stop[] = [
+  { id: 'intro', element: document.body, horizontalScroll: { element: document.body, mode: 'free' } },
+  { id: 'gallery', horizontalScroll: { element: document.body, mode: 'threshold', getSnapPoints: () => [0, 300] } },
+  { id: 'footer', role: 'auxiliary', align: 'document-end', contentAnchor: 'previous' }
+];
 const navigation = createScrollController({ getStops: () => stops, timings: { wheelThreshold: DEFAULT_TIMINGS.wheelThreshold } });
 const unsubscribe = navigation.subscribe(event => {
   if (event.type === 'navigationcancel') console.log(event.reason);

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 
-export function createModelInteraction({ models, camera, state, reset }) {
+export function createModelInteraction({ models, camera, state, reset, frameRotation }) {
   const root = document.querySelector('.surround-interaction');
+  const originalNextElement = root.nextElementSibling;
+  const technologyScroll = document.querySelector('.surround-technology-scroll');
   const canvas = document.getElementById('surround-canvas');
   const areas = [...root.querySelectorAll('[data-surround-model]')];
   const status = { enabled: false, dragging: false, mode: 'rotate', side: null, modified: false };
@@ -75,6 +77,7 @@ export function createModelInteraction({ models, camera, state, reset }) {
       pose.rotationX = euler.x;
       pose.rotationY = euler.y;
       pose.rotationZ = euler.z;
+      frameRotation(pose);
     }
     // Both colorways share the user's pose. The authored target is kept for reset
     // and the next section's animation starts from the pose the user is viewing.
@@ -160,14 +163,30 @@ export function createModelInteraction({ models, camera, state, reset }) {
     status.enabled = Boolean(canInteract());
     root.hidden = !status.enabled;
     if (!status.enabled) { endDrag(); return; }
+    // Route wheel input over the model through the horizontal scroll region.
+    if (document.body.dataset.surroundStop === 'surround-technology') {
+      if (root.parentElement !== technologyScroll) technologyScroll.prepend(root);
+    } else if (root.nextElementSibling !== originalNextElement) {
+      originalNextElement.before(root);
+    }
     camera.updateMatrixWorld();
     const width = window.innerWidth;
     const height = window.visualViewport?.height || window.innerHeight;
     areas.forEach((area) => {
       const side = area.dataset.surroundModel;
       const half = models[state.theme].halves[side];
-      area.hidden = half.current.opacity < 0.99;
+      area.hidden = half.current.opacity < 0.99 || (state.technologyFitArea && side !== 'right');
       if (area.hidden) return;
+      if (state.technologyFitArea && side === 'right') {
+        // Limit the input to the model region even when translucent geometry
+        // extends outside it. A touch outside this region can still scroll.
+        const { left, top, right, bottom } = state.technologyFitArea;
+        area.style.left = `${left}px`;
+        area.style.top = `${top}px`;
+        area.style.width = `${Math.max(0, right - left)}px`;
+        area.style.height = `${Math.max(0, bottom - top)}px`;
+        return;
+      }
       const key = `${state.theme}:${JSON.stringify(half.current)}:${state.explosionAmount}`;
       let cached = boundsCache.get(side);
       if (cached?.key !== key) {
