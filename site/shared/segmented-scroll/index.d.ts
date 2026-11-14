@@ -47,9 +47,9 @@ export interface Stop {
   readonly horizontalScroll?: HorizontalScroll;
   readonly observe?: boolean;
   readonly align?: 'start' | 'end' | 'document-end';
-  /** Allow continuous document scrolling from this section's start to its viewport-aligned end. */
+  /** Allow native document scrolling from this section's start to its viewport-aligned end. */
   readonly scrollWithin?: boolean;
-  /** Document offset within the range. Crossing it downward automatically advances to the next stop. */
+  /** Document offset within the range. Passing it downward advances once native scrolling has ended. */
   readonly getForwardExitTop?: (context: StopContext) => number | null;
   /** Document offset for a backward move into this scrollable section. Defaults to the range end. */
   readonly getReverseEntryTop?: (context: StopContext) => number | null;

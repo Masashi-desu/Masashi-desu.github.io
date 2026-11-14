@@ -2,6 +2,7 @@
  * テスト概要:
  *  - 目的: 共通 segmented scroll の停止位置・segment 表示同期と、微小 wheel 入力のキャンセル・ジェスチャー単位の移動を確認する。
  *  - 期待値: index/class/ARIA/indicator の同期に加え、86px 未満では移動せず、1ジェスチャーで1停止点だけ移動し、180ms の無入力後に再入力できる。停止点から3pxずれていても wheel/touch で隣へ進める。
+ *    自由区間は小数入力や慣性を含めて既定動作に委ね、スクロール終了後にのみ端を処理する。
  *  - 検証方法: Node の test/assert、fake DOM、mock clock で実際の wheel listener に入力し、位置・キャンセル・移動回数を検証する。
  */
 const assert = require('node:assert/strict');
@@ -82,7 +83,7 @@ function createWheelHarness(t, options = {}) {
   const navigations = [];
   const document = {
     body: { scrollHeight: 4000 },
-    documentElement: { clientHeight: 1000, scrollHeight: 4000, scrollTop: 0 }
+    documentElement: { classList: createFakeClassList(), clientHeight: 1000, scrollHeight: 4000, scrollTop: 0 }
   };
   const window = {
     document,
@@ -257,6 +258,77 @@ test('移動中のスクロールで終了位置を通過しても次の停止�
   h.tick(1400);
   assert.deepEqual(h.navigations, ['range']);
   assert.equal(h.window.scrollY, 1000);
+});
+
+test('自由区間の小数wheelと慣性は既定動作に任せ、終了後にだけ境界を揃える', (t) => {
+  let h;
+  h = createWheelHarness(t, {
+    getStops: () => [
+      { id: 'first', getTop: () => 0 },
+      {
+        id: 'range',
+        getTop: () => 1000,
+        scrollWithin: true,
+        element: { getBoundingClientRect: () => ({ bottom: 2600 - (h?.window.scrollY ?? 0) }) },
+        getForwardExitTop: () => 1600
+      },
+      { id: 'next', getTop: () => 2600 }
+    ]
+  });
+  const root = h.window.document.documentElement;
+  const scroll = (top) => {
+    h.window.scrollY = top;
+    h.listeners.get('scroll')();
+  };
+  scroll(1050);
+  assert.equal(root.classList.contains('segmented-scroll-native-range'), true);
+  assert.equal(h.wheel(-0.25).defaultPrevented, false);
+  assert.equal(h.window.scrollY, 1050);
+  scroll(930);
+  assert.equal(h.wheel(-100).defaultPrevented, false);
+  assert.equal(h.window.scrollY, 930);
+  assert.deepEqual(h.navigations, []);
+  h.tick(300);
+  assert.equal(h.window.scrollY, 1000);
+  assert.deepEqual(h.navigations, []);
+  // The browser can land a few pixels inside an otherwise aligned stop.
+  scroll(1003);
+  assert.equal(h.wheel(-85).defaultPrevented, true);
+  assert.equal(h.window.scrollY, 1003);
+  h.wheel(-1);
+  assert.deepEqual(h.navigations, ['first']);
+  scroll(h.window.scrollY);
+  for (let frame = 0; frame < 90; frame += 1) h.tick(16);
+  assert.equal(root.classList.contains('segmented-scroll-native-range'), false);
+
+  scroll(1500);
+  assert.equal(h.wheel(95).defaultPrevented, false);
+  scroll(1700);
+  assert.deepEqual(h.navigations, ['first']);
+  h.tick(300);
+  assert.deepEqual(h.navigations, ['first', 'next']);
+  h.controller.destroy();
+  assert.equal(root.classList.contains('segmented-scroll-native-range'), false);
+});
+
+test('自由区間から明示移動したら後続のwheelを新しい停止点へ流さない', (t) => {
+  let h;
+  h = createWheelHarness(t, {
+    getStops: () => [
+      {
+        id: 'range',
+        getTop: () => 0,
+        scrollWithin: true,
+        element: { getBoundingClientRect: () => ({ bottom: 2000 - (h?.window.scrollY ?? 0) }) }
+      },
+      { id: 'next', getTop: () => 2000 },
+      { id: 'last', getTop: () => 3000 }
+    ]
+  });
+  assert.equal(h.wheel(20).defaultPrevented, false);
+  h.controller.goTo('next');
+  assert.equal(h.wheel(100).defaultPrevented, true);
+  assert.deepEqual(h.navigations, ['next']);
 });
 
 test('1px 未満も累積し、86px に達するまで位置を変えない', (t) => {

@@ -4,6 +4,7 @@
  *  - 期待値: 0.25px の初回からキャンセルし、85.5px では動かず86pxで1区間移動する。1.5秒以上入力が続いても再移動せず、180ms以上の無入力後は逆方向へ戻れる。停止点から3pxずれた位置でも wheel/touch で隣へ進む。
  *    フッターの表示がactiveでも、移動の許容差を超える手前からwheelで末尾へ到達できる。
  *    Surroundでは、技術スタックから上方向のwheelまたはスワイプ1回で左手用の説明全体が見える位置へ着地する。
+ *    自由スクロール区間ではwheel/touchの既定動作を許可し、区間内の位置と終了後の境界遷移を実測する。
  *  - 検証方法: 隔離した Chromium/WebKit の実ページと制御可能な時計で合成 WheelEvent を dispatch し、キャンセル可否・scrollY・active nav を確認する。デスクトップでは実時間の実 wheel 入力も確認する。
  *    WebKit の iPad 設定はレイアウトと入力契約の検証であり、UIKit のイベント生成や実機トラックパッドそのものを再現するものではない。
  */
@@ -51,7 +52,8 @@ async function verifyPage(context, spec, baseURL, profile) {
   page.on('pageerror', (error) => errors.push(error.message));
   // Rendering has dedicated coverage in surround1x0-light-theme.js. Software
   // WebGL must not turn a 70ms input interval into a different gesture here.
-  await page.route('**/surround-3d.js', route => route.fulfill({ contentType: 'application/javascript', body: '' }));
+  await page.route(/(?:\/surround-3d\.js|\/assets\/products\/Surround1x0-AKDK\/index-[^/]+\.js)(?:\?|$)/, route =>
+    route.fulfill({ contentType: 'application/javascript', body: '' }));
   await page.addInitScript(() => {
     const trace = window.__segmentedTrace = [];
     const record = (event) => {
@@ -147,7 +149,11 @@ async function verifyPage(context, spec, baseURL, profile) {
       });
       // Let the browser deliver compositor scroll events even while the test clock is paused.
       const syncScroll = () => page.evaluate(() => window.dispatchEvent(new Event('scroll')));
-      await wheel(page, 144);
+      const scrollByBrowser = (delta) => page.evaluate(delta => window.scrollBy({ top: delta, behavior: 'instant' }), delta);
+      // Dispatching a DOM WheelEvent does not perform its default scroll.
+      assert.equal(await wheel(page, 144), false);
+      assert.equal((await featureState()).y, geometry.start);
+      await scrollByBrowser(144);
       await syncScroll();
       await page.clock.runFor(1500);
       const middle = await featureState();
@@ -156,16 +162,21 @@ async function verifyPage(context, spec, baseURL, profile) {
       assert.ok(middle.right < -144 && middle.left > 216 && middle.active === 'true');
       const swipe = async (steps) => page.evaluate((steps) => {
         const target = document.querySelector('.surround-feature-stage');
+        const prevented = [];
         for (const [index, y] of steps.entries()) {
           const event = new Event(index === 0 ? 'touchstart' : 'touchmove', { cancelable: true, bubbles: true });
           event.touches = [{ clientX: 100, clientY: y }];
           target.dispatchEvent(event);
+          if (index > 0) prevented.push(event.defaultPrevented);
         }
         const end = new Event('touchend', { bubbles: true });
         end.touches = [];
         target.dispatchEvent(end);
+        return prevented;
       }, steps);
-      await swipe([600, 480, 340, 200]);
+      assert.deepEqual(await swipe([600, 480, 340, 200]), [false, false, false]);
+      assert.equal((await featureState()).y, middle.y);
+      await scrollByBrowser(400);
       await syncScroll();
       await page.clock.runFor(1500);
       const trailing = await featureState();
@@ -173,14 +184,18 @@ async function verifyPage(context, spec, baseURL, profile) {
       assert.equal(trailing.progress, 1);
       assert.ok(trailing.left > 0 && trailing.active === 'true');
       assert.ok(geometry.end > trailing.y + 16, JSON.stringify({ geometry, trailing }));
-      await wheel(page, geometry.end - trailing.y - 16);
+      assert.equal(await wheel(page, geometry.end - trailing.y - 16), false);
+      await scrollByBrowser(geometry.end - trailing.y - 16);
       await syncScroll();
       assert.ok((await featureState()).left > 0, 'the final line should still be visible before the threshold');
       assert.equal((await featureState()).active, 'true');
-      await wheel(page, 16);
+      assert.equal(await wheel(page, 16), false);
+      await scrollByBrowser(16);
       await syncScroll();
       assert.ok((await featureState()).left <= 0, 'the final line should be above the viewport when the transition starts');
-      assert.equal((await featureState()).active, 'false', 'crossing the threshold must start the transition immediately');
+      await page.clock.runFor(260);
+      await page.evaluate(() => document.dispatchEvent(new Event('scrollend')));
+      assert.equal((await featureState()).active, 'false', 'settling past the exit must start the next transition');
       assert.equal(await page.locator('[data-surround-target="surround-technology"]').getAttribute('aria-current'), 'true');
       const starts = await page.evaluate(() => window.__segmentedTrace.filter((event) =>
         event.type === 'navigationstart' && event.id === 'surround-technology' && event.source === 'range-exit'
@@ -202,9 +217,14 @@ async function verifyPage(context, spec, baseURL, profile) {
       await page.clock.runFor(1600);
       await swipe([240, 340, 460]);
       await assertLeftHandArrival();
-      await wheel(page, -(geometry.exit + 460));
-      await wheel(page, -100);
+      assert.equal(await wheel(page, -(geometry.exit + 460)), false);
+      await scrollByBrowser(-(geometry.exit + 460));
       await syncScroll();
+      assert.equal(await wheel(page, -100), false, 'a native gesture retains ownership beyond the boundary');
+      await scrollByBrowser(-100);
+      await syncScroll();
+      await page.clock.runFor(260);
+      await page.evaluate(() => document.dispatchEvent(new Event('scrollend')));
       await page.clock.runFor(1600);
       const start = await featureState();
       assert.equal(start.y, geometry.start);

@@ -210,6 +210,7 @@ var MDWSegmentedScroll = (function(exports) {
 		const ownedHorizontalRegions = /* @__PURE__ */ new Set();
 		const rootElement = options.rootElement || doc.documentElement;
 		const eventTarget = options.eventTarget || win;
+		const supportsScrollEnd = "onscrollend" in doc;
 		const observerThresholds = options.observerThresholds || DEFAULT_OBSERVER_THRESHOLDS;
 		const listenerDisposers = [];
 		let mounted = false;
@@ -226,6 +227,8 @@ var MDWSegmentedScroll = (function(exports) {
 		let restTimer = null;
 		let restSampleScrollY = null;
 		let previousScrollY = 0;
+		let nativeRange = null;
+		let nativeRangeTimer = null;
 		let touchPointsActive = 0;
 		let lastTouchEventAt = 0;
 		let wheelDelta = 0;
@@ -233,16 +236,15 @@ var MDWSegmentedScroll = (function(exports) {
 		let wheelResetTimer = null;
 		let lastWheelEventAt = null;
 		let wheelHandled = false;
-		let wheelRangeDirection = 0;
-		let wheelRemainder = 0;
+		let wheelRangeId = "";
 		let touchStartX = 0;
 		let touchStartY = 0;
 		let touchHandled = false;
 		let touchStartStopId = "";
 		let touchHorizontalScroll = null;
 		let touchAxis = "";
-		let touchLastY = 0;
-		let touchScrolledRange = false;
+		let touchRange = null;
+		let touchRangeNative = false;
 		function getStops() {
 			return typeof options.getStops === "function" ? options.getStops() : [];
 		}
@@ -297,7 +299,12 @@ var MDWSegmentedScroll = (function(exports) {
 			}
 		}
 		function syncManagedClasses() {
-			for (const name of ["segmented-scroll-managed", options.managedClass].filter(Boolean)) if (mounted && index.getStops().length > 0) {
+			const managed = mounted && index.getStops().length > 0;
+			for (const name of ["segmented-scroll-managed", options.managedClass].filter(Boolean)) syncRootClass(name, managed);
+			syncNativeRangeClass(managed ? findScrollRange(4) : null);
+		}
+		function syncRootClass(name, enabled) {
+			if (enabled) {
 				if (rootElement?.classList && !rootElement.classList.contains(name)) {
 					rootElement.classList.add(name);
 					ownedClasses.add(name);
@@ -306,6 +313,11 @@ var MDWSegmentedScroll = (function(exports) {
 		}
 		function refresh() {
 			index.setStops(getStops());
+			if (nativeRange && !index.getById(nativeRange.id)?.scrollWithin) clearNativeRange();
+			if (touchRange && !index.getById(touchRange.stop.id)?.scrollWithin) {
+				touchRange = null;
+				touchRangeNative = false;
+			}
 			if (mounted) syncHorizontalRegions();
 			if (navigation && !index.getById(navigation.id)) cancelNavigation("stop-removed");
 			if (!index.getById(settledId)) settledId = "";
@@ -354,7 +366,7 @@ var MDWSegmentedScroll = (function(exports) {
 						});
 					}
 				});
-				if (navigation || isNavigationLocked()) return;
+				if (navigation || isNavigationLocked() || nativeRange) return;
 				const positionStop = findScrollRange()?.stop || findStopAtCurrentPosition(true);
 				if (positionStop) {
 					activateStop(positionStop, "position");
@@ -382,6 +394,8 @@ var MDWSegmentedScroll = (function(exports) {
 			previousScrollY = getScrollY();
 			listen(eventTarget, "wheel", handleWheel, { passive: false });
 			listen(eventTarget, "scroll", handleScroll, { passive: true });
+			listen(doc, "scrollend", handleNativeScrollEnd, { passive: true });
+			listen(win.visualViewport || win, "resize", () => syncNativeRangeClass(), { passive: true });
 			listen(eventTarget, "touchstart", handleTouchStart, { passive: true });
 			listen(eventTarget, "touchmove", handleTouchMove, { passive: false });
 			listen(eventTarget, "touchend", handleTouchEnd, { passive: true });
@@ -400,6 +414,7 @@ var MDWSegmentedScroll = (function(exports) {
 			}
 			clearSettleTimer();
 			resetWheelGesture();
+			clearNativeRange();
 			cancelScrollAlignment();
 			if (restTimer !== null) {
 				win.clearTimeout(restTimer);
@@ -418,6 +433,8 @@ var MDWSegmentedScroll = (function(exports) {
 			touchStartStopId = "";
 			touchHorizontalScroll = null;
 			touchAxis = "";
+			touchRange = null;
+			touchRangeNative = false;
 			settledId = "";
 			notifyLocks();
 			emit("destroy");
@@ -450,14 +467,14 @@ var MDWSegmentedScroll = (function(exports) {
 			clearWheelAccumulation();
 			wheelHandled = false;
 			wheelAxis = "";
-			wheelRangeDirection = 0;
-			wheelRemainder = 0;
+			wheelRangeId = "";
 			lastWheelEventAt = null;
 			notifyLocks();
 			if (wheelResetTimer !== null) {
 				win.clearTimeout(wheelResetTimer);
 				wheelResetTimer = null;
 			}
+			if (mounted && nativeRange?.scrollEnded) finishNativeRange(true);
 		}
 		function clearSettleTimer() {
 			if (settleTimer !== null) {
@@ -533,6 +550,7 @@ var MDWSegmentedScroll = (function(exports) {
 			const readTop = (candidate) => readNavigationTop(candidate, edge);
 			const top = readTop(stop);
 			if (!mounted || !stop || top === null) return false;
+			clearNativeRange();
 			const sequence = ++navigationSequence;
 			cancelNavigation("superseded");
 			if (!mounted || sequence !== navigationSequence) return false;
@@ -544,6 +562,10 @@ var MDWSegmentedScroll = (function(exports) {
 			};
 			navigation = current;
 			pendingId = stop.id;
+			if (wheelRangeId) {
+				wheelRangeId = "";
+				wheelHandled = true;
+			}
 			lockFor(prefersReducedMotion() ? 160 : Math.max(timings.navigationLockMs, timings.settleMs + 140));
 			if (navigation !== current) return false;
 			activateStop(stop, current.source);
@@ -605,8 +627,7 @@ var MDWSegmentedScroll = (function(exports) {
 			const y = getScrollY();
 			return Math.abs(y - start) <= 1 || Math.abs(y - readRangeEnd(stop, start)) <= 1;
 		}
-		function findScrollRange(tolerance = 1) {
-			const y = getScrollY();
+		function findScrollRange(tolerance = 1, y = getScrollY()) {
 			for (const stop of index.getStops()) {
 				if (!stop.scrollWithin) continue;
 				const start = readStopTop(stop);
@@ -620,16 +641,64 @@ var MDWSegmentedScroll = (function(exports) {
 			}
 			return null;
 		}
-		function scrollWithinRange(delta, wheel = false) {
-			const range = findScrollRange(4);
+		function syncNativeRangeClass(range = findScrollRange(4)) {
+			syncRootClass("segmented-scroll-native-range", Boolean(range));
+		}
+		function canScrollIntoRange(range, y, delta) {
 			if (!range) return false;
+			const edgeTolerance = Math.min(4, (range.end - range.start) / 2);
+			return delta > 0 ? y < range.end - edgeTolerance : delta < 0 && y > range.start + edgeTolerance;
+		}
+		function yieldToNativeRange(id) {
+			nativeRange ??= {
+				id,
+				moved: false,
+				scrollEnded: false,
+				forwardExit: false,
+				outward: 0
+			};
+			scheduleNativeRangeEnd();
+		}
+		function clearNativeRange() {
+			if (nativeRangeTimer !== null) win.clearTimeout(nativeRangeTimer);
+			nativeRangeTimer = null;
+			nativeRange = null;
+		}
+		function scheduleNativeRangeEnd() {
+			if (nativeRangeTimer !== null) win.clearTimeout(nativeRangeTimer);
+			nativeRangeTimer = null;
+			if (supportsScrollEnd && nativeRange?.moved) return;
+			nativeRangeTimer = win.setTimeout(finishNativeRange, 260);
+		}
+		function handleNativeScrollEnd(event) {
+			if (event.target !== doc || !nativeRange?.moved) return;
+			nativeRange.scrollEnded = true;
+			if (!wheelRangeId) finishNativeRange(true);
+		}
+		function finishNativeRange(ended = false) {
+			if (!nativeRange) return;
+			if (!ended && touchPointsActive > 0 && Date.now() - lastTouchEventAt < timings.touchActivityStaleMs) {
+				scheduleNativeRangeEnd();
+				return;
+			}
+			const { id, forwardExit, outward } = nativeRange;
+			const stop = index.getById(id);
+			clearNativeRange();
+			if (!stop?.scrollWithin || navigation || win.visualViewport?.scale > timings.zoomThreshold) return;
+			const start = readStopTop(stop);
+			const end = readRangeEnd(stop, start);
+			if (start === null || end <= start) return;
 			const y = getScrollY();
-			const edgeTolerance = range.end - range.start > 2 ? 1 : 0;
-			if (delta < 0 && y <= range.start + edgeTolerance || delta > 0 && y >= range.end) return false;
-			const top = Math.min(range.end, Math.max(range.start, y + delta + (wheel ? wheelRemainder : 0)));
-			adapter.scrollTo(top);
-			if (wheel) wheelRemainder = top - getScrollY();
-			return true;
+			const exitTop = readForwardExitTop(stop, start, end);
+			if (forwardExit && exitTop !== null && y >= exitTop && move(1, {
+				fromId: stop.id,
+				source: "range-exit"
+			})) return;
+			if (outward && (outward < 0 ? y < start - 1 : y > end + 1) && move(outward, {
+				fromId: stop.id,
+				source: "touch"
+			})) return;
+			if (y < start - 1 || y > end + 1) adapter.scrollTo(y < start ? start : end, "instant");
 		}
 		function getDirectionalStop(direction, event, preferredId = "") {
 			const anchorId = preferredId || getEventStopId(event) || findScrollRange()?.stop.id || findStopAtCurrentPosition(false, getPositionTolerance())?.id || "";
@@ -690,11 +759,13 @@ var MDWSegmentedScroll = (function(exports) {
 			const deltaY = normalizeWheelDelta(event, event.deltaY, getViewportHeight());
 			if (!Number.isFinite(deltaY) || index.getStops().length === 0) return;
 			if (!mayScrollHorizontally && deltaY === 0 && event.deltaX !== 0) return;
+			if (deltaY === 0 && event.deltaX === 0 && findScrollRange(4)) return;
 			const now = Date.now();
 			if (lastWheelEventAt !== null && now - lastWheelEventAt >= timings.wheelResetMs) {
 				resetWheelGesture();
 				if (!mounted) return;
 			}
+			const firstWheelEvent = lastWheelEventAt === null;
 			lastWheelEventAt = now;
 			if (wheelResetTimer !== null) win.clearTimeout(wheelResetTimer);
 			wheelResetTimer = win.setTimeout(resetWheelGesture, timings.wheelResetMs);
@@ -704,6 +775,18 @@ var MDWSegmentedScroll = (function(exports) {
 			}
 			if (wheelAxis === "x" && region?.mode === "free" && horizontal) return;
 			if (wheelAxis === "x" && !region && !wheelHandled) return;
+			if (wheelRangeId) {
+				if (!navigation && index.getById(wheelRangeId)?.scrollWithin) yieldToNativeRange(wheelRangeId);
+				return;
+			}
+			if (firstWheelEvent && deltaY && wheelAxis !== "x" && !navigation && !isNavigationLocked()) {
+				const range = findScrollRange(4);
+				if (nativeRange || canScrollIntoRange(range, getScrollY(), deltaY)) {
+					wheelRangeId = nativeRange?.id || range.stop.id;
+					yieldToNativeRange(wheelRangeId);
+					return;
+				}
+			}
 			if (!event.cancelable) {
 				wheelHandled = true;
 				notifyLocks();
@@ -727,13 +810,6 @@ var MDWSegmentedScroll = (function(exports) {
 			}
 			if (deltaY === 0) return;
 			const direction = deltaY > 0 ? 1 : -1;
-			if (scrollWithinRange(deltaY, true)) {
-				clearWheelAccumulation();
-				wheelRangeDirection = direction;
-				return;
-			}
-			wheelRemainder = 0;
-			if (wheelRangeDirection === direction) return;
 			if (!getDirectionalStop(direction, event)) {
 				clearWheelAccumulation();
 				return;
@@ -752,25 +828,31 @@ var MDWSegmentedScroll = (function(exports) {
 			scheduleRestAlignmentCheck(timings.touchActivityStaleMs + 320);
 			touchHorizontalScroll = null;
 			touchAxis = "";
+			touchRange = null;
+			touchRangeNative = false;
 			if (!event.touches || event.touches.length !== 1) {
 				touchStartStopId = "";
 				return;
 			}
 			touchStartX = event.touches[0].clientX;
 			touchStartY = event.touches[0].clientY;
-			touchLastY = touchStartY;
-			touchScrolledRange = false;
 			touchHandled = false;
 			notifyLocks();
 			touchStartStopId = getEventStopId(event);
 			touchHorizontalScroll = getHorizontalScroll(event);
+			if (!navigation && !isNavigationLocked()) {
+				const y = getScrollY();
+				const range = findScrollRange(4, y);
+				if (range) touchRange = {
+					...range,
+					y
+				};
+			}
 		}
 		function handleTouchMove(event) {
 			markTouchActivity(event);
 			if (!event.touches || event.touches.length !== 1) return;
 			const touch = event.touches[0];
-			const stepY = touchLastY - touch.clientY;
-			touchLastY = touch.clientY;
 			const deltaX = touchStartX - touch.clientX;
 			const deltaY = touchStartY - touch.clientY;
 			const absDeltaX = Math.abs(deltaX);
@@ -784,6 +866,13 @@ var MDWSegmentedScroll = (function(exports) {
 				verticalIntent: absDeltaY >= timings.touchIntentThreshold && absDeltaY >= absDeltaX * timings.verticalIntentRatio
 			};
 			if (typeof options.shouldYieldTouch === "function" && options.shouldYieldTouch(event, gesture)) return;
+			if (touchRangeNative) {
+				if (!navigation) {
+					yieldToNativeRange(touchRange.stop.id);
+					trackNativeTouchBoundary(gesture);
+				}
+				return;
+			}
 			if (touchHorizontalScroll) {
 				if (!touchAxis) if (gesture.verticalIntent) touchAxis = "y";
 				else if (gesture.horizontalDominant && absDeltaX >= timings.touchIntentThreshold) touchAxis = "x";
@@ -802,19 +891,28 @@ var MDWSegmentedScroll = (function(exports) {
 					return;
 				}
 			}
+			if (touchRange && !navigation && !isNavigationLocked()) {
+				if (!deltaY) return;
+				if (win.visualViewport?.scale > timings.zoomThreshold) return;
+				if (canScrollIntoRange(touchRange, touchRange.y, deltaY) || !event.cancelable) {
+					touchRangeNative = true;
+					yieldToNativeRange(touchRange.stop.id);
+					trackNativeTouchBoundary(gesture);
+					return;
+				}
+				touchRange = null;
+			}
 			if (event.cancelable) event.preventDefault();
 			if (!gesture.verticalIntent) return;
-			if (!touchHandled && !isNavigationLocked() && stepY !== 0 && scrollWithinRange(stepY)) {
-				touchScrolledRange = true;
-				return;
-			}
-			if (touchScrolledRange) return;
 			const direction = deltaY > 0 ? 1 : -1;
 			if (!getDirectionalStop(direction, event, touchStartStopId)) return;
 			if (touchHandled || absDeltaY < timings.touchThreshold) return;
 			touchHandled = true;
 			navigateDirection(direction, event, touchStartStopId);
 			notifyLocks();
+		}
+		function trackNativeTouchBoundary({ deltaY, absDeltaY, verticalIntent }) {
+			if (verticalIntent && absDeltaY >= timings.touchThreshold && !canScrollIntoRange(touchRange, touchRange.y, deltaY)) nativeRange.outward = Math.sign(deltaY);
 		}
 		function handleTouchEnd(event) {
 			markTouchActivity(event);
@@ -827,7 +925,10 @@ var MDWSegmentedScroll = (function(exports) {
 			touchStartStopId = "";
 			touchHorizontalScroll = null;
 			touchAxis = "";
+			touchRange = null;
+			touchRangeNative = false;
 			notifyLocks();
+			if (nativeRange) scheduleNativeRangeEnd();
 			if (touchPointsActive === 0) scheduleRestAlignmentCheck(timings.touchMomentumSettleMs + 200);
 		}
 		function getEventStopId(event) {
@@ -842,26 +943,38 @@ var MDWSegmentedScroll = (function(exports) {
 			const y = getScrollY();
 			const previousY = previousScrollY;
 			previousScrollY = y;
+			if (nativeRange && y !== previousY) {
+				nativeRange.moved = true;
+				nativeRange.scrollEnded = false;
+			}
+			const range = findScrollRange(4, y);
+			syncNativeRangeClass(range);
 			if (!navigation && !isNavigationLocked()) {
-				const stop = findScrollRange()?.stop || findStopAtCurrentPosition(false);
+				const stop = index.getById(nativeRange?.id) || range?.stop || findStopAtCurrentPosition(false);
 				if (stop) {
 					if (isAtStopEdge(stop)) settledId = stop.id;
 					activateStop(stop, "position");
 				}
-				advanceOnForwardExit(index.getById(index.getState().activeId), previousY, y);
+				const exitStop = stop || index.getById(index.getState().activeId);
+				if (!navigation && !isNavigationLocked() && crossedForwardExit(exitStop, previousY, y)) if (nativeRange) nativeRange.forwardExit = true;
+				else move(1, {
+					fromId: exitStop.id,
+					source: "range-exit"
+				});
 			}
-			if (shouldMonitorRestAlignment()) scheduleRestAlignmentCheck(260);
+			if (nativeRange) scheduleNativeRangeEnd();
+			else if (shouldMonitorRestAlignment()) scheduleRestAlignmentCheck(260);
 		}
-		function advanceOnForwardExit(stop, previousY, y) {
-			if (!stop?.scrollWithin || typeof stop.getForwardExitTop !== "function" || y <= previousY || navigation || isNavigationLocked() || win.visualViewport?.scale > timings.zoomThreshold) return;
-			const exitTop = readStopTop(stop, stop.getForwardExitTop);
-			if (exitTop === null || previousY >= exitTop || y < exitTop) return;
+		function crossedForwardExit(stop, previousY, y) {
+			if (!stop?.scrollWithin || typeof stop.getForwardExitTop !== "function" || y <= previousY || win.visualViewport?.scale > timings.zoomThreshold) return false;
 			const start = readStopTop(stop);
-			if (start === null || exitTop < start || exitTop > readRangeEnd(stop, start)) return;
-			move(1, {
-				fromId: stop.id,
-				source: "range-exit"
-			});
+			const exitTop = readForwardExitTop(stop, start, readRangeEnd(stop, start));
+			return exitTop !== null && previousY < exitTop && y >= exitTop;
+		}
+		function readForwardExitTop(stop, start, end) {
+			if (start === null || typeof stop.getForwardExitTop !== "function") return null;
+			const top = readStopTop(stop, stop.getForwardExitTop);
+			return top !== null && top >= start && top <= end ? top : null;
 		}
 		function findStopAtCurrentPosition(auxiliaryOnly, maxDistance = Infinity) {
 			const current = getScrollY();
@@ -900,6 +1013,10 @@ var MDWSegmentedScroll = (function(exports) {
 		}
 		function runRestAlignmentCheck() {
 			restTimer = null;
+			if (nativeRange) {
+				restSampleScrollY = null;
+				return;
+			}
 			if (touchPointsActive > 0 && Date.now() - lastTouchEventAt < timings.touchActivityStaleMs || isNavigationLocked() || pendingId || alignmentFrame !== null) {
 				restSampleScrollY = null;
 				scheduleRestAlignmentCheck(320);
